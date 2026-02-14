@@ -167,6 +167,57 @@ class FullChainTransformTests(unittest.TestCase):
         self.assertTrue(math.isfinite(yaw))
         self.assertTrue(math.isfinite(pitch))
 
+    def test_gimbal_yaw_rotates_boresight_correctly(self) -> None:
+        """Gimbal yaw=10° with target at optical center → error should be 0
+        (the gimbal is already pointing at the target)."""
+        cam = _make_cam()
+        fct = FullChainTransform(cam)
+        body_zero = BodyState(timestamp=0.0)
+
+        fb_yaw10 = GimbalFeedback(timestamp=0.0, yaw_deg=10.0, pitch_deg=0.0,
+                                  yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        yaw_err, pitch_err = fct.target_lock_error(
+            cam.cx, cam.cy, fb_yaw10, body=body_zero,
+        )
+        self.assertAlmostEqual(yaw_err, 0.0, places=2,
+                               msg="optical center with matching gimbal angle → 0 error")
+        self.assertAlmostEqual(pitch_err, 0.0, places=2)
+
+    def test_gimbal_pitch_rotates_boresight_correctly(self) -> None:
+        """Gimbal pitch=-5° with target at optical center → error should be 0."""
+        cam = _make_cam()
+        fct = FullChainTransform(cam)
+        body_zero = BodyState(timestamp=0.0)
+
+        fb_pitch = GimbalFeedback(timestamp=0.0, yaw_deg=0.0, pitch_deg=-5.0,
+                                  yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        yaw_err, pitch_err = fct.target_lock_error(
+            cam.cx, cam.cy, fb_pitch, body=body_zero,
+        )
+        self.assertAlmostEqual(yaw_err, 0.0, places=2)
+        self.assertAlmostEqual(pitch_err, 0.0, places=2)
+
+    def test_target_offset_with_gimbal_rotation(self) -> None:
+        """Target 5° right of center + gimbal at 10° yaw → desired yaw ≈ 15°,
+        so yaw error ≈ +5°."""
+        cam = _make_cam()
+        fct = FullChainTransform(cam)
+        simple = PixelToGimbalTransform(cam)
+        body_zero = BodyState(timestamp=0.0)
+
+        # Find a pixel that corresponds to ~5° yaw offset
+        u_offset = cam.cx + 100.0  # about 5.9° right of center
+        pixel_yaw, _ = simple.pixel_to_angle_error(u_offset, cam.cy)
+
+        fb_yaw10 = GimbalFeedback(timestamp=0.0, yaw_deg=10.0, pitch_deg=0.0,
+                                  yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        yaw_err, _ = fct.target_lock_error(
+            u_offset, cam.cy, fb_yaw10, body=body_zero,
+        )
+        # Error should approximate the pixel-space angular offset
+        self.assertAlmostEqual(yaw_err, pixel_yaw, delta=0.5,
+                               msg="gimbal rotation should preserve pixel-space error")
+
 
 # ---------------------------------------------------------------------------
 # Controller feedforward tests

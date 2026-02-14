@@ -31,7 +31,7 @@ from ..perception import (
     YoloSegTracker,
 )
 from ..telemetry import InMemoryTelemetryLogger
-from ..tools.simulation import SimTarget, SyntheticScene
+from ..tools.simulation import SimTarget, SyntheticScene, WorldSimTarget, WorldCoordinateScene
 from ..tools.tuning import grid_search_pid
 from .pipeline import VisionGimbalPipeline
 
@@ -250,16 +250,56 @@ def build_pipeline_from_config(
 # ---------------------------------------------------------------------------
 
 def run_demo(duration_s: float = 10.0, dt_s: float = 0.03) -> dict:
-    """Run synthetic scene demo (no camera/YOLO needed)."""
+    """Run synthetic scene demo (no camera/YOLO needed).
+
+    Uses WorldCoordinateScene for realistic simulation where targets
+    move in world coordinates and gimbal rotation affects their position
+    in the camera frame.
+    """
     cam = default_camera_model()
     pipeline = build_sim_pipeline(cam)
-    scene = SyntheticScene(cam.width, cam.height, seed=11)
-    scene.add_target(SimTarget(x=220, y=150, w=75, h=100, vx=65, vy=24, confidence=0.92, class_id="person"))
-    scene.add_target(SimTarget(x=900, y=400, w=110, h=90, vx=-38, vy=-11, confidence=0.85, class_id="vehicle"))
+
+    # Create realistic world-coordinate scene
+    scene = WorldCoordinateScene(
+        cam_width=cam.width,
+        cam_height=cam.height,
+        fx=cam.fx,
+        fy=cam.fy,
+        cx=cam.cx,
+        cy=cam.cy,
+        seed=11
+    )
+
+    # Add targets in world coordinates (angular position)
+    scene.add_target(WorldSimTarget(
+        world_yaw_deg=5.0,
+        world_pitch_deg=2.0,
+        vel_yaw_dps=2.0,  # 2 degrees per second
+        vel_pitch_dps=1.0,
+        bbox_width=75,
+        bbox_height=100,
+        confidence=0.92,
+        class_id="person"
+    ))
+    scene.add_target(WorldSimTarget(
+        world_yaw_deg=-8.0,
+        world_pitch_deg=-3.0,
+        vel_yaw_dps=-1.5,
+        vel_pitch_dps=0.8,
+        bbox_width=110,
+        bbox_height=90,
+        confidence=0.85,
+        class_id="vehicle"
+    ))
 
     ts = 0.0
     while ts < duration_s:
-        frame = scene.step(dt_s)
+        # Get current gimbal position
+        gimbal_yaw = pipeline.driver._yaw
+        gimbal_pitch = pipeline.driver._pitch
+
+        # Generate detections considering gimbal rotation
+        frame = scene.step(dt_s, gimbal_yaw, gimbal_pitch)
         pipeline.step(frame, ts)
         ts += dt_s
 

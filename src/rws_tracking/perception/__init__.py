@@ -4,6 +4,8 @@ from .selector import WeightedTargetSelector
 from .tracker import SimpleIoUTracker
 from .yolo_detector import YoloDetector
 from .yolo_seg_tracker import YoloSegTracker
+from .multi_target_selector import WeightedMultiTargetSelector
+from .multi_target import TargetAllocator, TargetAssignment
 
 __all__ = [
     "Detector",
@@ -14,4 +16,7 @@ __all__ = [
     "WeightedTargetSelector",
     "YoloDetector",
     "YoloSegTracker",
+    "WeightedMultiTargetSelector",
+    "TargetAllocator",
+    "TargetAssignment",
 ]

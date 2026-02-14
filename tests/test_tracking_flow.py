@@ -81,6 +81,37 @@ class CoordinateTransformTests(unittest.TestCase):
         yaw, pitch = tf.pixel_to_angle_error(cam.cx, cam.cy)
         self.assertNotAlmostEqual(yaw, 0.0, places=1)
 
+    def test_mount_yaw_direction_correct(self) -> None:
+        """mount yaw_deg should produce matching yaw error at optical center."""
+        cam = _make_cam()
+        for mount_yaw in [5.0, -3.0]:
+            mount = MountExtrinsics(yaw_deg=mount_yaw)
+            tf = PixelToGimbalTransform(cam, mount)
+            yaw, pitch = tf.pixel_to_angle_error(cam.cx, cam.cy)
+            self.assertAlmostEqual(yaw, mount_yaw, places=2,
+                                   msg=f"mount yaw={mount_yaw}")
+            self.assertAlmostEqual(pitch, 0.0, places=2)
+
+    def test_mount_pitch_direction_correct(self) -> None:
+        """mount pitch_deg should produce matching pitch error at optical center."""
+        cam = _make_cam()
+        for mount_pitch in [5.0, -3.0]:
+            mount = MountExtrinsics(pitch_deg=mount_pitch)
+            tf = PixelToGimbalTransform(cam, mount)
+            yaw, pitch = tf.pixel_to_angle_error(cam.cx, cam.cy)
+            self.assertAlmostEqual(yaw, 0.0, places=2)
+            self.assertAlmostEqual(pitch, mount_pitch, places=2,
+                                   msg=f"mount pitch={mount_pitch}")
+
+    def test_mount_roll_no_boresight_shift(self) -> None:
+        """mount roll should NOT shift the boresight (optical center stays zero)."""
+        cam = _make_cam()
+        mount = MountExtrinsics(roll_deg=10.0)
+        tf = PixelToGimbalTransform(cam, mount)
+        yaw, pitch = tf.pixel_to_angle_error(cam.cx, cam.cy)
+        self.assertAlmostEqual(yaw, 0.0, places=4)
+        self.assertAlmostEqual(pitch, 0.0, places=4)
+
     def test_distortion_model_does_not_crash(self) -> None:
         cam = CameraModel(
             width=1280, height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0,

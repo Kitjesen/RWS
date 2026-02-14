@@ -71,22 +71,18 @@ class MountExtrinsics:
     yaw_deg: float = 0.0
 
     def rotation_matrix(self) -> np.ndarray:
-        """Camera-to-gimbal rotation matrix (3x3)."""
-        r = math.radians(self.roll_deg)
-        p = math.radians(self.pitch_deg)
-        y = math.radians(self.yaw_deg)
+        """Camera-to-gimbal rotation matrix (3×3).
 
-        cr, sr = math.cos(r), math.sin(r)
-        cp, sp = math.cos(p), math.sin(p)
-        cy, sy = math.cos(y), math.sin(y)
+        Uses **camera-frame Euler convention** Ry(yaw) @ Rx(pitch) @ Rz(roll)
+        because both camera and gimbal frames are Z-forward (OpenCV):
 
-        # Rz(yaw) @ Ry(pitch) @ Rx(roll)
-        R = np.array([
-            [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-            [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-            [-sp,     cp * sr,                cp * cr               ],
-        ], dtype=np.float64)
-        return R
+        * Yaw   = rotation around Y (down)    → turns boresight left / right
+        * Pitch = rotation around X (right)   → tilts boresight up / down
+        * Roll  = rotation around Z (forward) → rolls image plane
+        """
+        return _euler_camera_to_rotation(
+            self.yaw_deg, self.pitch_deg, self.roll_deg,
+        )
 
 
 @dataclass
@@ -182,16 +178,27 @@ class PixelToGimbalTransform:
 
 
 # ---------------------------------------------------------------------------
-# Helper: Euler ZYX -> rotation matrix
+# Helper: Euler rotation matrices
 # ---------------------------------------------------------------------------
 
-def _euler_zyx_to_rotation(yaw_deg: float, pitch_deg: float, roll_deg: float) -> np.ndarray:
-    """Return 3×3 rotation matrix from Euler angles (ZYX convention).
+def _euler_camera_to_rotation(
+    yaw_deg: float, pitch_deg: float, roll_deg: float,
+) -> np.ndarray:
+    """Rotation matrix for Z-forward frames: Ry(yaw) @ Rx(pitch) @ Rz(roll).
+
+    Applicable to **camera**, **gimbal**, and any other Z-forward frame
+    (OpenCV convention: X-right, Y-down, Z-forward).
+
+    Axis-to-motion mapping
+    ----------------------
+    * Yaw   → Ry — rotation around Y (down):    positive = boresight turns RIGHT
+    * Pitch → Rx — rotation around X (right):   positive = boresight tilts UP
+    * Roll  → Rz — rotation around Z (forward): positive = CW image rotation
 
     Parameters
     ----------
     yaw_deg, pitch_deg, roll_deg : float
-        Angles in degrees.  Convention: Rz(yaw) @ Ry(pitch) @ Rx(roll).
+        Angles in degrees.
 
     Returns
     -------
@@ -206,10 +213,11 @@ def _euler_zyx_to_rotation(yaw_deg: float, pitch_deg: float, roll_deg: float) ->
     cp, sp = math.cos(p), math.sin(p)
     cr, sr = math.cos(r), math.sin(r)
 
+    # Ry(y) @ Rx(p) @ Rz(r)
     return np.array([
-        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-        [-sp,     cp * sr,                cp * cr               ],
+        [cy * cr + sy * sp * sr, -cy * sr + sy * sp * cr, sy * cp],
+        [cp * sr,                 cp * cr,                -sp    ],
+        [-sy * cr + cy * sp * sr, sy * sr + cy * sp * cr, cy * cp],
     ], dtype=np.float64)
 
 
@@ -272,15 +280,15 @@ class FullChainTransform:
         cam_dir = np.array([xn, yn, 1.0], dtype=np.float64)
         gimbal_dir = self._pixel_to_gimbal._R_cam2gimbal @ cam_dir
 
-        # gimbal → body
-        R_gimbal2body = _euler_zyx_to_rotation(
+        # gimbal → body  (gimbal frame is Z-forward → camera convention)
+        R_gimbal2body = _euler_camera_to_rotation(
             gimbal_fb.yaw_deg, gimbal_fb.pitch_deg, 0.0,
         )
         body_dir = R_gimbal2body @ gimbal_dir
 
-        # body → world
+        # body → world  (body frame also treated as Z-forward — see module docstring)
         if body is not None:
-            R_body2world = _euler_zyx_to_rotation(
+            R_body2world = _euler_camera_to_rotation(
                 body.yaw_deg, body.pitch_deg, body.roll_deg,
             )
             world_dir = R_body2world @ body_dir
@@ -334,8 +342,8 @@ class FullChainTransform:
         cam_dir = np.array([xn, yn, 1.0], dtype=np.float64)
         gimbal_dir = self._pixel_to_gimbal._R_cam2gimbal @ cam_dir
 
-        # Step 2: gimbal → body (using current gimbal angles)
-        R_gimbal2body = _euler_zyx_to_rotation(
+        # Step 2: gimbal → body (using current gimbal angles, Z-forward convention)
+        R_gimbal2body = _euler_camera_to_rotation(
             gimbal_fb.yaw_deg, gimbal_fb.pitch_deg, 0.0,
         )
         body_dir = R_gimbal2body @ gimbal_dir
