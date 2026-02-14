@@ -1,0 +1,9 @@
+# Core dependencies
+ultralytics>=8.3.0    # YOLO11n model & inference
+opencv-python>=4.8.0  # Image I/O, undistortion, display
+numpy>=1.24.0         # Array math, coordinate transforms
+scipy>=1.11.0         # Signal processing (optional, for future filters)
+pyyaml>=6.0           # Configuration file support
+
+# SIL simulation (MuJoCo)
+mujoco>=3.0.0         # Physics simulation for closed-loop testing

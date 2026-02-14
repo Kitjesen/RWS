@@ -1,0 +1,94 @@
+# ============================================================
+# RWS Vision-Gimbal Tracking System Configuration
+# ============================================================
+
+camera:
+  width: 1280
+  height: 720
+  fx: 970.0
+  fy: 965.0
+  cx: 640.0
+  cy: 360.0
+  # OpenCV 5-param distortion [k1, k2, p1, p2, k3]
+  distortion_k1: 0.0
+  distortion_k2: 0.0
+  distortion_p1: 0.0
+  distortion_p2: 0.0
+  distortion_k3: 0.0
+  # Camera-to-gimbal mount offsets (degrees)
+  mount_roll_deg: 0.0
+  mount_pitch_deg: 0.0
+  mount_yaw_deg: 0.0
+
+detector:
+  # --- 检测+分割+跟踪模型 (推荐) ---
+  model_path: "yolo11n-seg.pt"        # 实例分割模型（Kalman平滑 + mask质心）
+  # --- 仅检测模型 (轻量备选) ---
+  # model_path: "yolo11n.pt"
+  # --- 使用微调后的自定义模型（训练完后取消注释） ---
+  # model_path: "runs/rws_finetune/weights/best.pt"
+  confidence_threshold: 0.40
+  nms_iou_threshold: 0.45
+  img_size: 640
+  device: ""                    # "" = auto, "cpu", "cuda:0"
+  tracker: "botsort.yaml"      # BoT-SORT (Kalman+ReID); 备选: "bytetrack.yaml"
+  class_whitelist:              # 微调后改成你的类别名，如 ["target"]
+    - person
+
+selector:
+  weights:
+    confidence: 0.35
+    size: 0.20
+    center_proximity: 0.20
+    track_age: 0.15
+    class_weight: 0.10
+    switch_penalty: 0.30
+  min_hold_time_s: 0.4
+  delta_threshold: 0.12
+  preferred_classes:
+    person: 1.0
+    car: 0.6
+
+controller:
+  yaw_pid:
+    kp: 5.0                      # 提高比例增益，加快响应
+    ki: 0.4                       # 提高积分增益，消除稳态误差
+    kd: 0.35                      # 微分增益，抑制超调
+    integral_limit: 40.0
+    output_limit: 180.0
+    derivative_lpf_alpha: 0.4     # 微分低通滤波（抗高频噪声）
+    feedforward_kv: 0.75          # 速度前馈增益：补偿 75% 目标角速度
+  pitch_pid:
+    kp: 5.5
+    ki: 0.35
+    kd: 0.35
+    integral_limit: 40.0
+    output_limit: 180.0
+    derivative_lpf_alpha: 0.4
+    feedforward_kv: 0.70
+  max_rate_dps: 180.0
+  command_lpf_alpha: 0.75         # 减少平滑，提高响应速度
+  lock_error_threshold_deg: 0.8
+  lock_hold_time_s: 0.4
+  predict_timeout_s: 0.25
+  lost_timeout_s: 1.5
+  max_track_error_timeout_s: 5.0  # 持续高误差超时后回退 SEARCH (s)
+  high_error_multiplier: 5.0      # "误差过大"判断倍数 (× lock_error_threshold_deg)
+  scan_pattern: [40.0, 20.0]      # [yaw_amplitude_dps, pitch_amplitude_dps]
+  scan_freq_hz: 0.15              # 扫描正弦波频率 (Hz, ~6.7s 周期)
+  scan_yaw_scale: 1.0             # yaw 幅度系数
+  scan_pitch_scale: 0.3           # pitch 幅度系数
+  scan_pitch_freq_ratio: 0.7      # pitch 频率 / yaw 频率
+  latency_compensation_s: 0.033   # 补偿约 1 帧延迟 (30Hz)
+
+# 云台驱动限位与动力学参数
+driver_limits:
+  yaw_min_deg: -160.0
+  yaw_max_deg: 160.0
+  pitch_min_deg: -45.0
+  pitch_max_deg: 75.0
+  max_rate_dps: 240.0
+  deadband_dps: 0.2
+  inertia_time_constant_s: 0.05   # 一阶惯性时间常数
+  static_friction_dps: 0.5        # 静摩擦阈值
+  coulomb_friction_dps: 2.0       # 库仑摩擦

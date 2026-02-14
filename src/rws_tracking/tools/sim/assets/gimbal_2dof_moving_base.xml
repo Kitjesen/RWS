@@ -1,0 +1,135 @@
+<!--
+  RWS 2-DOF Gimbal on Moving Base (Robot Dog Simulation)
+  =======================================================
+  Structure:
+      world (fixed)
+        └─ base_link           (MOVABLE platform — simulates robot dog body)
+            ├─ base_roll_joint  (revolute, X-axis)
+            ├─ base_pitch_joint (revolute, Y-axis)
+            └─ base_yaw_joint   (revolute, Z-axis)
+                └─ yaw_joint       (revolute, Z-axis, pan — gimbal)
+                    └─ yaw_link
+                        └─ pitch_joint (revolute, Y-axis, tilt — gimbal)
+                            └─ pitch_link + camera
+
+      target_base              (free body, movable target)
+
+  The base joints are position-controlled externally by MujocoEnv
+  to simulate robot dog body oscillation during walking gait.
+
+  Actuators: velocity-controlled gimbal (match pipeline's rate commands)
+             + position-controlled base joints (driven by env disturbance).
+  Camera: 1280x720, mounted on pitch_link, looking along +X of pitch_link.
+-->
+<mujoco model="rws_gimbal_2dof_moving_base">
+
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicit"/>
+
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+  </visual>
+
+  <compiler angle="degree"/>
+
+  <default>
+    <joint damping="0.5" armature="0.01"/>
+    <geom rgba="0.6 0.6 0.6 1"/>
+  </default>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker"
+             rgb1="0.3 0.3 0.3" rgb2="0.4 0.4 0.4"
+             width="512" height="512"/>
+    <material name="grid_mat" texture="grid" texrepeat="8 8" reflectance="0.1"/>
+    <material name="target_mat" rgba="0.9 0.2 0.1 1" reflectance="0.3"/>
+  </asset>
+
+  <worldbody>
+    <!-- Ground plane -->
+    <geom type="plane" size="20 20 0.1" material="grid_mat"/>
+
+    <light pos="0 0 8" dir="0 0 -1" diffuse="0.8 0.8 0.8" castshadow="true"/>
+    <light pos="5 5 6" dir="-1 -1 -1" diffuse="0.5 0.5 0.5"/>
+
+    <!-- ============= Moving Base (Robot Dog Body) ============= -->
+    <!-- Roll around X, then pitch around Y, then yaw around Z -->
+    <body name="base_platform" pos="0 0 1.2">
+      <inertial pos="0 0 0" mass="1.0" diaginertia="0.01 0.01 0.01"/>
+      <joint name="base_roll" type="hinge" axis="1 0 0"
+             range="-30 30" damping="2" armature="0.02"/>
+      <body name="base_pitch_body">
+        <inertial pos="0 0 0" mass="1.0" diaginertia="0.01 0.01 0.01"/>
+        <joint name="base_pitch" type="hinge" axis="0 1 0"
+               range="-30 30" damping="2" armature="0.02"/>
+        <body name="base_yaw_body">
+          <joint name="base_yaw" type="hinge" axis="0 0 1"
+                 range="-30 30" damping="2" armature="0.02"/>
+          <geom type="box" size="0.15 0.1 0.04" rgba="0.4 0.3 0.2 1"/>
+
+          <!-- ============= Gimbal Assembly (mounted on dog body) ============= -->
+          <body name="base_link" pos="0 0 0.05">
+            <geom type="cylinder" size="0.08 0.05" rgba="0.3 0.3 0.3 1"/>
+
+            <!-- Yaw joint: rotates around Z (vertical) -->
+            <body name="yaw_link" pos="0 0 0.06">
+              <joint name="yaw_joint" type="hinge" axis="0 0 1"
+                     range="-160 160" damping="0.8" armature="0.02"/>
+              <geom type="box" size="0.04 0.04 0.03" rgba="0.2 0.5 0.7 1"/>
+
+              <!-- Pitch joint: rotates around Y (lateral) -->
+              <body name="pitch_link" pos="0 0 0.04">
+                <joint name="pitch_joint" type="hinge" axis="0 1 0"
+                       range="-45 75" damping="0.6" armature="0.015"/>
+                <geom type="box" size="0.06 0.03 0.025" rgba="0.2 0.6 0.3 1"/>
+
+                <!-- Camera sensor: looks along +X of pitch_link -->
+                <camera name="gimbal_cam" pos="0.07 0 0" xyaxes="0 -1 0 0 0 1"
+                        fovy="41" resolution="1280 720"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- ============= Target Object ============= -->
+    <body name="target" pos="0 0 0" gravcomp="1">
+      <joint name="target_x" type="slide" axis="1 0 0" damping="0"/>
+      <joint name="target_y" type="slide" axis="0 1 0" damping="0"/>
+      <joint name="target_z" type="slide" axis="0 0 1" damping="0"/>
+      <geom name="target_geom" type="sphere" size="0.5"
+            material="target_mat" mass="1.0"/>
+    </body>
+  </worldbody>
+
+  <!-- Actuators -->
+  <actuator>
+    <!-- Gimbal velocity-controlled -->
+    <velocity name="yaw_motor" joint="yaw_joint" kv="50"
+              ctrlrange="-240 240" forcerange="-20 20"/>
+    <velocity name="pitch_motor" joint="pitch_joint" kv="50"
+              ctrlrange="-240 240" forcerange="-20 20"/>
+
+    <!-- Base position-controlled (driven by env to simulate gait) -->
+    <!-- High kp for tight tracking of sinusoidal commands -->
+    <position name="base_roll_motor"  joint="base_roll"  kp="2000" ctrlrange="-30 30"/>
+    <position name="base_pitch_motor" joint="base_pitch" kp="2000" ctrlrange="-30 30"/>
+    <position name="base_yaw_motor"   joint="base_yaw"   kp="2000" ctrlrange="-30 30"/>
+  </actuator>
+
+  <!-- Sensors for reading joint state -->
+  <sensor>
+    <jointpos name="yaw_pos" joint="yaw_joint"/>
+    <jointpos name="pitch_pos" joint="pitch_joint"/>
+    <jointvel name="yaw_vel" joint="yaw_joint"/>
+    <jointvel name="pitch_vel" joint="pitch_joint"/>
+    <!-- Base sensors -->
+    <jointpos name="base_roll_pos"  joint="base_roll"/>
+    <jointpos name="base_pitch_pos" joint="base_pitch"/>
+    <jointpos name="base_yaw_pos"   joint="base_yaw"/>
+    <jointvel name="base_roll_vel"  joint="base_roll"/>
+    <jointvel name="base_pitch_vel" joint="base_pitch"/>
+    <jointvel name="base_yaw_vel"   joint="base_yaw"/>
+  </sensor>
+
+</mujoco>

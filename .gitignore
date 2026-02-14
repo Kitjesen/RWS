@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+
+# Virtual environment
+rws/
+.venv/
+venv/
+
+# YOLO model weights (download at runtime)
+*.pt
+*.onnx
+*.engine
+*.trt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI assistants
+.cursor/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Logs and telemetry exports
+*.jsonl
+*.log
+logs/
+
+# Training outputs
+runs/
+
+# Dataset images & labels (too large for git, manage separately)
+dataset/images/
+dataset/labels/
+
+# Test videos (downloaded at runtime)
+test_videos/
+
+# Recorded output videos
+output/
+
+# Vendor (cloned repos tracked separately)
+vendor/
