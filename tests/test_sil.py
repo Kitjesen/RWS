@@ -3,7 +3,7 @@
 import unittest
 
 try:
-    import mujoco
+    import mujoco  # noqa: F401
 
     MUJOCO_AVAILABLE = True
 except ImportError:
