@@ -15,6 +15,7 @@ Units
 - Sensors return rad and rad/s.
 - All conversions happen here, so the rest of the pipeline stays in degrees.
 """
+
 from __future__ import annotations
 
 import math
@@ -42,8 +43,8 @@ class MujocoGimbalDriver:
 
     def __init__(
         self,
-        model: "mujoco.MjModel",
-        data: "mujoco.MjData",
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
         yaw_actuator: str = "yaw_motor",
         pitch_actuator: str = "pitch_motor",
         yaw_sign: float = -1.0,
@@ -62,10 +63,18 @@ class MujocoGimbalDriver:
         self._pitch_sign = pitch_sign
 
         # Sensor indices
-        self._yaw_pos_adr = model.sensor_adr[mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR, "yaw_pos")]
-        self._pitch_pos_adr = model.sensor_adr[mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR, "pitch_pos")]
-        self._yaw_vel_adr = model.sensor_adr[mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR, "yaw_vel")]
-        self._pitch_vel_adr = model.sensor_adr[mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR, "pitch_vel")]
+        self._yaw_pos_adr = model.sensor_adr[
+            mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR, "yaw_pos")
+        ]
+        self._pitch_pos_adr = model.sensor_adr[
+            mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR, "pitch_pos")
+        ]
+        self._yaw_vel_adr = model.sensor_adr[
+            mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR, "yaw_vel")
+        ]
+        self._pitch_vel_adr = model.sensor_adr[
+            mj.mj_name2id(model, mj.mjtObj.mjOBJ_SENSOR, "pitch_vel")
+        ]
 
     # ------------------------------------------------------------------
     # GimbalDriver protocol

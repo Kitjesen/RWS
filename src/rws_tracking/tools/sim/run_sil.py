@@ -19,20 +19,20 @@ Usage::
     # Waypoint motion
     python -m src.rws_tracking.tools.sim.run_sil --pattern waypoints --duration 30 --show
 """
+
 from __future__ import annotations
 
 import argparse
 import time
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 from .mujoco_env import BaseDisturbance, MujocoEnv, TargetMotion
 
-
 # ---------------------------------------------------------------------------
 # MuJoCo-backed BodyMotionProvider — reads actual base sensors
 # ---------------------------------------------------------------------------
+
 
 class _MujocoBodyMotionProvider:
     """Reads body state from MuJoCo base sensors.  Implements ``BodyMotionProvider``."""
@@ -47,6 +47,7 @@ class _MujocoBodyMotionProvider:
 # ---------------------------------------------------------------------------
 # Pipeline factory
 # ---------------------------------------------------------------------------
+
 
 def build_sil_pipeline(
     env: MujocoEnv,
@@ -79,7 +80,8 @@ def build_sil_pipeline(
     cam = CameraModel(
         width=env.camera.width,
         height=env.camera.height,
-        fx=970.0, fy=965.0,
+        fx=970.0,
+        fy=965.0,
         cx=env.camera.width / 2.0,
         cy=env.camera.height / 2.0,
     )
@@ -88,6 +90,7 @@ def build_sil_pipeline(
 
     if use_yolo:
         from ...perception import YoloDetector
+
         detector = YoloDetector(
             model_path=model_path,
             confidence_threshold=0.35,
@@ -133,7 +136,7 @@ def run_sil(
     device: str = "",
     show: bool = False,
     body_motion: bool = False,
-) -> Dict:
+) -> dict:
     """
     Run closed-loop SIL simulation.
 
@@ -187,6 +190,7 @@ def run_sil(
     cv2_imported = False
     if show:
         import cv2
+
         cv2_imported = True
 
     frame_count = 0
@@ -251,7 +255,7 @@ def run_sil(
     print(f"  Sim time:   {env.time:.1f}s")
     print(f"  Wall time:  {elapsed:.1f}s  ({elapsed / max(env.time, 1e-6):.1f}x realtime)")
     print(f"  Frames:     {frame_count}")
-    print(f"  Metrics:")
+    print("  Metrics:")
     for k, v in metrics.items():
         print(f"    {k}: {v:.4f}")
     print("=" * 60)
@@ -328,7 +332,12 @@ def _draw_overlay(frame: np.ndarray, output, env: MujocoEnv) -> np.ndarray:
     yaw_err = cmd.metadata.get("yaw_error_deg", 0.0)
     pitch_err = cmd.metadata.get("pitch_error_deg", 0.0)
 
-    color_map = {"SEARCH": (0, 200, 255), "TRACK": (255, 200, 0), "LOCK": (0, 255, 0), "LOST": (0, 0, 255)}
+    color_map = {
+        "SEARCH": (0, 200, 255),
+        "TRACK": (255, 200, 0),
+        "LOCK": (0, 255, 0),
+        "LOST": (0, 0, 255),
+    }
     color = color_map.get(state_name, (255, 255, 255))
 
     info = f"{state_name} | err:({yaw_err:+.1f}, {pitch_err:+.1f}) | t={env.time:.1f}s"
@@ -341,25 +350,38 @@ def _draw_overlay(frame: np.ndarray, output, env: MujocoEnv) -> np.ndarray:
 # CLI entry point
 # ------------------------------------------------------------------
 
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="RWS MuJoCo SIL closed-loop simulation.")
-    p.add_argument("--pattern", type=str, default="circle",
-                   choices=["static", "linear", "circle", "waypoints"],
-                   help="Target motion pattern (default: circle)")
-    p.add_argument("--duration", type=float, default=10.0,
-                   help="Simulation duration in seconds (default: 10)")
-    p.add_argument("--hz", type=float, default=30.0,
-                   help="Control loop rate in Hz (default: 30)")
-    p.add_argument("--yolo", action="store_true",
-                   help="Use YOLO detector instead of ground truth (default: ground truth)")
-    p.add_argument("--model", type=str, default="yolo11n.pt",
-                   help="YOLO model path, only used with --yolo (default: yolo11n.pt)")
-    p.add_argument("--device", type=str, default="",
-                   help="Inference device (default: auto)")
-    p.add_argument("--show", action="store_true",
-                   help="Show live visualization window")
-    p.add_argument("--body-motion", action="store_true",
-                   help="Simulate robot dog gait oscillation on base (test feedforward compensation)")
+    p.add_argument(
+        "--pattern",
+        type=str,
+        default="circle",
+        choices=["static", "linear", "circle", "waypoints"],
+        help="Target motion pattern (default: circle)",
+    )
+    p.add_argument(
+        "--duration", type=float, default=10.0, help="Simulation duration in seconds (default: 10)"
+    )
+    p.add_argument("--hz", type=float, default=30.0, help="Control loop rate in Hz (default: 30)")
+    p.add_argument(
+        "--yolo",
+        action="store_true",
+        help="Use YOLO detector instead of ground truth (default: ground truth)",
+    )
+    p.add_argument(
+        "--model",
+        type=str,
+        default="yolo11n.pt",
+        help="YOLO model path, only used with --yolo (default: yolo11n.pt)",
+    )
+    p.add_argument("--device", type=str, default="", help="Inference device (default: auto)")
+    p.add_argument("--show", action="store_true", help="Show live visualization window")
+    p.add_argument(
+        "--body-motion",
+        action="store_true",
+        help="Simulate robot dog gait oscillation on base (test feedforward compensation)",
+    )
     return p.parse_args()
 
 

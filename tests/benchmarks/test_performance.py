@@ -1,15 +1,17 @@
 """Performance benchmarks for RWS components."""
-import pytest
+
 import time
-import numpy as np
+
+import pytest
+
 from src.rws_tracking.algebra.coordinate_transform import (
     CameraModel,
     PixelToGimbalTransform,
 )
 from src.rws_tracking.algebra.kalman2d import ConstantVelocityKalman2D
-from src.rws_tracking.perception.selector import WeightedTargetSelector
 from src.rws_tracking.config import SelectorConfig, SelectorWeights
-from src.rws_tracking.types import Track, BoundingBox
+from src.rws_tracking.perception.selector import WeightedTargetSelector
+from src.rws_tracking.types import BoundingBox, Track
 
 
 @pytest.fixture
@@ -47,16 +49,16 @@ class TestCoordinateTransformPerformance:
         def run():
             return transform.pixel_to_gimbal_error(740.0, 360.0, 0.0, 0.0)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # Should be very fast (< 100 microseconds)
-        assert benchmark.stats['mean'] < 0.0001  # 100 µs
+        assert benchmark.stats["mean"] < 0.0001  # 100 µs
 
     def test_pixel_to_gimbal_batch(self, benchmark, camera_model):
         """Benchmark batch pixel to gimbal transforms."""
         transform = PixelToGimbalTransform(camera_model)
 
-        pixels = [(100 + i*10, 200 + i*5) for i in range(100)]
+        pixels = [(100 + i * 10, 200 + i * 5) for i in range(100)]
 
         def run():
             results = []
@@ -64,35 +66,35 @@ class TestCoordinateTransformPerformance:
                 results.append(transform.pixel_to_gimbal_error(px, py, 0.0, 0.0))
             return results
 
-        result = benchmark(run)
+        benchmark(run)
 
         # 100 transforms should be < 10ms
-        assert benchmark.stats['mean'] < 0.01
+        assert benchmark.stats["mean"] < 0.01
 
     def test_pixel_to_normalized(self, benchmark, camera_model):
         """Benchmark pixel to normalized conversion."""
+
         def run():
             return camera_model.pixel_to_normalized(740.0, 360.0)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # Should be extremely fast (< 10 microseconds)
-        assert benchmark.stats['mean'] < 0.00001  # 10 µs
+        assert benchmark.stats["mean"] < 0.00001  # 10 µs
 
     def test_distortion_correction(self, benchmark):
         """Benchmark distortion correction."""
         cam = CameraModel(
-            1280, 720, 970.0, 965.0, 640.0, 360.0,
-            k1=0.1, k2=-0.05, p1=0.01, p2=-0.01, k3=0.02
+            1280, 720, 970.0, 965.0, 640.0, 360.0, k1=0.1, k2=-0.05, p1=0.01, p2=-0.01, k3=0.02
         )
 
         def run():
             return cam.undistort(0.1, 0.05)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # Distortion correction should be fast (< 50 microseconds)
-        assert benchmark.stats['mean'] < 0.00005  # 50 µs
+        assert benchmark.stats["mean"] < 0.00005  # 50 µs
 
 
 class TestKalmanFilterPerformance:
@@ -105,10 +107,10 @@ class TestKalmanFilterPerformance:
         def run():
             kf.update(100.0, 200.0, timestamp=time.time())
 
-        result = benchmark(run)
+        benchmark(run)
 
         # Kalman update should be fast (< 100 microseconds)
-        assert benchmark.stats['mean'] < 0.0001  # 100 µs
+        assert benchmark.stats["mean"] < 0.0001  # 100 µs
 
     def test_kalman_predict(self, benchmark):
         """Benchmark Kalman filter prediction."""
@@ -118,25 +120,25 @@ class TestKalmanFilterPerformance:
         def run():
             return kf.predict(dt=0.033)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # Prediction should be very fast (< 50 microseconds)
-        assert benchmark.stats['mean'] < 0.00005  # 50 µs
+        assert benchmark.stats["mean"] < 0.00005  # 50 µs
 
     def test_kalman_sequence(self, benchmark):
         """Benchmark sequence of Kalman updates."""
         kf = ConstantVelocityKalman2D(process_noise=0.1, measurement_noise=1.0)
 
-        measurements = [(100 + i, 200 + i*0.5) for i in range(30)]
+        measurements = [(100 + i, 200 + i * 0.5) for i in range(30)]
 
         def run():
             for i, (x, y) in enumerate(measurements):
-                kf.update(x, y, timestamp=i*0.033)
+                kf.update(x, y, timestamp=i * 0.033)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # 30 updates @ 30Hz should be < 3ms
-        assert benchmark.stats['mean'] < 0.003
+        assert benchmark.stats["mean"] < 0.003
 
 
 class TestSelectorPerformance:
@@ -148,8 +150,8 @@ class TestSelectorPerformance:
         for i in range(n):
             track = Track(
                 track_id=i,
-                bbox=BoundingBox(x=100+i*50, y=100+i*30, w=50, h=50),
-                confidence=0.7 + i*0.01,
+                bbox=BoundingBox(x=100 + i * 50, y=100 + i * 30, w=50, h=50),
+                confidence=0.7 + i * 0.01,
                 class_id="person",
                 first_seen_ts=0.0,
                 last_seen_ts=0.0,
@@ -167,10 +169,10 @@ class TestSelectorPerformance:
         def run():
             return selector.select(tracks, timestamp=1.0)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # Single track selection should be very fast (< 50 microseconds)
-        assert benchmark.stats['mean'] < 0.00005  # 50 µs
+        assert benchmark.stats["mean"] < 0.00005  # 50 µs
 
     def test_selector_10_tracks(self, benchmark, selector):
         """Benchmark selector with 10 tracks."""
@@ -179,10 +181,10 @@ class TestSelectorPerformance:
         def run():
             return selector.select(tracks, timestamp=1.0)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # 10 tracks should be < 200 microseconds
-        assert benchmark.stats['mean'] < 0.0002  # 200 µs
+        assert benchmark.stats["mean"] < 0.0002  # 200 µs
 
     def test_selector_50_tracks(self, benchmark, selector):
         """Benchmark selector with 50 tracks."""
@@ -191,10 +193,10 @@ class TestSelectorPerformance:
         def run():
             return selector.select(tracks, timestamp=1.0)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # 50 tracks should be < 1ms
-        assert benchmark.stats['mean'] < 0.001
+        assert benchmark.stats["mean"] < 0.001
 
     def test_selector_100_tracks(self, benchmark, selector):
         """Benchmark selector with 100 tracks."""
@@ -203,10 +205,10 @@ class TestSelectorPerformance:
         def run():
             return selector.select(tracks, timestamp=1.0)
 
-        result = benchmark(run)
+        benchmark(run)
 
         # 100 tracks should be < 2ms
-        assert benchmark.stats['mean'] < 0.002
+        assert benchmark.stats["mean"] < 0.002
 
 
 class TestEndToEndPerformance:
@@ -218,7 +220,7 @@ class TestEndToEndPerformance:
         tracks = [
             Track(
                 track_id=i,
-                bbox=BoundingBox(x=100+i*100, y=200, w=100, h=100),
+                bbox=BoundingBox(x=100 + i * 100, y=200, w=100, h=100),
                 confidence=0.8,
                 class_id="person",
                 first_seen_ts=0.0,
@@ -239,10 +241,10 @@ class TestEndToEndPerformance:
                 yaw_err, pitch_err = transform.pixel_to_gimbal_error(cx, cy, 0.0, 0.0)
             return target
 
-        result = benchmark(run)
+        benchmark(run)
 
         # Full processing (without YOLO) should be < 500 microseconds
-        assert benchmark.stats['mean'] < 0.0005  # 500 µs
+        assert benchmark.stats["mean"] < 0.0005  # 500 µs
 
     def test_control_loop_iteration(self, benchmark, camera_model):
         """Benchmark single control loop iteration."""
@@ -261,14 +263,14 @@ class TestEndToEndPerformance:
             yaw_err, pitch_err = transform.pixel_to_gimbal_error(pixel_x, pixel_y, 0.0, 0.0)
 
             # 4. Predict
-            predicted = kf.predict(dt=0.033)
+            kf.predict(dt=0.033)
 
             return yaw_err, pitch_err
 
-        result = benchmark(run)
+        benchmark(run)
 
         # Control loop iteration should be < 200 microseconds
-        assert benchmark.stats['mean'] < 0.0002  # 200 µs
+        assert benchmark.stats["mean"] < 0.0002  # 200 µs
 
 
 class TestMemoryUsage:
@@ -353,7 +355,7 @@ class TestScalability:
             tracks = [
                 Track(
                     track_id=i,
-                    bbox=BoundingBox(x=100+i*10, y=100, w=50, h=50),
+                    bbox=BoundingBox(x=100 + i * 10, y=100, w=50, h=50),
                     confidence=0.8,
                     class_id="person",
                     first_seen_ts=0.0,
@@ -406,7 +408,7 @@ class TestRealTimeConstraints:
         tracks = [
             Track(
                 track_id=i,
-                bbox=BoundingBox(x=100+i*50, y=100, w=50, h=50),
+                bbox=BoundingBox(x=100 + i * 50, y=100, w=50, h=50),
                 confidence=0.8,
                 class_id="person",
                 first_seen_ts=0.0,
@@ -433,7 +435,7 @@ class TestRealTimeConstraints:
             yaw_err, pitch_err = transform.pixel_to_gimbal_error(cx, cy, 0.0, 0.0)
 
             # Predict
-            predicted = kf.predict(dt=0.033)
+            kf.predict(dt=0.033)
 
         elapsed = time.perf_counter() - start
 

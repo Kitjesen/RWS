@@ -1,9 +1,10 @@
 """End-to-end orchestration pipeline."""
+
 from __future__ import annotations
 
 import signal
 from dataclasses import dataclass
-from typing import List, Optional, Protocol
+from typing import Protocol
 
 from ..control.interfaces import GimbalController
 from ..hardware.imu_interface import BodyMotionProvider
@@ -16,13 +17,12 @@ from ..types import ControlCommand, TargetObservation, Track
 class CombinedTracker(Protocol):
     """Protocol for combined detector+tracker (e.g. YoloSegTracker)."""
 
-    def detect_and_track(self, frame: object, timestamp: float) -> List[Track]:
-        ...
+    def detect_and_track(self, frame: object, timestamp: float) -> list[Track]: ...
 
 
 @dataclass
 class PipelineOutputs:
-    selected_target: Optional[TargetObservation]
+    selected_target: TargetObservation | None
     command: ControlCommand
 
 
@@ -49,8 +49,8 @@ class VisionGimbalPipeline:
         controller: GimbalController,
         driver: GimbalDriver,
         telemetry: TelemetryLogger,
-        combined_tracker: Optional[CombinedTracker] = None,
-        body_provider: Optional[BodyMotionProvider] = None,
+        combined_tracker: CombinedTracker | None = None,
+        body_provider: BodyMotionProvider | None = None,
     ) -> None:
         self.detector = detector
         self.tracker = tracker
@@ -60,7 +60,7 @@ class VisionGimbalPipeline:
         self.telemetry = telemetry
         self._combined_tracker = combined_tracker
         self._body_provider = body_provider
-        self._last_target_id: Optional[int] = None
+        self._last_target_id: int | None = None
         self._stop_flag = False
         self._signal_handlers_installed = False
 
@@ -108,9 +108,14 @@ class VisionGimbalPipeline:
         )
 
         command = self.controller.compute_command(
-            selected, feedback, timestamp, body_state=body_state,
+            selected,
+            feedback,
+            timestamp,
+            body_state=body_state,
         )
-        self.driver.set_yaw_pitch_rate(command.yaw_rate_cmd_dps, command.pitch_rate_cmd_dps, timestamp)
+        self.driver.set_yaw_pitch_rate(
+            command.yaw_rate_cmd_dps, command.pitch_rate_cmd_dps, timestamp
+        )
 
         self.telemetry.log(
             "control",

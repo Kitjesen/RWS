@@ -5,21 +5,22 @@ Usage:
     cfg = load_config("config.yaml")
     save_config(cfg, "config_backup.yaml")
 """
+
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
-
-logger = logging.getLogger(__name__)
+from typing import Any
 
 import yaml
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Selector
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class SelectorWeights:
@@ -36,10 +37,10 @@ class SelectorConfig:
     weights: SelectorWeights = SelectorWeights()
     min_hold_time_s: float = 0.4
     delta_threshold: float = 0.12
-    preferred_classes: Optional[Dict[str, float]] = None
+    preferred_classes: dict[str, float] | None = None
     age_norm_frames: int = 60  # 年龄归一化帧数
 
-    def class_weights(self) -> Dict[str, float]:
+    def class_weights(self) -> dict[str, float]:
         if self.preferred_classes is None:
             return {}
         return self.preferred_classes
@@ -48,6 +49,7 @@ class SelectorConfig:
 # ---------------------------------------------------------------------------
 # PID
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class PIDConfig:
@@ -64,6 +66,7 @@ class PIDConfig:
 # Ballistic Compensation
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class BallisticConfig:
     enabled: bool = False
@@ -74,13 +77,14 @@ class BallisticConfig:
     quadratic_b: float = 0.01
     quadratic_c: float = 0.0
     # Table 模型参数
-    distance_table: Tuple[float, ...] = (5.0, 10.0, 15.0, 20.0, 25.0, 30.0)
-    compensation_table: Tuple[float, ...] = (0.1, 0.4, 0.9, 1.6, 2.5, 3.6)
+    distance_table: tuple[float, ...] = (5.0, 10.0, 15.0, 20.0, 25.0, 30.0)
+    compensation_table: tuple[float, ...] = (0.1, 0.4, 0.9, 1.6, 2.5, 3.6)
 
 
 # ---------------------------------------------------------------------------
 # Adaptive PID
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class AdaptivePIDConfig:
@@ -104,6 +108,7 @@ class AdaptivePIDConfig:
 # Controller
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class GimbalControllerConfig:
     yaw_pid: PIDConfig
@@ -116,7 +121,7 @@ class GimbalControllerConfig:
     lost_timeout_s: float = 1.5
     max_track_error_timeout_s: float = 5.0
     high_error_multiplier: float = 5.0  # 判断"误差过大"的倍数 (× lock_error_threshold_deg)
-    scan_pattern: Tuple[float, float] = (40.0, 20.0)
+    scan_pattern: tuple[float, float] = (40.0, 20.0)
     scan_freq_hz: float = 0.15  # 扫描正弦波频率 (Hz)
     scan_yaw_scale: float = 1.0  # yaw 幅度相对 scan_pattern[0] 的系数
     scan_pitch_scale: float = 0.3  # pitch 幅度相对 scan_pattern[1] 的系数
@@ -129,6 +134,7 @@ class GimbalControllerConfig:
 # ---------------------------------------------------------------------------
 # Camera
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class CameraConfig:
@@ -152,6 +158,7 @@ class CameraConfig:
 # Detection
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class DetectorConfig:
     model_path: str = "yolo11n.pt"
@@ -160,12 +167,13 @@ class DetectorConfig:
     img_size: int = 640
     device: str = ""
     tracker: str = "botsort.yaml"  # BoT-SORT | ByteTrack tracker config
-    class_whitelist: Tuple[str, ...] = ()
+    class_whitelist: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
 # Hardware / Driver limits
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class DriverLimitsConfig:
@@ -184,12 +192,13 @@ class DriverLimitsConfig:
 # Top-level system config
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SystemConfig:
     camera: CameraConfig = CameraConfig()
     detector: DetectorConfig = DetectorConfig()
     selector: SelectorConfig = SelectorConfig()
-    controller: Optional[GimbalControllerConfig] = None
+    controller: GimbalControllerConfig | None = None
     driver_limits: DriverLimitsConfig = DriverLimitsConfig()
 
     def __post_init__(self) -> None:
@@ -201,17 +210,24 @@ class SystemConfig:
 # Defaults
 # ---------------------------------------------------------------------------
 
+
 def default_controller_config() -> GimbalControllerConfig:
     return GimbalControllerConfig(
         yaw_pid=PIDConfig(
-            kp=5.0, ki=0.4, kd=0.35,
-            integral_limit=40.0, output_limit=180.0,
+            kp=5.0,
+            ki=0.4,
+            kd=0.35,
+            integral_limit=40.0,
+            output_limit=180.0,
             derivative_lpf_alpha=0.4,
             feedforward_kv=0.75,
         ),
         pitch_pid=PIDConfig(
-            kp=5.5, ki=0.35, kd=0.35,
-            integral_limit=40.0, output_limit=180.0,
+            kp=5.5,
+            ki=0.35,
+            kd=0.35,
+            integral_limit=40.0,
+            output_limit=180.0,
             derivative_lpf_alpha=0.4,
             feedforward_kv=0.70,
         ),
@@ -224,7 +240,8 @@ def default_controller_config() -> GimbalControllerConfig:
 # YAML load / save
 # ---------------------------------------------------------------------------
 
-def _warn_unknown_keys(section: str, data: Dict[str, Any], cls: type) -> None:
+
+def _warn_unknown_keys(section: str, data: dict[str, Any], cls: type) -> None:
     """Warn about keys in YAML that don't match any dataclass field."""
     known = set(cls.__dataclass_fields__.keys())
     for k in data:
@@ -232,7 +249,7 @@ def _warn_unknown_keys(section: str, data: Dict[str, Any], cls: type) -> None:
             logger.warning("config.yaml [%s]: unknown key '%s' (ignored)", section, k)
 
 
-def _nested_dict_to_config(data: Dict[str, Any]) -> SystemConfig:
+def _nested_dict_to_config(data: dict[str, Any]) -> SystemConfig:
     """Convert a flat/nested dict (from YAML) into SystemConfig."""
     cam_d = data.get("camera", {})
     det_d = data.get("detector", {})
@@ -241,23 +258,35 @@ def _nested_dict_to_config(data: Dict[str, Any]) -> SystemConfig:
     drv_d = data.get("driver_limits", {})
 
     _warn_unknown_keys("camera", cam_d, CameraConfig)
-    camera = CameraConfig(**{k: v for k, v in cam_d.items() if k in CameraConfig.__dataclass_fields__})
+    camera = CameraConfig(
+        **{k: v for k, v in cam_d.items() if k in CameraConfig.__dataclass_fields__}
+    )
 
     wl = det_d.pop("class_whitelist", ())
     if isinstance(wl, list):
         wl = tuple(wl)
     _warn_unknown_keys("detector", det_d, DetectorConfig)
-    detector = DetectorConfig(**{k: v for k, v in det_d.items() if k in DetectorConfig.__dataclass_fields__}, class_whitelist=wl)
+    detector = DetectorConfig(
+        **{k: v for k, v in det_d.items() if k in DetectorConfig.__dataclass_fields__},
+        class_whitelist=wl,
+    )
 
     weights_d = sel_d.pop("weights", {})
     _warn_unknown_keys("selector.weights", weights_d, SelectorWeights)
-    weights = SelectorWeights(**{k: v for k, v in weights_d.items() if k in SelectorWeights.__dataclass_fields__})
+    weights = SelectorWeights(
+        **{k: v for k, v in weights_d.items() if k in SelectorWeights.__dataclass_fields__}
+    )
     preferred = sel_d.pop("preferred_classes", None)
     _warn_unknown_keys("selector", sel_d, SelectorConfig)
     selector = SelectorConfig(
         weights=weights,
         preferred_classes=preferred,
-        **{k: v for k, v in sel_d.items() if k in SelectorConfig.__dataclass_fields__ and k not in ("weights", "preferred_classes")},
+        **{
+            k: v
+            for k, v in sel_d.items()
+            if k in SelectorConfig.__dataclass_fields__
+            and k not in ("weights", "preferred_classes")
+        },
     )
 
     yaw_d = ctrl_d.pop("yaw_pid", {})
@@ -284,37 +313,54 @@ def _nested_dict_to_config(data: Dict[str, Any]) -> SystemConfig:
     # Parse adaptive PID config
     adaptive_d = ctrl_d.pop("adaptive_pid", {})
     _warn_unknown_keys("controller.adaptive_pid", adaptive_d, AdaptivePIDConfig)
-    adaptive_pid = AdaptivePIDConfig(**{k: v for k, v in adaptive_d.items() if k in AdaptivePIDConfig.__dataclass_fields__})
+    adaptive_pid = AdaptivePIDConfig(
+        **{k: v for k, v in adaptive_d.items() if k in AdaptivePIDConfig.__dataclass_fields__}
+    )
 
     _warn_unknown_keys("controller.yaw_pid", yaw_d, PIDConfig)
     _warn_unknown_keys("controller.pitch_pid", pitch_d, PIDConfig)
     yaw_pid = PIDConfig(**{k: v for k, v in yaw_d.items() if k in PIDConfig.__dataclass_fields__})
-    pitch_pid = PIDConfig(**{k: v for k, v in pitch_d.items() if k in PIDConfig.__dataclass_fields__})
+    pitch_pid = PIDConfig(
+        **{k: v for k, v in pitch_d.items() if k in PIDConfig.__dataclass_fields__}
+    )
     _warn_unknown_keys("controller", ctrl_d, GimbalControllerConfig)
     controller = GimbalControllerConfig(
-        yaw_pid=yaw_pid, pitch_pid=pitch_pid, scan_pattern=scan,
-        ballistic=ballistic, adaptive_pid=adaptive_pid,
-        **{k: v for k, v in ctrl_d.items() if k in GimbalControllerConfig.__dataclass_fields__ and k not in ("yaw_pid", "pitch_pid", "scan_pattern", "ballistic", "adaptive_pid")},
+        yaw_pid=yaw_pid,
+        pitch_pid=pitch_pid,
+        scan_pattern=scan,
+        ballistic=ballistic,
+        adaptive_pid=adaptive_pid,
+        **{
+            k: v
+            for k, v in ctrl_d.items()
+            if k in GimbalControllerConfig.__dataclass_fields__
+            and k not in ("yaw_pid", "pitch_pid", "scan_pattern", "ballistic", "adaptive_pid")
+        },
     )
 
     # Parse driver limits config
     _warn_unknown_keys("driver_limits", drv_d, DriverLimitsConfig)
-    driver_limits = DriverLimitsConfig(**{k: v for k, v in drv_d.items() if k in DriverLimitsConfig.__dataclass_fields__})
+    driver_limits = DriverLimitsConfig(
+        **{k: v for k, v in drv_d.items() if k in DriverLimitsConfig.__dataclass_fields__}
+    )
 
     return SystemConfig(
-        camera=camera, detector=detector, selector=selector,
-        controller=controller, driver_limits=driver_limits,
+        camera=camera,
+        detector=detector,
+        selector=selector,
+        controller=controller,
+        driver_limits=driver_limits,
     )
 
 
-def load_config(path: Union[str, Path]) -> SystemConfig:
+def load_config(path: str | Path) -> SystemConfig:
     """Load SystemConfig from a YAML file."""
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     return _nested_dict_to_config(data)
 
 
-def save_config(cfg: SystemConfig, path: Union[str, Path]) -> None:
+def save_config(cfg: SystemConfig, path: str | Path) -> None:
     """Save SystemConfig to a YAML file."""
     d = asdict(cfg)
     # Convert tuples to lists for YAML readability

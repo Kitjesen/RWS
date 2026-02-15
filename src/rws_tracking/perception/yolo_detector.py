@@ -6,10 +6,11 @@ Responsibilities (single):
     - Class whitelist filtering and confidence threshold are handled here.
     - No tracking, no coordinate transform -- those belong to downstream modules.
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -45,7 +46,7 @@ class YoloDetector:
         model_path: str = "yolo11n.pt",
         confidence_threshold: float = 0.45,
         nms_iou_threshold: float = 0.45,
-        class_whitelist: Optional[Sequence[str]] = None,
+        class_whitelist: Sequence[str] | None = None,
         device: str = "",
         img_size: int = 640,
     ) -> None:
@@ -57,8 +58,8 @@ class YoloDetector:
         self._device = device
         self._img_size = img_size
 
-        self._id_to_name: Dict[int, str] = self._model.names
-        self._allowed_ids: Optional[List[int]] = None
+        self._id_to_name: dict[int, str] = self._model.names
+        self._allowed_ids: list[int] | None = None
         if class_whitelist is not None:
             name_lower_map = {v.lower(): k for k, v in self._id_to_name.items()}
             self._allowed_ids = [
@@ -72,10 +73,14 @@ class YoloDetector:
 
         logger.info(
             "YoloDetector ready  model=%s  conf=%.2f  iou=%.2f  whitelist=%s  device=%s",
-            model_path, self._conf, self._iou, class_whitelist, device or "auto",
+            model_path,
+            self._conf,
+            self._iou,
+            class_whitelist,
+            device or "auto",
         )
 
-    def detect(self, frame: object, timestamp: float) -> List[Detection]:
+    def detect(self, frame: object, timestamp: float) -> list[Detection]:
         """Run YOLO inference on a single BGR frame (np.ndarray)."""
         if not isinstance(frame, np.ndarray):
             logger.warning("YoloDetector.detect received non-ndarray frame; returning empty.")
@@ -91,7 +96,7 @@ class YoloDetector:
             verbose=False,
         )
 
-        detections: List[Detection] = []
+        detections: list[Detection] = []
         for result in results:
             boxes = result.boxes
             if boxes is None or len(boxes) == 0:

@@ -9,26 +9,26 @@ Validates:
   4. Controller feedforward compensation (body_state=None → zero regression)
   5. Pipeline body_provider plumbing
 """
+
 from __future__ import annotations
 
 import math
 import unittest
 
-from src.rws_tracking.types import BodyState, GimbalFeedback, TargetObservation, BoundingBox
 from src.rws_tracking.algebra import (
     CameraModel,
     FullChainTransform,
-    MountExtrinsics,
     PixelToGimbalTransform,
 )
+from src.rws_tracking.config import default_controller_config
+from src.rws_tracking.control import TwoAxisGimbalController
 from src.rws_tracking.hardware.mock_imu import (
     ReplayBodyMotion,
     SinusoidalBodyMotion,
     SinusoidalConfig,
     StaticBodyMotion,
 )
-from src.rws_tracking.config import default_controller_config
-from src.rws_tracking.control import TwoAxisGimbalController
+from src.rws_tracking.types import BodyState, BoundingBox, GimbalFeedback, TargetObservation
 
 
 def _make_cam() -> CameraModel:
@@ -38,6 +38,7 @@ def _make_cam() -> CameraModel:
 # ---------------------------------------------------------------------------
 # BodyState tests
 # ---------------------------------------------------------------------------
+
 
 class BodyStateTests(unittest.TestCase):
     def test_defaults_are_zero(self) -> None:
@@ -59,6 +60,7 @@ class BodyStateTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Mock IMU tests
 # ---------------------------------------------------------------------------
+
 
 class StaticBodyMotionTests(unittest.TestCase):
     def test_always_zero(self) -> None:
@@ -127,14 +129,16 @@ class ReplayBodyMotionTests(unittest.TestCase):
 # FullChainTransform tests
 # ---------------------------------------------------------------------------
 
+
 class FullChainTransformTests(unittest.TestCase):
     def test_no_body_matches_pixel_to_gimbal(self) -> None:
         """With body=None, target_lock_error should equal PixelToGimbalTransform."""
         cam = _make_cam()
         fct = FullChainTransform(cam)
         simple = PixelToGimbalTransform(cam)
-        fb = GimbalFeedback(timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0,
-                            yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        fb = GimbalFeedback(
+            timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
+        )
 
         u, v = 700.0, 300.0
         yaw_full, pitch_full = fct.target_lock_error(u, v, fb, body=None)
@@ -147,8 +151,9 @@ class FullChainTransformTests(unittest.TestCase):
         the same result as target_lock_error(body=None)."""
         cam = _make_cam()
         fct = FullChainTransform(cam)
-        fb = GimbalFeedback(timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0,
-                            yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        fb = GimbalFeedback(
+            timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
+        )
         body_zero = BodyState(timestamp=0.0)
 
         u, v = 700.0, 300.0
@@ -160,8 +165,9 @@ class FullChainTransformTests(unittest.TestCase):
     def test_pixel_to_world_returns_finite(self) -> None:
         cam = _make_cam()
         fct = FullChainTransform(cam)
-        fb = GimbalFeedback(timestamp=0.0, yaw_deg=5.0, pitch_deg=-3.0,
-                            yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        fb = GimbalFeedback(
+            timestamp=0.0, yaw_deg=5.0, pitch_deg=-3.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
+        )
         body = BodyState(timestamp=0.0, roll_deg=2.0, pitch_deg=-1.0, yaw_deg=10.0)
         yaw, pitch = fct.pixel_to_world_direction(640.0, 360.0, fb, body)
         self.assertTrue(math.isfinite(yaw))
@@ -174,13 +180,18 @@ class FullChainTransformTests(unittest.TestCase):
         fct = FullChainTransform(cam)
         body_zero = BodyState(timestamp=0.0)
 
-        fb_yaw10 = GimbalFeedback(timestamp=0.0, yaw_deg=10.0, pitch_deg=0.0,
-                                  yaw_rate_dps=0.0, pitch_rate_dps=0.0)
-        yaw_err, pitch_err = fct.target_lock_error(
-            cam.cx, cam.cy, fb_yaw10, body=body_zero,
+        fb_yaw10 = GimbalFeedback(
+            timestamp=0.0, yaw_deg=10.0, pitch_deg=0.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
         )
-        self.assertAlmostEqual(yaw_err, 0.0, places=2,
-                               msg="optical center with matching gimbal angle → 0 error")
+        yaw_err, pitch_err = fct.target_lock_error(
+            cam.cx,
+            cam.cy,
+            fb_yaw10,
+            body=body_zero,
+        )
+        self.assertAlmostEqual(
+            yaw_err, 0.0, places=2, msg="optical center with matching gimbal angle → 0 error"
+        )
         self.assertAlmostEqual(pitch_err, 0.0, places=2)
 
     def test_gimbal_pitch_rotates_boresight_correctly(self) -> None:
@@ -189,10 +200,14 @@ class FullChainTransformTests(unittest.TestCase):
         fct = FullChainTransform(cam)
         body_zero = BodyState(timestamp=0.0)
 
-        fb_pitch = GimbalFeedback(timestamp=0.0, yaw_deg=0.0, pitch_deg=-5.0,
-                                  yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        fb_pitch = GimbalFeedback(
+            timestamp=0.0, yaw_deg=0.0, pitch_deg=-5.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
+        )
         yaw_err, pitch_err = fct.target_lock_error(
-            cam.cx, cam.cy, fb_pitch, body=body_zero,
+            cam.cx,
+            cam.cy,
+            fb_pitch,
+            body=body_zero,
         )
         self.assertAlmostEqual(yaw_err, 0.0, places=2)
         self.assertAlmostEqual(pitch_err, 0.0, places=2)
@@ -209,19 +224,25 @@ class FullChainTransformTests(unittest.TestCase):
         u_offset = cam.cx + 100.0  # about 5.9° right of center
         pixel_yaw, _ = simple.pixel_to_angle_error(u_offset, cam.cy)
 
-        fb_yaw10 = GimbalFeedback(timestamp=0.0, yaw_deg=10.0, pitch_deg=0.0,
-                                  yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        fb_yaw10 = GimbalFeedback(
+            timestamp=0.0, yaw_deg=10.0, pitch_deg=0.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
+        )
         yaw_err, _ = fct.target_lock_error(
-            u_offset, cam.cy, fb_yaw10, body=body_zero,
+            u_offset,
+            cam.cy,
+            fb_yaw10,
+            body=body_zero,
         )
         # Error should approximate the pixel-space angular offset
-        self.assertAlmostEqual(yaw_err, pixel_yaw, delta=0.5,
-                               msg="gimbal rotation should preserve pixel-space error")
+        self.assertAlmostEqual(
+            yaw_err, pixel_yaw, delta=0.5, msg="gimbal rotation should preserve pixel-space error"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Controller feedforward tests
 # ---------------------------------------------------------------------------
+
 
 class ControllerFeedforwardTests(unittest.TestCase):
     def _make_controller(self) -> TwoAxisGimbalController:
@@ -304,14 +325,19 @@ class ControllerFeedforwardTests(unittest.TestCase):
 # Pipeline body_provider plumbing test
 # ---------------------------------------------------------------------------
 
+
 class PipelineBodyProviderTests(unittest.TestCase):
     def test_pipeline_accepts_body_provider(self) -> None:
         """Pipeline construction with body_provider=StaticBodyMotion should work."""
-        from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
+        from src.rws_tracking.config import SelectorConfig
         from src.rws_tracking.hardware import SimulatedGimbalDriver
+        from src.rws_tracking.perception import (
+            PassthroughDetector,
+            SimpleIoUTracker,
+            WeightedTargetSelector,
+        )
         from src.rws_tracking.pipeline import VisionGimbalPipeline
         from src.rws_tracking.telemetry import InMemoryTelemetryLogger
-        from src.rws_tracking.config import SelectorConfig
 
         cam = _make_cam()
         transform = PixelToGimbalTransform(cam)
@@ -331,11 +357,15 @@ class PipelineBodyProviderTests(unittest.TestCase):
 
     def test_pipeline_without_body_provider_works(self) -> None:
         """Pipeline with body_provider=None must not regress."""
-        from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
+        from src.rws_tracking.config import SelectorConfig
         from src.rws_tracking.hardware import SimulatedGimbalDriver
+        from src.rws_tracking.perception import (
+            PassthroughDetector,
+            SimpleIoUTracker,
+            WeightedTargetSelector,
+        )
         from src.rws_tracking.pipeline import VisionGimbalPipeline
         from src.rws_tracking.telemetry import InMemoryTelemetryLogger
-        from src.rws_tracking.config import SelectorConfig
 
         cam = _make_cam()
         transform = PixelToGimbalTransform(cam)

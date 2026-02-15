@@ -22,6 +22,7 @@ YOLO 微调训练脚本
 
 训练完成后，把 best.pt 路径填入 config.yaml → detector.model_path 即可接入 pipeline。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -85,7 +86,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help="Number of backbone layers to freeze (0 = train all, 10 = freeze backbone). "
-             "Freezing backbone is recommended when dataset is small (<200 images).",
+        "Freezing backbone is recommended when dataset is small (<200 images).",
     )
     return parser.parse_args()
 
@@ -101,7 +102,7 @@ def validate_dataset(data_path: str) -> None:
     # Quick sanity check on image dirs
     import yaml  # type: ignore[import-untyped]
 
-    with open(p, "r", encoding="utf-8") as f:
+    with open(p, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     root = Path(cfg.get("path", p.parent))
@@ -170,10 +171,10 @@ def main() -> None:
         hsv_h=0.015,
         hsv_s=0.7,
         hsv_v=0.4,
-        flipud=0.0,       # 上下翻转（目标一般不倒置，关掉）
-        fliplr=0.5,        # 左右翻转
-        mosaic=1.0,         # 马赛克增强
-        mixup=0.1,          # mixup 增强
+        flipud=0.0,  # 上下翻转（目标一般不倒置，关掉）
+        fliplr=0.5,  # 左右翻转
+        mosaic=1.0,  # 马赛克增强
+        mixup=0.1,  # mixup 增强
     )
 
     # --- Done ---

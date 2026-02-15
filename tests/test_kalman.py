@@ -1,11 +1,12 @@
 """Unit tests for Kalman filters."""
-import pytest
+
 import numpy as np
+import pytest
+
 from src.rws_tracking.algebra.kalman2d import (
     CentroidKalman2D,
     CentroidKalmanCA,
     KalmanConfig,
-    KalmanCAConfig,
 )
 
 
@@ -88,7 +89,7 @@ class TestCentroidKalman2D:
         measurements = []
         estimates = []
 
-        for i in range(30):
+        for _i in range(30):
             # Add noise
             meas_cx = 100.0 + np.random.randn() * 10.0
             meas_cy = 200.0 + np.random.randn() * 10.0
@@ -220,12 +221,12 @@ class TestEdgeCases:
         # Move right
         for i in range(10):
             kf.predict(dt=0.033)
-            kf.update(cx=i*10.0, cy=0.0)
+            kf.update(cx=i * 10.0, cy=0.0)
 
         # Sudden reverse
         for i in range(10):
             kf.predict(dt=0.033)
-            kf.update(cx=100.0 - i*10.0, cy=0.0)
+            kf.update(cx=100.0 - i * 10.0, cy=0.0)
 
         # Should adapt
         pos = kf.position
@@ -263,8 +264,8 @@ class TestComparison:
             cv_pos = cv.position
             ca_pos = ca.position
 
-            cv_err = np.sqrt((cv_pos[0] - true_cx)**2 + (cv_pos[1] - true_cy)**2)
-            ca_err = np.sqrt((ca_pos[0] - true_cx)**2 + (ca_pos[1] - true_cy)**2)
+            cv_err = np.sqrt((cv_pos[0] - true_cx) ** 2 + (cv_pos[1] - true_cy) ** 2)
+            ca_err = np.sqrt((ca_pos[0] - true_cx) ** 2 + (ca_pos[1] - true_cy) ** 2)
 
             cv_errors.append(cv_err)
             ca_errors.append(ca_err)

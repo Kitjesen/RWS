@@ -1,10 +1,19 @@
 """MuJoCo SIL integration tests."""
+
 import unittest
 
+try:
+    import mujoco
+
+    MUJOCO_AVAILABLE = True
+except ImportError:
+    MUJOCO_AVAILABLE = False
+
 from src.rws_tracking.tools.sim.mujoco_env import BaseDisturbance, MujocoEnv, TargetMotion
-from src.rws_tracking.tools.sim.run_sil import build_sil_pipeline, _MujocoBodyMotionProvider
+from src.rws_tracking.tools.sim.run_sil import _MujocoBodyMotionProvider, build_sil_pipeline
 
 
+@unittest.skipIf(not MUJOCO_AVAILABLE, "mujoco not installed")
 class MujocoEnvTests(unittest.TestCase):
     def test_env_create_and_close(self) -> None:
         env = MujocoEnv()
@@ -12,7 +21,9 @@ class MujocoEnvTests(unittest.TestCase):
         env.close()
 
     def test_target_position_updates(self) -> None:
-        motion = TargetMotion(pattern="linear", start_pos=(5.0, 0.0, 1.5), velocity_mps=(1.0, 0.0, 0.0))
+        motion = TargetMotion(
+            pattern="linear", start_pos=(5.0, 0.0, 1.5), velocity_mps=(1.0, 0.0, 0.0)
+        )
         env = MujocoEnv(target_motion=motion)
         env.step(100)
         pos = env.get_target_position()
@@ -22,7 +33,6 @@ class MujocoEnvTests(unittest.TestCase):
     def test_reset_restores_initial_state(self) -> None:
         env = MujocoEnv()
         env.step(50)
-        t_before = env.time
         env.reset()
         self.assertAlmostEqual(env.time, 0.0, places=6)
         env.close()
@@ -34,9 +44,12 @@ class GroundTruthDetectorTests(unittest.TestCase):
         env.step(10)
         frame = env.camera.render()
         from src.rws_tracking.tools.sim.ground_truth_detector import GroundTruthDetector
+
         det = GroundTruthDetector(
-            model=env.model, data=env.data,
-            image_width=env.camera.width, image_height=env.camera.height,
+            model=env.model,
+            data=env.data,
+            image_width=env.camera.width,
+            image_height=env.camera.height,
         )
         detections = det.detect(frame, env.time)
         self.assertGreater(len(detections), 0)
@@ -60,7 +73,9 @@ class SILClosedLoopTests(unittest.TestCase):
         env.close()
 
     def test_circle_target_tracks(self) -> None:
-        motion = TargetMotion(pattern="circle", center=(5.0, 0.0, 1.5), radius_m=2.0, omega_dps=25.0)
+        motion = TargetMotion(
+            pattern="circle", center=(5.0, 0.0, 1.5), radius_m=2.0, omega_dps=25.0
+        )
         env = MujocoEnv(target_motion=motion)
         pipeline = build_sil_pipeline(env)
         control_dt = 1.0 / 30.0

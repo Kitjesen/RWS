@@ -1,8 +1,8 @@
 """实时可视化仪表盘 — 基于 cv2 的轻量级遥测可视化"""
+
 from __future__ import annotations
 
 from collections import deque
-from typing import Dict, List, Optional
 
 import cv2
 import numpy as np
@@ -85,14 +85,17 @@ class RealtimeDashboard:
     # 绘图子模块
     # ------------------------------------------------------------------
 
-    def _draw_error_plot(
-        self, canvas: np.ndarray, x: int, y: int, w: int, h: int
-    ) -> None:
+    def _draw_error_plot(self, canvas: np.ndarray, x: int, y: int, w: int, h: int) -> None:
         """绘制误差曲线"""
         if len(self._history) < 2:
             cv2.putText(
-                canvas, "Waiting for data...", (x + 10, y + h // 2),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 100, 100), 1,
+                canvas,
+                "Waiting for data...",
+                (x + 10, y + h // 2),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (100, 100, 100),
+                1,
             )
             return
 
@@ -129,29 +132,52 @@ class RealtimeDashboard:
 
         # 标签
         cv2.putText(
-            canvas, "Error (deg)", (x + 10, y + 20),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1,
+            canvas,
+            "Error (deg)",
+            (x + 10, y + 20),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
         )
         cv2.putText(
-            canvas, "Yaw", (x + 10, y + 40),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1,
+            canvas,
+            "Yaw",
+            (x + 10, y + 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (0, 0, 255),
+            1,
         )
         cv2.putText(
-            canvas, "Pitch", (x + 60, y + 40),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1,
+            canvas,
+            "Pitch",
+            (x + 60, y + 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (0, 255, 0),
+            1,
         )
         cv2.putText(
-            canvas, f"+{y_range:.0f}", (x + w - 30, y + 15),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.3, (150, 150, 150), 1,
+            canvas,
+            f"+{y_range:.0f}",
+            (x + w - 30, y + 15),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.3,
+            (150, 150, 150),
+            1,
         )
         cv2.putText(
-            canvas, f"-{y_range:.0f}", (x + w - 30, y + h - 5),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.3, (150, 150, 150), 1,
+            canvas,
+            f"-{y_range:.0f}",
+            (x + w - 30, y + h - 5),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.3,
+            (150, 150, 150),
+            1,
         )
 
-    def _draw_command_plot(
-        self, canvas: np.ndarray, x: int, y: int, w: int, h: int
-    ) -> None:
+    def _draw_command_plot(self, canvas: np.ndarray, x: int, y: int, w: int, h: int) -> None:
         """绘制命令速率曲线"""
         if len(self._history) < 2:
             return
@@ -187,21 +213,34 @@ class RealtimeDashboard:
             cv2.line(canvas, (x1, y1), (x2, y2), (255, 255, 0), 2)
 
         cv2.putText(
-            canvas, "Command (dps)", (x + 10, y + 20),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1,
+            canvas,
+            "Command (dps)",
+            (x + 10, y + 20),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
         )
         cv2.putText(
-            canvas, "Yaw", (x + 10, y + 40),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1,
+            canvas,
+            "Yaw",
+            (x + 10, y + 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (0, 255, 255),
+            1,
         )
         cv2.putText(
-            canvas, "Pitch", (x + 60, y + 40),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1,
+            canvas,
+            "Pitch",
+            (x + 60, y + 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (255, 255, 0),
+            1,
         )
 
-    def _draw_state_machine(
-        self, canvas: np.ndarray, x: int, y: int, w: int, h: int
-    ) -> None:
+    def _draw_state_machine(self, canvas: np.ndarray, x: int, y: int, w: int, h: int) -> None:
         """绘制状态机可视化"""
         if len(self._history) == 0:
             return
@@ -212,7 +251,10 @@ class RealtimeDashboard:
         current_state = self._history[-1].payload.get("state", 0.0)
         state_names = ["SEARCH", "TRACK", "LOCK", "LOST"]
         state_colors = [
-            (100, 100, 100), (0, 255, 255), (0, 255, 0), (0, 0, 255),
+            (100, 100, 100),
+            (0, 255, 255),
+            (0, 255, 0),
+            (0, 0, 255),
         ]
 
         state_idx = int(current_state)
@@ -225,12 +267,22 @@ class RealtimeDashboard:
 
         # 大字显示当前状态
         cv2.putText(
-            canvas, "STATE", (x + 10, y + 30),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1,
+            canvas,
+            "STATE",
+            (x + 10, y + 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (200, 200, 200),
+            1,
         )
         cv2.putText(
-            canvas, state_name, (x + 10, y + 70),
-            cv2.FONT_HERSHEY_SIMPLEX, 1.2, state_color, 2,
+            canvas,
+            state_name,
+            (x + 10, y + 70),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.2,
+            state_color,
+            2,
         )
 
         # 状态历史（窗口内的状态分布）
@@ -244,26 +296,32 @@ class RealtimeDashboard:
         total = sum(state_counts)
         if total > 0:
             y_offset = y + 120
-            for i, (name, count, color) in enumerate(
-                zip(state_names, state_counts, state_colors)
-            ):
+            for i, (name, count, color) in enumerate(zip(state_names, state_counts, state_colors)):
                 pct = count / total * 100
                 cv2.putText(
-                    canvas, f"{name}: {pct:.1f}%", (x + 10, y_offset + i * 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1,
+                    canvas,
+                    f"{name}: {pct:.1f}%",
+                    (x + 10, y_offset + i * 25),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    color,
+                    1,
                 )
 
-    def _draw_metrics(
-        self, canvas: np.ndarray, x: int, y: int, w: int, h: int
-    ) -> None:
+    def _draw_metrics(self, canvas: np.ndarray, x: int, y: int, w: int, h: int) -> None:
         """绘制实时指标"""
         cv2.rectangle(canvas, (x, y), (x + w, y + h), (20, 20, 20), -1)
 
         metrics = self._logger.snapshot_metrics()
 
         cv2.putText(
-            canvas, "METRICS", (x + 10, y + 30),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1,
+            canvas,
+            "METRICS",
+            (x + 10, y + 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (200, 200, 200),
+            1,
         )
 
         y_offset = y + 60
@@ -271,48 +329,55 @@ class RealtimeDashboard:
 
         # Lock Rate
         lock_rate = metrics.get("lock_rate", 0.0) * 100
-        color = (
-            (0, 255, 0) if lock_rate > 50
-            else (0, 255, 255) if lock_rate > 20
-            else (0, 0, 255)
-        )
+        color = (0, 255, 0) if lock_rate > 50 else (0, 255, 255) if lock_rate > 20 else (0, 0, 255)
         cv2.putText(
-            canvas, f"Lock Rate: {lock_rate:.1f}%", (x + 10, y_offset),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1,
+            canvas,
+            f"Lock Rate: {lock_rate:.1f}%",
+            (x + 10, y_offset),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            color,
+            1,
         )
 
         # Avg Error
         avg_error = metrics.get("avg_abs_error_deg", 0.0)
         color = (
-            (0, 255, 0) if avg_error < 2.0
-            else (0, 255, 255) if avg_error < 5.0
-            else (0, 0, 255)
+            (0, 255, 0) if avg_error < 2.0 else (0, 255, 255) if avg_error < 5.0 else (0, 0, 255)
         )
         cv2.putText(
-            canvas, f"Avg Error: {avg_error:.2f} deg",
+            canvas,
+            f"Avg Error: {avg_error:.2f} deg",
             (x + 10, y_offset + line_height),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            color,
+            1,
         )
 
         # Switches
         switches = metrics.get("switches_per_min", 0.0)
-        color = (
-            (0, 255, 0) if switches < 5
-            else (0, 255, 255) if switches < 10
-            else (0, 0, 255)
-        )
+        color = (0, 255, 0) if switches < 5 else (0, 255, 255) if switches < 10 else (0, 0, 255)
         cv2.putText(
-            canvas, f"Switches: {switches:.1f} /min",
+            canvas,
+            f"Switches: {switches:.1f} /min",
             (x + 10, y_offset + line_height * 2),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            color,
+            1,
         )
 
         # 事件计数
         total_events = len(self._logger.events)
         cv2.putText(
-            canvas, f"Events: {total_events}",
+            canvas,
+            f"Events: {total_events}",
             (x + 10, y_offset + line_height * 3),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (150, 150, 150),
+            1,
         )
 
         # 当前误差（最新值）
@@ -321,12 +386,20 @@ class RealtimeDashboard:
             yaw_err = latest.get("yaw_error_deg", 0.0)
             pitch_err = latest.get("pitch_error_deg", 0.0)
             cv2.putText(
-                canvas, f"Yaw Err: {yaw_err:+.2f} deg",
+                canvas,
+                f"Yaw Err: {yaw_err:+.2f} deg",
                 (x + 10, y_offset + line_height * 4),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (0, 0, 255),
+                1,
             )
             cv2.putText(
-                canvas, f"Pitch Err: {pitch_err:+.2f} deg",
+                canvas,
+                f"Pitch Err: {pitch_err:+.2f} deg",
                 (x + 10, y_offset + line_height * 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (0, 255, 0),
+                1,
             )

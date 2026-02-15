@@ -10,12 +10,12 @@ Owns the MuJoCo model/data lifecycle.  Provides:
 
 This is the single entry point for creating a MuJoCo SIL session.
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -42,6 +42,7 @@ class BaseDisturbance:
     roll_freq_hz, pitch_freq_hz, yaw_freq_hz : float
         Oscillation frequency for each axis (Hz).
     """
+
     roll_amplitude_deg: float = 3.0
     roll_freq_hz: float = 2.0
     pitch_amplitude_deg: float = 5.0
@@ -62,15 +63,16 @@ class TargetMotion:
     - ``"circle"``     : orbits around ``center`` at ``radius_m`` with ``omega_dps``.
     - ``"waypoints"``  : moves through ``waypoints`` list sequentially.
     """
+
     pattern: str = "static"
-    start_pos: Tuple[float, float, float] = (5.0, 0.0, 1.5)
-    velocity_mps: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    start_pos: tuple[float, float, float] = (5.0, 0.0, 1.5)
+    velocity_mps: tuple[float, float, float] = (0.0, 0.0, 0.0)
     # circle params
-    center: Tuple[float, float, float] = (5.0, 0.0, 1.5)
+    center: tuple[float, float, float] = (5.0, 0.0, 1.5)
     radius_m: float = 2.0
     omega_dps: float = 30.0
     # waypoint params
-    waypoints: List[Tuple[float, float, float]] = field(default_factory=list)
+    waypoints: list[tuple[float, float, float]] = field(default_factory=list)
     waypoint_speed_mps: float = 1.0
 
 
@@ -92,11 +94,11 @@ class MujocoEnv:
 
     def __init__(
         self,
-        xml_path: Optional[str] = None,
-        target_motion: Optional[TargetMotion] = None,
+        xml_path: str | None = None,
+        target_motion: TargetMotion | None = None,
         render_width: int = 1280,
         render_height: int = 720,
-        base_disturbance: Optional[BaseDisturbance] = None,
+        base_disturbance: BaseDisturbance | None = None,
     ) -> None:
         import mujoco as mj
 
@@ -113,8 +115,10 @@ class MujocoEnv:
 
         self._driver = MujocoGimbalDriver(self._m, self._d)
         self._camera = MujocoCameraRenderer(
-            self._m, self._d,
-            width=render_width, height=render_height,
+            self._m,
+            self._d,
+            width=render_width,
+            height=render_height,
         )
 
         self._target_motion = target_motion or TargetMotion()
@@ -122,8 +126,7 @@ class MujocoEnv:
 
         # Target joint indices (slide joints for x, y, z)
         self._target_jnt_ids = [
-            mj.mj_name2id(self._m, mj.mjtObj.mjOBJ_JOINT, f"target_{ax}")
-            for ax in ("x", "y", "z")
+            mj.mj_name2id(self._m, mj.mjtObj.mjOBJ_JOINT, f"target_{ax}") for ax in ("x", "y", "z")
         ]
         self._waypoint_idx = 0
 
@@ -136,9 +139,7 @@ class MujocoEnv:
             self._base_pitch_act = mj.mj_name2id(
                 self._m, mj.mjtObj.mjOBJ_ACTUATOR, "base_pitch_motor"
             )
-            self._base_yaw_act = mj.mj_name2id(
-                self._m, mj.mjtObj.mjOBJ_ACTUATOR, "base_yaw_motor"
-            )
+            self._base_yaw_act = mj.mj_name2id(self._m, mj.mjtObj.mjOBJ_ACTUATOR, "base_yaw_motor")
             # Base sensors for reading actual state
             self._base_roll_pos_adr = self._m.sensor_adr[
                 mj.mj_name2id(self._m, mj.mjtObj.mjOBJ_SENSOR, "base_roll_pos")
@@ -236,7 +237,7 @@ class MujocoEnv:
         n = max(1, int(round(dt / self.timestep)))
         self.step(n)
 
-    def get_target_position(self) -> Tuple[float, float, float]:
+    def get_target_position(self) -> tuple[float, float, float]:
         """Get current target position in world frame."""
         pos = self._d.body(self._target_body_id).xpos
         return float(pos[0]), float(pos[1]), float(pos[2])

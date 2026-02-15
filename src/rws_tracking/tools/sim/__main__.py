@@ -1,4 +1,5 @@
 """Allow ``python -m src.rws_tracking.tools.sim`` to launch SIL."""
+
 from .run_sil import parse_args, run_sil
 
 args = parse_args()

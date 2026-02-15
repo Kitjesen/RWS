@@ -7,6 +7,7 @@ identical in format to what ``cv2.VideoCapture.read()`` returns.
 
 This module owns the MuJoCo renderer/context lifecycle.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -32,8 +33,8 @@ class MujocoCameraRenderer:
 
     def __init__(
         self,
-        model: "mujoco.MjModel",
-        data: "mujoco.MjData",
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
         camera_name: str = "gimbal_cam",
         width: int = 1280,
         height: int = 720,

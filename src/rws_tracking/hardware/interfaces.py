@@ -26,6 +26,7 @@ Example::
         ...,
     )
 """
+
 from __future__ import annotations
 
 from typing import Protocol
@@ -49,8 +50,8 @@ class GimbalDriver(Protocol):
         Returns GimbalFeedback with current angles and angular rates.
     """
 
-    def set_yaw_pitch_rate(self, yaw_rate_dps: float, pitch_rate_dps: float, timestamp: float) -> None:
-        ...
+    def set_yaw_pitch_rate(
+        self, yaw_rate_dps: float, pitch_rate_dps: float, timestamp: float
+    ) -> None: ...
 
-    def get_feedback(self, timestamp: float) -> GimbalFeedback:
-        ...
+    def get_feedback(self, timestamp: float) -> GimbalFeedback: ...

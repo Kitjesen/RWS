@@ -1,8 +1,8 @@
 """Multi-target selector implementation using weighted scoring."""
+
 from __future__ import annotations
 
 import logging
-from typing import List
 
 from ..config import SelectorConfig
 from ..types import TargetObservation, Track
@@ -32,14 +32,11 @@ class WeightedMultiTargetSelector:
         self._w = frame_width
         self._h = frame_height
         self._cfg = config
-        self._last_selected_ids: List[int] = []
+        self._last_selected_ids: list[int] = []
 
     def select_multiple(
-        self,
-        tracks: List[Track],
-        timestamp: float,
-        max_targets: int = 3
-    ) -> List[TargetObservation]:
+        self, tracks: list[Track], timestamp: float, max_targets: int = 3
+    ) -> list[TargetObservation]:
         """Select up to max_targets best targets.
 
         Parameters
@@ -71,7 +68,7 @@ class WeightedMultiTargetSelector:
 
         # Take top N
         selected = []
-        for score, track in scored[:max_targets]:
+        for _score, track in scored[:max_targets]:
             obs = TargetObservation(
                 timestamp=timestamp,
                 track_id=track.track_id,
@@ -91,7 +88,7 @@ class WeightedMultiTargetSelector:
             "Selected %d targets: %s (scores: %s)",
             len(selected),
             [obs.track_id for obs in selected],
-            [f"{score:.2f}" for score, _ in scored[:max_targets]]
+            [f"{score:.2f}" for score, _ in scored[:max_targets]],
         )
 
         return selected
@@ -111,7 +108,7 @@ class WeightedMultiTargetSelector:
         # 3. Center distance weight (closer to center = higher score)
         dx = (cx - self._w / 2) / (self._w / 2)
         dy = (cy - self._h / 2) / (self._h / 2)
-        dist = (dx ** 2 + dy ** 2) ** 0.5
+        dist = (dx**2 + dy**2) ** 0.5
         center_score = max(0.0, 1.0 - dist)
 
         # 4. Age weight (older tracks = more stable)

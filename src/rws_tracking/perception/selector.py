@@ -1,8 +1,8 @@
 """Multi-target weighted scoring with anti-switch jitter."""
+
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 from ..config import SelectorConfig
 from ..types import TargetObservation, Track
@@ -15,12 +15,12 @@ class WeightedTargetSelector:
         self._w = frame_width
         self._h = frame_height
         self._cfg = config
-        self._current_id: Optional[int] = None
+        self._current_id: int | None = None
         self._current_since = 0.0
         self._last_score = 0.0
 
     @staticmethod
-    def _effective_center(track: Track) -> "tuple[float, float]":
+    def _effective_center(track: Track) -> tuple[float, float]:
         """Return mask centroid if available, otherwise bbox center."""
         if track.mask_center is not None:
             return track.mask_center
@@ -46,7 +46,7 @@ class WeightedTargetSelector:
             score -= weights.switch_penalty
         return score
 
-    def select(self, tracks: List[Track], timestamp: float) -> Optional[TargetObservation]:
+    def select(self, tracks: list[Track], timestamp: float) -> TargetObservation | None:
         if not tracks:
             self._current_id = None
             self._last_score = 0.0
@@ -68,8 +68,11 @@ class WeightedTargetSelector:
             if should_switch:
                 logger.debug(
                     "target switch: ID %s -> %s (score %.3f -> %.3f, hold %.2fs)",
-                    self._current_id, top_track.track_id,
-                    self._last_score, top_score, hold_elapsed,
+                    self._current_id,
+                    top_track.track_id,
+                    self._last_score,
+                    top_score,
+                    hold_elapsed,
                 )
                 self._current_id = top_track.track_id
                 self._current_since = timestamp

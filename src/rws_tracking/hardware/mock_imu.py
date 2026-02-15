@@ -17,18 +17,18 @@ Three implementations:
     Replays a pre-recorded sequence of ``BodyState`` entries,
     interpolating between the two nearest timestamps.
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import List
 
 from ..types import BodyState
-
 
 # ---------------------------------------------------------------------------
 # Static (zero motion) — drop-in for legacy "base is fixed" assumption
 # ---------------------------------------------------------------------------
+
 
 class StaticBodyMotion:
     """Always returns zero body state.  Implements ``BodyMotionProvider``."""
@@ -41,9 +41,11 @@ class StaticBodyMotion:
 # Sinusoidal oscillation — models walking gait
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SinusoidalConfig:
     """Amplitude (deg) and frequency (Hz) for each axis."""
+
     roll_amplitude_deg: float = 3.0
     roll_freq_hz: float = 2.0
     pitch_amplitude_deg: float = 5.0
@@ -117,6 +119,7 @@ class SinusoidalBodyMotion:
 # Replay from recorded data
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ReplayBodyMotion:
     """Replay a recorded sequence of ``BodyState``.
@@ -133,7 +136,7 @@ class ReplayBodyMotion:
         Must be sorted by timestamp in ascending order.
     """
 
-    data: List[BodyState] = field(default_factory=list)
+    data: list[BodyState] = field(default_factory=list)
 
     def get_body_state(self, timestamp: float) -> BodyState:
         if not self.data:

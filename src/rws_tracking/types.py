@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -16,7 +15,7 @@ class BoundingBox:
         return max(self.w, 0.0) * max(self.h, 0.0)
 
     @property
-    def center(self) -> Tuple[float, float]:
+    def center(self) -> tuple[float, float]:
         return self.x + self.w * 0.5, self.y + self.h * 0.5
 
 
@@ -38,9 +37,9 @@ class Track:
     last_seen_ts: float
     age_frames: int = 1
     misses: int = 0
-    velocity_px_per_s: Tuple[float, float] = (0.0, 0.0)
-    acceleration_px_per_s2: Tuple[float, float] = (0.0, 0.0)
-    mask_center: Optional[Tuple[float, float]] = None  # segmentation mask centroid (px)
+    velocity_px_per_s: tuple[float, float] = (0.0, 0.0)
+    acceleration_px_per_s2: tuple[float, float] = (0.0, 0.0)
+    mask_center: tuple[float, float] | None = None  # segmentation mask centroid (px)
 
 
 @dataclass(frozen=True)
@@ -50,9 +49,9 @@ class TargetObservation:
     bbox: BoundingBox
     confidence: float
     class_id: str
-    velocity_px_per_s: Tuple[float, float] = (0.0, 0.0)
-    acceleration_px_per_s2: Tuple[float, float] = (0.0, 0.0)
-    mask_center: Optional[Tuple[float, float]] = None  # segmentation mask centroid (px)
+    velocity_px_per_s: tuple[float, float] = (0.0, 0.0)
+    acceleration_px_per_s2: tuple[float, float] = (0.0, 0.0)
+    mask_center: tuple[float, float] | None = None  # segmentation mask centroid (px)
 
 
 @dataclass
@@ -69,7 +68,7 @@ class ControlCommand:
     timestamp: float
     yaw_rate_cmd_dps: float
     pitch_rate_cmd_dps: float
-    metadata: Dict[str, float] = field(default_factory=dict)
+    metadata: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -85,6 +84,7 @@ class BodyState:
     roll_rate_dps, pitch_rate_dps, yaw_rate_dps : float
         Body angular velocity (degrees per second).
     """
+
     timestamp: float
     roll_deg: float = 0.0
     pitch_deg: float = 0.0
@@ -115,4 +115,4 @@ class TargetError:
     timestamp: float
     yaw_error_deg: float
     pitch_error_deg: float
-    target_id: Optional[int]
+    target_id: int | None

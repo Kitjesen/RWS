@@ -1,8 +1,8 @@
 """IoU-based multi-object tracker with stable IDs."""
+
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Dict, List, Set
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -26,11 +26,11 @@ class SimpleIoUTracker:
         self._iou_threshold = iou_threshold
         self._max_misses = max_misses
         self._next_id = 1
-        self._tracks: Dict[int, Track] = {}
+        self._tracks: dict[int, Track] = {}
 
-    def update(self, detections: List[Detection], timestamp: float) -> List[Track]:
-        matches: Dict[int, int] = {}
-        used_det: Set[int] = set()
+    def update(self, detections: list[Detection], timestamp: float) -> list[Track]:
+        matches: dict[int, int] = {}
+        used_det: set[int] = set()
         track_ids = list(self._tracks.keys())
 
         if track_ids and detections:

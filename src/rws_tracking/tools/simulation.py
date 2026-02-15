@@ -1,15 +1,16 @@
 """Synthetic scene and target motion simulation for offline testing."""
+
 from __future__ import annotations
 
 import math
 import random
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
 
 
 @dataclass
 class SimTarget:
     """Legacy pixel-based target (deprecated - use WorldSimTarget instead)."""
+
     x: float
     y: float
     w: float
@@ -27,6 +28,7 @@ class WorldSimTarget:
     This is the recommended way to simulate targets, as it correctly
     models how targets appear in the camera frame when the gimbal rotates.
     """
+
     world_yaw_deg: float  # Target position in world frame (degrees)
     world_pitch_deg: float
     vel_yaw_dps: float  # Target velocity (degrees per second)
@@ -47,16 +49,17 @@ class SyntheticScene:
 
     For realistic simulation, use WorldCoordinateScene instead.
     """
+
     def __init__(self, width: int, height: int, seed: int = 42) -> None:
         self.width = width
         self.height = height
         self.rng = random.Random(seed)
-        self.targets: List[SimTarget] = []
+        self.targets: list[SimTarget] = []
 
     def add_target(self, target: SimTarget) -> None:
         self.targets.append(target)
 
-    def step(self, dt: float) -> List[dict]:
+    def step(self, dt: float) -> list[dict]:
         out = []
         for t in self.targets:
             t.x += t.vx * dt
@@ -69,11 +72,15 @@ class SyntheticScene:
                 t.y = min(max(t.y, 0.0), self.height - t.h)
             noisy_x = t.x + self.rng.uniform(-1.5, 1.5)
             noisy_y = t.y + self.rng.uniform(-1.5, 1.5)
-            out.append({
-                "bbox": (noisy_x, noisy_y, t.w, t.h),
-                "confidence": max(0.05, min(0.99, t.confidence + self.rng.uniform(-0.02, 0.02))),
-                "class_id": t.class_id,
-            })
+            out.append(
+                {
+                    "bbox": (noisy_x, noisy_y, t.w, t.h),
+                    "confidence": max(
+                        0.05, min(0.99, t.confidence + self.rng.uniform(-0.02, 0.02))
+                    ),
+                    "class_id": t.class_id,
+                }
+            )
         return out
 
 
@@ -107,7 +114,7 @@ class WorldCoordinateScene:
         fy: float,
         cx: float,
         cy: float,
-        seed: int = 42
+        seed: int = 42,
     ):
         """Initialize world coordinate scene.
 
@@ -129,18 +136,15 @@ class WorldCoordinateScene:
         self.cx = cx
         self.cy = cy
         self.rng = random.Random(seed)
-        self.targets: List[WorldSimTarget] = []
+        self.targets: list[WorldSimTarget] = []
 
     def add_target(self, target: WorldSimTarget) -> None:
         """Add a target to the scene."""
         self.targets.append(target)
 
     def step(
-        self,
-        dt: float,
-        gimbal_yaw_deg: float = 0.0,
-        gimbal_pitch_deg: float = 0.0
-    ) -> List[dict]:
+        self, dt: float, gimbal_yaw_deg: float = 0.0, gimbal_pitch_deg: float = 0.0
+    ) -> list[dict]:
         """Update scene and return detections visible in current gimbal frame.
 
         Parameters
@@ -183,9 +187,7 @@ class WorldCoordinateScene:
             pixel_y = self.cy - self.fy * math.tan(math.radians(relative_pitch))
 
             # Check if target is in frame
-            if (0 <= pixel_x < self.cam_width and
-                0 <= pixel_y < self.cam_height):
-
+            if 0 <= pixel_x < self.cam_width and 0 <= pixel_y < self.cam_height:
                 # Add detection noise
                 noisy_x = pixel_x + self.rng.uniform(-1.5, 1.5)
                 noisy_y = pixel_y + self.rng.uniform(-1.5, 1.5)
@@ -196,11 +198,12 @@ class WorldCoordinateScene:
                 bbox_x = noisy_x - target.bbox_width / 2
                 bbox_y = noisy_y - target.bbox_height / 2
 
-                detections.append({
-                    "bbox": (bbox_x, bbox_y, target.bbox_width, target.bbox_height),
-                    "confidence": noisy_conf,
-                    "class_id": target.class_id,
-                })
+                detections.append(
+                    {
+                        "bbox": (bbox_x, bbox_y, target.bbox_width, target.bbox_height),
+                        "confidence": noisy_conf,
+                        "class_id": target.class_id,
+                    }
+                )
 
         return detections
-

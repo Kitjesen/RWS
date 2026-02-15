@@ -1,10 +1,9 @@
 """Serial gimbal driver for real hardware integration."""
+
 from __future__ import annotations
 
 import logging
-import time
 from enum import Enum
-from typing import Optional
 
 from ..types import GimbalFeedback
 
@@ -13,10 +12,11 @@ logger = logging.getLogger(__name__)
 
 class GimbalProtocol(Enum):
     """Supported gimbal communication protocols."""
-    PWM = "pwm"           # PWM servo control
-    PELCO_D = "pelco-d"   # PELCO-D protocol
-    PELCO_P = "pelco-p"   # PELCO-P protocol
-    CUSTOM = "custom"     # Custom binary protocol
+
+    PWM = "pwm"  # PWM servo control
+    PELCO_D = "pelco-d"  # PELCO-D protocol
+    PELCO_P = "pelco-p"  # PELCO-P protocol
+    CUSTOM = "custom"  # Custom binary protocol
 
 
 class SerialGimbalDriver:
@@ -75,18 +75,19 @@ class SerialGimbalDriver:
 
         logger.info(
             "SerialGimbalDriver initialized: port=%s, baudrate=%d, protocol=%s",
-            port, baudrate, protocol.value
+            port,
+            baudrate,
+            protocol.value,
         )
 
     def _connect(self) -> None:
         """Establish serial connection."""
         try:
             import serial
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
-                "pyserial is required for SerialGimbalDriver. "
-                "Install it with: pip install pyserial"
-            )
+                "pyserial is required for SerialGimbalDriver. Install it with: pip install pyserial"
+            ) from e
 
         try:
             self._serial = serial.Serial(
@@ -101,10 +102,7 @@ class SerialGimbalDriver:
             raise
 
     def set_yaw_pitch_rate(
-        self,
-        yaw_rate_dps: float,
-        pitch_rate_dps: float,
-        timestamp: float
+        self, yaw_rate_dps: float, pitch_rate_dps: float, timestamp: float
     ) -> None:
         """Send rate command to gimbal.
 
@@ -137,7 +135,9 @@ class SerialGimbalDriver:
 
         logger.debug(
             "Sent command: yaw=%.2f dps, pitch=%.2f dps, t=%.3f",
-            yaw_rate_dps, pitch_rate_dps, timestamp
+            yaw_rate_dps,
+            pitch_rate_dps,
+            timestamp,
         )
 
     def get_feedback(self, timestamp: float) -> GimbalFeedback:
@@ -176,9 +176,11 @@ class SerialGimbalDriver:
 
         logger.debug(
             "Feedback: yaw=%.2f°, pitch=%.2f°, rates=(%.2f, %.2f) dps, t=%.3f",
-            self._yaw_deg, self._pitch_deg,
-            self._yaw_rate_dps, self._pitch_rate_dps,
-            timestamp
+            self._yaw_deg,
+            self._pitch_deg,
+            self._yaw_rate_dps,
+            self._pitch_rate_dps,
+            timestamp,
         )
 
         return GimbalFeedback(
@@ -202,14 +204,16 @@ class SerialGimbalDriver:
         pitch_int = int(max(-32767, min(32767, pitch_rate / 180.0 * 32767)))
 
         # Build packet
-        packet = bytearray([
-            0xFF,  # Header byte 1
-            0xAA,  # Header byte 2
-            (yaw_int >> 8) & 0xFF,   # Yaw high byte
-            yaw_int & 0xFF,          # Yaw low byte
-            (pitch_int >> 8) & 0xFF, # Pitch high byte
-            pitch_int & 0xFF,        # Pitch low byte
-        ])
+        packet = bytearray(
+            [
+                0xFF,  # Header byte 1
+                0xAA,  # Header byte 2
+                (yaw_int >> 8) & 0xFF,  # Yaw high byte
+                yaw_int & 0xFF,  # Yaw low byte
+                (pitch_int >> 8) & 0xFF,  # Pitch high byte
+                pitch_int & 0xFF,  # Pitch low byte
+            ]
+        )
 
         # Add checksum (simple XOR)
         checksum = 0
@@ -251,14 +255,16 @@ class SerialGimbalDriver:
         tilt_speed = int(min(63, abs(pitch_rate) / 180.0 * 63))
 
         # Build packet
-        packet = bytearray([
-            0xFF,        # Sync
-            address,     # Address
-            cmd1,        # Command 1
-            cmd2,        # Command 2
-            pan_speed,   # Pan speed
-            tilt_speed,  # Tilt speed
-        ])
+        packet = bytearray(
+            [
+                0xFF,  # Sync
+                address,  # Address
+                cmd1,  # Command 1
+                cmd2,  # Command 2
+                pan_speed,  # Pan speed
+                tilt_speed,  # Tilt speed
+            ]
+        )
 
         # Checksum (sum of bytes 1-5, modulo 256)
         checksum = sum(packet[1:]) % 256
@@ -281,7 +287,7 @@ class SerialGimbalDriver:
         target_pitch = self._pitch_deg + pitch_rate * dt
 
         command = f"Y{target_yaw:.2f},P{target_pitch:.2f}\n"
-        self._serial.write(command.encode('ascii'))
+        self._serial.write(command.encode("ascii"))
 
     def _read_custom_feedback(self) -> None:
         """Read feedback using custom protocol.

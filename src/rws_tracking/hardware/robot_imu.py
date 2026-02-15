@@ -1,10 +1,9 @@
 """Real robot IMU integration for body motion compensation."""
+
 from __future__ import annotations
 
 import logging
-import time
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from ..types import BodyState
 
@@ -61,17 +60,14 @@ class UnitreeAdapter(RobotSDKAdapter):
         try:
             # Example API (adjust based on actual SDK)
             imu_data = self.robot.get_imu_data()
-            roll = imu_data.rpy[0]   # radians
+            roll = imu_data.rpy[0]  # radians
             pitch = imu_data.rpy[1]  # radians
-            yaw = imu_data.rpy[2]    # radians
+            yaw = imu_data.rpy[2]  # radians
 
             # Convert to degrees
             import math
-            return (
-                math.degrees(roll),
-                math.degrees(pitch),
-                math.degrees(yaw)
-            )
+
+            return (math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
         except Exception as e:
             logger.error("Failed to get orientation from Unitree: %s", e)
             return (0.0, 0.0, 0.0)
@@ -84,11 +80,8 @@ class UnitreeAdapter(RobotSDKAdapter):
 
             # Convert to deg/s
             import math
-            return (
-                math.degrees(gyro[0]),
-                math.degrees(gyro[1]),
-                math.degrees(gyro[2])
-            )
+
+            return (math.degrees(gyro[0]), math.degrees(gyro[1]), math.degrees(gyro[2]))
         except Exception as e:
             logger.error("Failed to get angular velocity from Unitree: %s", e)
             return (0.0, 0.0, 0.0)
@@ -135,20 +128,17 @@ class SpotAdapter(RobotSDKAdapter):
         try:
             robot_state = self.state_client.get_robot_state()
             orientation = robot_state.kinematic_state.transforms_snapshot.child_to_parent_edge_map[
-                'body'
+                "body"
             ].parent_tform_child.rotation
 
             # Convert quaternion to Euler angles
             import math
+
             from bosdyn.client.math_helpers import quat_to_eulerZYX
 
             yaw, pitch, roll = quat_to_eulerZYX(orientation)
 
-            return (
-                math.degrees(roll),
-                math.degrees(pitch),
-                math.degrees(yaw)
-            )
+            return (math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
         except Exception as e:
             logger.error("Failed to get orientation from Spot: %s", e)
             return (0.0, 0.0, 0.0)
@@ -160,10 +150,11 @@ class SpotAdapter(RobotSDKAdapter):
             angular_vel = robot_state.kinematic_state.velocity_of_body_in_odom.angular
 
             import math
+
             return (
                 math.degrees(angular_vel.x),
                 math.degrees(angular_vel.y),
-                math.degrees(angular_vel.z)
+                math.degrees(angular_vel.z),
             )
         except Exception as e:
             logger.error("Failed to get angular velocity from Spot: %s", e)
@@ -213,17 +204,11 @@ class GenericSerialIMU(RobotSDKAdapter):
         """Establish serial connection."""
         try:
             import serial
-        except ImportError:
-            raise ImportError(
-                "pyserial is required. Install with: pip install pyserial"
-            )
+        except ImportError as e:
+            raise ImportError("pyserial is required. Install with: pip install pyserial") from e
 
         try:
-            self._serial = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                timeout=0.1
-            )
+            self._serial = serial.Serial(port=self.port, baudrate=self.baudrate, timeout=0.1)
             logger.info("Serial IMU connected: %s", self.port)
         except serial.SerialException as e:
             logger.error("Failed to connect to IMU: %s", e)
@@ -246,7 +231,7 @@ class GenericSerialIMU(RobotSDKAdapter):
 
         try:
             if self._serial.in_waiting > 0:
-                line = self._serial.readline().decode('ascii').strip()
+                line = self._serial.readline().decode("ascii").strip()
                 self._parse_line(line)
         except Exception as e:
             logger.warning("Failed to read IMU data: %s", e)
@@ -257,22 +242,14 @@ class GenericSerialIMU(RobotSDKAdapter):
         Expected format: "R:<roll>,P:<pitch>,Y:<yaw>,GX:<gx>,GY:<gy>,GZ:<gz>"
         """
         try:
-            parts = line.split(',')
+            parts = line.split(",")
             data = {}
             for part in parts:
-                key, value = part.split(':')
+                key, value = part.split(":")
                 data[key] = float(value)
 
-            self._last_orientation = (
-                data.get('R', 0.0),
-                data.get('P', 0.0),
-                data.get('Y', 0.0)
-            )
-            self._last_angular_vel = (
-                data.get('GX', 0.0),
-                data.get('GY', 0.0),
-                data.get('GZ', 0.0)
-            )
+            self._last_orientation = (data.get("R", 0.0), data.get("P", 0.0), data.get("Y", 0.0))
+            self._last_angular_vel = (data.get("GX", 0.0), data.get("GY", 0.0), data.get("GZ", 0.0))
         except Exception as e:
             logger.warning("Failed to parse IMU line '%s': %s", line, e)
 
@@ -319,10 +296,7 @@ class RobotIMUProvider:
     """
 
     def __init__(
-        self,
-        adapter: RobotSDKAdapter,
-        enable_filtering: bool = True,
-        filter_alpha: float = 0.3
+        self, adapter: RobotSDKAdapter, enable_filtering: bool = True, filter_alpha: float = 0.3
     ):
         """Initialize robot IMU provider.
 
@@ -345,10 +319,11 @@ class RobotIMUProvider:
 
         logger.info(
             "RobotIMUProvider initialized (filtering=%s, alpha=%.2f)",
-            enable_filtering, filter_alpha
+            enable_filtering,
+            filter_alpha,
         )
 
-    def get_body_state(self, timestamp: float) -> Optional[BodyState]:
+    def get_body_state(self, timestamp: float) -> BodyState | None:
         """Get current body state from robot IMU.
 
         Parameters

@@ -30,10 +30,10 @@ Pure numpy, no external dependencies, O(1) per step.
 
 Units: position in pixels, velocity in px/s, acceleration in px/s², dt in seconds.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Tuple
 
 import numpy as np
 
@@ -57,6 +57,7 @@ class KalmanConfig:
         Initial variance for velocity states (px/s)^2.
         Large value → filter learns velocity quickly from first observations.
     """
+
     process_noise_pos: float = 3.0
     process_noise_vel: float = 15.0
     measurement_noise: float = 8.0
@@ -91,21 +92,26 @@ class CentroidKalman2D:
 
         # Covariance
         iv = config.initial_velocity_var
-        self._P = np.diag([
-            config.measurement_noise ** 2,
-            config.measurement_noise ** 2,
-            iv,
-            iv,
-        ]).astype(np.float64)
+        self._P = np.diag(
+            [
+                config.measurement_noise**2,
+                config.measurement_noise**2,
+                iv,
+                iv,
+            ]
+        ).astype(np.float64)
 
         # Measurement matrix: observe [cx, cy]
-        self._H = np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-        ], dtype=np.float64)
+        self._H = np.array(
+            [
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+            ],
+            dtype=np.float64,
+        )
 
         # Measurement noise
-        r = config.measurement_noise ** 2
+        r = config.measurement_noise**2
         self._R = np.diag([r, r]).astype(np.float64)
 
         # Process noise config (used to build Q each predict step)
@@ -133,20 +139,20 @@ class CentroidKalman2D:
     def update(self, cx: float, cy: float) -> None:
         """Fuse a new centroid measurement."""
         z = np.array([cx, cy], dtype=np.float64)
-        y = z - self._H @ self._x                     # innovation
-        S = self._H @ self._P @ self._H.T + self._R   # innovation covariance
-        K = self._P @ self._H.T @ np.linalg.inv(S)    # Kalman gain
+        y = z - self._H @ self._x  # innovation
+        S = self._H @ self._P @ self._H.T + self._R  # innovation covariance
+        K = self._P @ self._H.T @ np.linalg.inv(S)  # Kalman gain
 
         self._x = self._x + K @ y
         self._P = (self._I4 - K @ self._H) @ self._P
 
     @property
-    def position(self) -> Tuple[float, float]:
+    def position(self) -> tuple[float, float]:
         """Current estimated position (cx, cy) in pixels."""
         return (float(self._x[0]), float(self._x[1]))
 
     @property
-    def velocity(self) -> Tuple[float, float]:
+    def velocity(self) -> tuple[float, float]:
         """Current estimated velocity (vx, vy) in px/s."""
         return (float(self._x[2]), float(self._x[3]))
 
@@ -155,7 +161,7 @@ class CentroidKalman2D:
         """Full state vector [cx, cy, vx, vy] (read-only copy)."""
         return self._x.copy()
 
-    def predict_position(self, dt_ahead: float) -> Tuple[float, float]:
+    def predict_position(self, dt_ahead: float) -> tuple[float, float]:
         """Extrapolate position *dt_ahead* seconds into the future (read-only)."""
         cx = self._x[0] + self._x[2] * dt_ahead
         cy = self._x[1] + self._x[3] * dt_ahead
@@ -168,12 +174,15 @@ class CentroidKalman2D:
     @staticmethod
     def _transition(dt: float) -> np.ndarray:
         """State transition matrix F(dt)."""
-        return np.array([
-            [1, 0, dt, 0],
-            [0, 1, 0, dt],
-            [0, 0, 1,  0],
-            [0, 0, 0,  1],
-        ], dtype=np.float64)
+        return np.array(
+            [
+                [1, 0, dt, 0],
+                [0, 1, 0, dt],
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+            ],
+            dtype=np.float64,
+        )
 
     def _process_noise(self, dt: float) -> np.ndarray:
         """
@@ -185,19 +194,23 @@ class CentroidKalman2D:
         """
         dt2 = dt * dt
         dt3 = dt2 * dt
-        qp = self._q_pos ** 2
-        qv = self._q_vel ** 2
-        return np.array([
-            [qp + qv * dt3 / 3, 0,                 qv * dt2 / 2, 0],
-            [0,                  qp + qv * dt3 / 3, 0,            qv * dt2 / 2],
-            [qv * dt2 / 2,      0,                  qv * dt,      0],
-            [0,                  qv * dt2 / 2,       0,            qv * dt],
-        ], dtype=np.float64)
+        qp = self._q_pos**2
+        qv = self._q_vel**2
+        return np.array(
+            [
+                [qp + qv * dt3 / 3, 0, qv * dt2 / 2, 0],
+                [0, qp + qv * dt3 / 3, 0, qv * dt2 / 2],
+                [qv * dt2 / 2, 0, qv * dt, 0],
+                [0, qv * dt2 / 2, 0, qv * dt],
+            ],
+            dtype=np.float64,
+        )
 
 
 # ======================================================================
 # Constant-Acceleration (CA) model — 6 states
 # ======================================================================
+
 
 @dataclass
 class KalmanCAConfig:
@@ -219,6 +232,7 @@ class KalmanCAConfig:
     initial_accel_var : float
         Initial acceleration variance (px/s²)².
     """
+
     process_noise_pos: float = 2.0
     process_noise_vel: float = 10.0
     process_noise_acc: float = 30.0
@@ -261,7 +275,7 @@ class CentroidKalmanCA:
         self._x = np.array([cx0, cy0, vx0, vy0, 0.0, 0.0], dtype=np.float64)
 
         # Covariance
-        r2 = config.measurement_noise ** 2
+        r2 = config.measurement_noise**2
         iv = config.initial_velocity_var
         ia = config.initial_accel_var
         self._P = np.diag([r2, r2, iv, iv, ia, ia]).astype(np.float64)
@@ -304,22 +318,22 @@ class CentroidKalmanCA:
         self._P = (self._I6 - K @ self._H) @ self._P
 
     @property
-    def position(self) -> Tuple[float, float]:
+    def position(self) -> tuple[float, float]:
         return (float(self._x[0]), float(self._x[1]))
 
     @property
-    def velocity(self) -> Tuple[float, float]:
+    def velocity(self) -> tuple[float, float]:
         return (float(self._x[2]), float(self._x[3]))
 
     @property
-    def acceleration(self) -> Tuple[float, float]:
+    def acceleration(self) -> tuple[float, float]:
         return (float(self._x[4]), float(self._x[5]))
 
     @property
     def state(self) -> np.ndarray:
         return self._x.copy()
 
-    def predict_position(self, dt_ahead: float) -> Tuple[float, float]:
+    def predict_position(self, dt_ahead: float) -> tuple[float, float]:
         """Parabolic extrapolation: p + v*t + 0.5*a*t²."""
         t = dt_ahead
         t2 = t * t
@@ -329,7 +343,7 @@ class CentroidKalmanCA:
 
     def predict_trajectory(
         self, horizon_s: float = 0.5, steps: int = 8
-    ) -> List[Tuple[float, float]]:
+    ) -> list[tuple[float, float]]:
         """Return a list of predicted future positions (parabolic arc)."""
         dt_step = horizon_s / steps
         return [self.predict_position(dt_step * i) for i in range(1, steps + 1)]
@@ -342,14 +356,17 @@ class CentroidKalmanCA:
     def _transition(dt: float) -> np.ndarray:
         """State transition F(dt) for constant-acceleration model."""
         dt2 = 0.5 * dt * dt
-        return np.array([
-            [1, 0, dt, 0,  dt2, 0],
-            [0, 1, 0,  dt, 0,   dt2],
-            [0, 0, 1,  0,  dt,  0],
-            [0, 0, 0,  1,  0,   dt],
-            [0, 0, 0,  0,  1,   0],
-            [0, 0, 0,  0,  0,   1],
-        ], dtype=np.float64)
+        return np.array(
+            [
+                [1, 0, dt, 0, dt2, 0],
+                [0, 1, 0, dt, 0, dt2],
+                [0, 0, 1, 0, dt, 0],
+                [0, 0, 0, 1, 0, dt],
+                [0, 0, 0, 0, 1, 0],
+                [0, 0, 0, 0, 0, 1],
+            ],
+            dtype=np.float64,
+        )
 
     def _process_noise(self, dt: float) -> np.ndarray:
         """
@@ -367,16 +384,19 @@ class CentroidKalmanCA:
         dt4 = dt3 * dt
         dt5 = dt4 * dt
 
-        qp = self._q_pos ** 2
-        qv = self._q_vel ** 2
-        qa = self._q_acc ** 2
+        qp = self._q_pos**2
+        qv = self._q_vel**2
+        qa = self._q_acc**2
 
         # Per-axis 3x3 block (pos, vel, acc coupling from jerk noise)
-        q_block = qa * np.array([
-            [dt5 / 20, dt4 / 8, dt3 / 6],
-            [dt4 / 8,  dt3 / 3, dt2 / 2],
-            [dt3 / 6,  dt2 / 2, dt],
-        ], dtype=np.float64)
+        q_block = qa * np.array(
+            [
+                [dt5 / 20, dt4 / 8, dt3 / 6],
+                [dt4 / 8, dt3 / 3, dt2 / 2],
+                [dt3 / 6, dt2 / 2, dt],
+            ],
+            dtype=np.float64,
+        )
 
         # Add direct pos/vel noise
         q_block[0, 0] += qp * dt + qv * dt3 / 3

@@ -1,11 +1,13 @@
 """Unit tests for coordinate transformations."""
-import pytest
+
 import numpy as np
+import pytest
+
 from src.rws_tracking.algebra.coordinate_transform import (
     CameraModel,
-    PixelToGimbalTransform,
     FullChainTransform,
     MountExtrinsics,
+    PixelToGimbalTransform,
 )
 from src.rws_tracking.types import BodyState
 
@@ -61,7 +63,7 @@ class TestCameraModel:
         test_pixels = [
             (640.0, 360.0),  # Center
             (100.0, 100.0),  # Top-left
-            (1180.0, 620.0), # Bottom-right
+            (1180.0, 620.0),  # Bottom-right
             (320.0, 540.0),  # Random
         ]
 
@@ -75,8 +77,7 @@ class TestCameraModel:
     def test_distortion_undistortion(self):
         """Test distortion and undistortion."""
         cam = CameraModel(
-            1280, 720, 970.0, 965.0, 640.0, 360.0,
-            k1=0.1, k2=-0.05, p1=0.01, p2=-0.01, k3=0.02
+            1280, 720, 970.0, 965.0, 640.0, 360.0, k1=0.1, k2=-0.05, p1=0.01, p2=-0.01, k3=0.02
         )
 
         # Distorted point
@@ -176,11 +177,7 @@ class TestFullChainTransform:
         transform = FullChainTransform(cam, mount)
 
         yaw_err, pitch_err = transform.target_lock_error(
-            pixel_x=740.0,
-            pixel_y=360.0,
-            gimbal_yaw_deg=0.0,
-            gimbal_pitch_deg=0.0,
-            body_state=None
+            pixel_x=740.0, pixel_y=360.0, gimbal_yaw_deg=0.0, gimbal_pitch_deg=0.0, body_state=None
         )
 
         # Should match simple pixel_to_gimbal_error
@@ -207,7 +204,7 @@ class TestFullChainTransform:
             pixel_y=360.0,
             gimbal_yaw_deg=0.0,
             gimbal_pitch_deg=0.0,
-            body_state=body_state
+            body_state=body_state,
         )
 
         # Body motion should affect the error
@@ -247,9 +244,7 @@ class TestCoordinateConsistency:
         yaw_err, pitch_err = transform.pixel_to_gimbal_error(pixel_x, pixel_y, 0.0, 0.0)
 
         # If we move gimbal by this error, target should be centered
-        yaw_err2, pitch_err2 = transform.pixel_to_gimbal_error(
-            pixel_x, pixel_y, yaw_err, pitch_err
-        )
+        yaw_err2, pitch_err2 = transform.pixel_to_gimbal_error(pixel_x, pixel_y, yaw_err, pitch_err)
 
         # New error should be near zero
         assert abs(yaw_err2) < 0.1
@@ -300,9 +295,7 @@ class TestEdgeCases:
         transform = PixelToGimbalTransform(cam)
 
         # Extreme angles
-        yaw_err, pitch_err = transform.pixel_to_gimbal_error(
-            640.0, 360.0, 170.0, 80.0
-        )
+        yaw_err, pitch_err = transform.pixel_to_gimbal_error(640.0, 360.0, 170.0, 80.0)
 
         assert np.isfinite(yaw_err)
         assert np.isfinite(pitch_err)
@@ -310,7 +303,7 @@ class TestEdgeCases:
     def test_zero_focal_length(self):
         """Test handling of invalid focal length."""
         with pytest.raises((ValueError, ZeroDivisionError)):
-            cam = CameraModel(1280, 720, 0.0, 0.0, 640.0, 360.0)
+            CameraModel(1280, 720, 0.0, 0.0, 640.0, 360.0)
 
     def test_negative_pixel_coordinates(self):
         """Test with negative pixel coordinates."""

@@ -31,11 +31,12 @@ Units
 - Angles: degrees.
 - Distortion coefficients: OpenCV 5-param model [k1, k2, p1, p2, k3].
 """
+
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -46,6 +47,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class DistortionCoeffs:
     """OpenCV 5-parameter distortion model."""
+
     k1: float = 0.0
     k2: float = 0.0
     p1: float = 0.0
@@ -66,6 +68,7 @@ class MountExtrinsics:
     Rotation from camera frame to gimbal frame, expressed as small-angle
     roll/pitch/yaw offsets (degrees).
     """
+
     roll_deg: float = 0.0
     pitch_deg: float = 0.0
     yaw_deg: float = 0.0
@@ -81,7 +84,9 @@ class MountExtrinsics:
         * Roll  = rotation around Z (forward) → rolls image plane
         """
         return _euler_camera_to_rotation(
-            self.yaw_deg, self.pitch_deg, self.roll_deg,
+            self.yaw_deg,
+            self.pitch_deg,
+            self.roll_deg,
         )
 
 
@@ -97,20 +102,24 @@ class CameraModel:
     cx, cy : principal point in pixels.
     distortion : 5-param distortion coefficients (None = no distortion).
     """
+
     width: int
     height: int
     fx: float
     fy: float
     cx: float
     cy: float
-    distortion: Optional[DistortionCoeffs] = None
+    distortion: DistortionCoeffs | None = None
 
     def camera_matrix(self) -> np.ndarray:
-        return np.array([
-            [self.fx, 0.0, self.cx],
-            [0.0, self.fy, self.cy],
-            [0.0, 0.0, 1.0],
-        ], dtype=np.float64)
+        return np.array(
+            [
+                [self.fx, 0.0, self.cx],
+                [0.0, self.fy, self.cy],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
 
 
 class PixelToGimbalTransform:
@@ -134,6 +143,7 @@ class PixelToGimbalTransform:
         self._use_undistort = self._dist is not None and not self._dist.is_zero
         if self._use_undistort:
             import cv2  # type: ignore[import-untyped]
+
             self._cv2 = cv2
 
     @property
@@ -141,7 +151,7 @@ class PixelToGimbalTransform:
         """Expose camera model for external use (e.g. velocity conversion)."""
         return self._cam
 
-    def pixel_to_angle_error(self, u: float, v: float) -> Tuple[float, float]:
+    def pixel_to_angle_error(self, u: float, v: float) -> tuple[float, float]:
         """
         Convert pixel location to gimbal angular error.
 
@@ -158,13 +168,13 @@ class PixelToGimbalTransform:
 
     def bbox_center_to_angle_error(
         self, x: float, y: float, w: float, h: float
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Convenience: convert bounding box (x, y, w, h) to angular error."""
         cu = x + w * 0.5
         cv = y + h * 0.5
         return self.pixel_to_angle_error(cu, cv)
 
-    def _undistort_and_normalize(self, u: float, v: float) -> Tuple[float, float]:
+    def _undistort_and_normalize(self, u: float, v: float) -> tuple[float, float]:
         if not self._use_undistort:
             xn = (u - self._cam.cx) / self._cam.fx
             yn = (v - self._cam.cy) / self._cam.fy
@@ -172,7 +182,10 @@ class PixelToGimbalTransform:
 
         pts = np.array([[[u, v]]], dtype=np.float64)
         undistorted = self._cv2.undistortPoints(
-            pts, self._K, self._dist.as_array(), P=None,  # type: ignore[union-attr]
+            pts,
+            self._K,
+            self._dist.as_array(),
+            P=None,  # type: ignore[union-attr]
         )
         return float(undistorted[0, 0, 0]), float(undistorted[0, 0, 1])
 
@@ -181,8 +194,11 @@ class PixelToGimbalTransform:
 # Helper: Euler rotation matrices
 # ---------------------------------------------------------------------------
 
+
 def _euler_camera_to_rotation(
-    yaw_deg: float, pitch_deg: float, roll_deg: float,
+    yaw_deg: float,
+    pitch_deg: float,
+    roll_deg: float,
 ) -> np.ndarray:
     """Rotation matrix for Z-forward frames: Ry(yaw) @ Rx(pitch) @ Rz(roll).
 
@@ -214,16 +230,20 @@ def _euler_camera_to_rotation(
     cr, sr = math.cos(r), math.sin(r)
 
     # Ry(y) @ Rx(p) @ Rz(r)
-    return np.array([
-        [cy * cr + sy * sp * sr, -cy * sr + sy * sp * cr, sy * cp],
-        [cp * sr,                 cp * cr,                -sp    ],
-        [-sy * cr + cy * sp * sr, sy * sr + cy * sp * cr, cy * cp],
-    ], dtype=np.float64)
+    return np.array(
+        [
+            [cy * cr + sy * sp * sr, -cy * sr + sy * sp * cr, sy * cp],
+            [cp * sr, cp * cr, -sp],
+            [-sy * cr + cy * sp * sr, sy * sr + cy * sp * cr, cy * cp],
+        ],
+        dtype=np.float64,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Full-chain transform: pixel -> camera -> gimbal -> body -> world
 # ---------------------------------------------------------------------------
+
 
 class FullChainTransform:
     """
@@ -262,9 +282,9 @@ class FullChainTransform:
         self,
         u: float,
         v: float,
-        gimbal_fb: "GimbalFeedback",
-        body: "Optional[BodyState]" = None,
-    ) -> Tuple[float, float]:
+        gimbal_fb: GimbalFeedback,
+        body: BodyState | None = None,
+    ) -> tuple[float, float]:
         """Pixel (u, v) → world-frame direction (yaw_deg, pitch_deg).
 
         If *body* is ``None`` the body-to-world rotation is identity
@@ -282,14 +302,18 @@ class FullChainTransform:
 
         # gimbal → body  (gimbal frame is Z-forward → camera convention)
         R_gimbal2body = _euler_camera_to_rotation(
-            gimbal_fb.yaw_deg, gimbal_fb.pitch_deg, 0.0,
+            gimbal_fb.yaw_deg,
+            gimbal_fb.pitch_deg,
+            0.0,
         )
         body_dir = R_gimbal2body @ gimbal_dir
 
         # body → world  (body frame also treated as Z-forward — see module docstring)
         if body is not None:
             R_body2world = _euler_camera_to_rotation(
-                body.yaw_deg, body.pitch_deg, body.roll_deg,
+                body.yaw_deg,
+                body.pitch_deg,
+                body.roll_deg,
             )
             world_dir = R_body2world @ body_dir
         else:
@@ -304,9 +328,9 @@ class FullChainTransform:
         self,
         u: float,
         v: float,
-        gimbal_fb: "GimbalFeedback",
-        body: "Optional[BodyState]" = None,
-    ) -> Tuple[float, float]:
+        gimbal_fb: GimbalFeedback,
+        body: BodyState | None = None,
+    ) -> tuple[float, float]:
         """Compute gimbal correction needed to keep the weapon aimed at the target.
 
         This is the error signal fed to the PID controller when running on a
@@ -344,7 +368,9 @@ class FullChainTransform:
 
         # Step 2: gimbal → body (using current gimbal angles, Z-forward convention)
         R_gimbal2body = _euler_camera_to_rotation(
-            gimbal_fb.yaw_deg, gimbal_fb.pitch_deg, 0.0,
+            gimbal_fb.yaw_deg,
+            gimbal_fb.pitch_deg,
+            0.0,
         )
         body_dir = R_gimbal2body @ gimbal_dir
 

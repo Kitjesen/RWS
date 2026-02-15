@@ -1,17 +1,18 @@
 """Unit tests for TwoAxisGimbalController."""
+
 import pytest
-import numpy as np
-from src.rws_tracking.control.controller import TwoAxisGimbalController
-from src.rws_tracking.config import ControllerConfig, PIDConfig
+
 from src.rws_tracking.algebra.coordinate_transform import (
     CameraModel,
     PixelToGimbalTransform,
 )
+from src.rws_tracking.config import ControllerConfig, PIDConfig
+from src.rws_tracking.control.controller import TwoAxisGimbalController
 from src.rws_tracking.types import (
-    TargetObservation,
-    GimbalFeedback,
-    BoundingBox,
     BodyState,
+    BoundingBox,
+    GimbalFeedback,
+    TargetObservation,
 )
 
 
@@ -147,7 +148,7 @@ class TestPIDControl:
 
         # Run for many iterations to saturate integral
         for i in range(100):
-            cmd = controller.compute_command(target, feedback, timestamp=1.0 + i*0.1)
+            controller.compute_command(target, feedback, timestamp=1.0 + i * 0.1)
 
         # Integral should be clamped
         assert abs(controller._yaw_integral) <= controller._yaw_pid_cfg.integral_limit
@@ -158,7 +159,7 @@ class TestPIDControl:
 
         # First target at t=1.0
         target1 = create_target((700, 340, 800, 440), timestamp=1.0)
-        cmd1 = controller.compute_command(target1, feedback, timestamp=1.0)
+        controller.compute_command(target1, feedback, timestamp=1.0)
 
         # Second target at t=1.1 (error increasing)
         target2 = create_target((750, 340, 850, 440), timestamp=1.1)
@@ -211,7 +212,7 @@ class TestStateMachine:
 
         # Run until lock
         for i in range(20):
-            cmd = controller.compute_command(target, feedback, timestamp=1.0 + i*0.1)
+            cmd = controller.compute_command(target, feedback, timestamp=1.0 + i * 0.1)
 
         # Should eventually lock
         assert cmd.state.name == "LOCK"
@@ -223,7 +224,7 @@ class TestStateMachine:
         feedback = create_feedback(yaw=0.0, pitch=0.0)
 
         for i in range(20):
-            controller.compute_command(target_center, feedback, timestamp=1.0 + i*0.1)
+            controller.compute_command(target_center, feedback, timestamp=1.0 + i * 0.1)
 
         # Now introduce large error
         target_far = create_target((800, 360, 900, 460))
@@ -264,11 +265,7 @@ class TestLatencyCompensation:
     def test_prediction_with_velocity(self, controller):
         """Should predict future position based on velocity."""
         # Target moving right at 100 px/s
-        target = create_target(
-            (640, 360, 740, 460),
-            velocity=(100.0, 0.0),
-            timestamp=1.0
-        )
+        target = create_target((640, 360, 740, 460), velocity=(100.0, 0.0), timestamp=1.0)
         feedback = create_feedback(timestamp=1.0)
 
         cmd = controller.compute_command(target, feedback, timestamp=1.0)
@@ -279,11 +276,7 @@ class TestLatencyCompensation:
 
     def test_no_prediction_without_velocity(self, controller):
         """Should not predict if velocity is zero."""
-        target = create_target(
-            (640, 360, 740, 460),
-            velocity=(0.0, 0.0),
-            timestamp=1.0
-        )
+        target = create_target((640, 360, 740, 460), velocity=(0.0, 0.0), timestamp=1.0)
         feedback = create_feedback(timestamp=1.0)
 
         cmd = controller.compute_command(target, feedback, timestamp=1.0)
@@ -311,9 +304,7 @@ class TestBodyMotionCompensation:
             yaw_rate_dps=10.0,  # Body rotating right
         )
 
-        cmd = controller.compute_command(
-            target, feedback, timestamp=1.0, body_state=body_state
-        )
+        cmd = controller.compute_command(target, feedback, timestamp=1.0, body_state=body_state)
 
         # Should add feedforward to compensate
         # (command should be adjusted to counter body motion)
@@ -339,7 +330,7 @@ class TestScanPattern:
 
         commands = []
         for i in range(50):
-            cmd = controller.compute_command(None, feedback, timestamp=i*0.1)
+            cmd = controller.compute_command(None, feedback, timestamp=i * 0.1)
             commands.append((cmd.yaw_rate_cmd_dps, cmd.pitch_rate_cmd_dps))
 
         # Should have non-zero commands (scanning)
@@ -348,8 +339,7 @@ class TestScanPattern:
 
         # Should be sinusoidal (check sign changes)
         sign_changes = sum(
-            1 for i in range(1, len(yaw_rates))
-            if yaw_rates[i] * yaw_rates[i-1] < 0
+            1 for i in range(1, len(yaw_rates)) if yaw_rates[i] * yaw_rates[i - 1] < 0
         )
         assert sign_changes > 2  # At least a few oscillations
 
@@ -362,7 +352,7 @@ class TestEdgeCases:
         target = create_target((640, 360, 740, 460))
         feedback = create_feedback()
 
-        cmd1 = controller.compute_command(target, feedback, timestamp=1.0)
+        controller.compute_command(target, feedback, timestamp=1.0)
         cmd2 = controller.compute_command(target, feedback, timestamp=1.0)  # Same time
 
         # Should not crash
@@ -373,7 +363,7 @@ class TestEdgeCases:
         target = create_target((640, 360, 740, 460))
         feedback = create_feedback()
 
-        cmd1 = controller.compute_command(target, feedback, timestamp=2.0)
+        controller.compute_command(target, feedback, timestamp=2.0)
         cmd2 = controller.compute_command(target, feedback, timestamp=1.0)  # Earlier
 
         # Should not crash
@@ -397,9 +387,9 @@ class TestEdgeCases:
             # Random target position
             x = 100 + (i * 137) % 1000
             y = 100 + (i * 211) % 500
-            target = create_target((x, y, x+50, y+50))
+            target = create_target((x, y, x + 50, y + 50))
 
-            cmd = controller.compute_command(target, feedback, timestamp=i*0.01)
+            cmd = controller.compute_command(target, feedback, timestamp=i * 0.01)
 
             # Should not crash
             assert cmd is not None
@@ -411,9 +401,7 @@ class TestEdgeCases:
 
         # Build up integral
         for i in range(10):
-            controller.compute_command(target, feedback, timestamp=1.0 + i*0.1)
-
-        integral_before = controller._yaw_integral
+            controller.compute_command(target, feedback, timestamp=1.0 + i * 0.1)
 
         # Lose target
         controller.compute_command(None, feedback, timestamp=3.0)

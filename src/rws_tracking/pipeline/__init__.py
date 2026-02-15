@@ -1,6 +1,6 @@
 from .app import build_sim_pipeline, build_yolo_pipeline, run_camera_demo, run_demo
+from .multi_gimbal_pipeline import GimbalUnit, MultiGimbalOutputs, MultiGimbalPipeline
 from .pipeline import PipelineOutputs, VisionGimbalPipeline
-from .multi_gimbal_pipeline import MultiGimbalPipeline, GimbalUnit, MultiGimbalOutputs
 
 __all__ = [
     "PipelineOutputs",

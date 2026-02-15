@@ -1,12 +1,12 @@
 """测试 P2 改进：FileTelemetryLogger、环形缓冲区、优雅退出"""
+
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from src.rws_tracking.hardware import DriverLimits, SimulatedGimbalDriver
 from src.rws_tracking.telemetry import FileTelemetryLogger, InMemoryTelemetryLogger
-from src.rws_tracking.pipeline import VisionGimbalPipeline
-from src.rws_tracking.hardware import SimulatedGimbalDriver, DriverLimits
 
 
 class FileTelemetryLoggerTests(unittest.TestCase):
@@ -25,7 +25,7 @@ class FileTelemetryLoggerTests(unittest.TestCase):
                 logger.log("switch", 2.5, {"track_id": 42.0})
 
             # 验证文件内容
-            with open(temp_path, "r", encoding="utf-8") as f:
+            with open(temp_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             self.assertEqual(len(lines), 3)
@@ -59,7 +59,7 @@ class FileTelemetryLoggerTests(unittest.TestCase):
                 logger.log("control", 2.0, {"state": 1.0})
 
             # 验证有两行
-            with open(temp_path, "r", encoding="utf-8") as f:
+            with open(temp_path, encoding="utf-8") as f:
                 lines = f.readlines()
 
             self.assertEqual(len(lines), 2)
@@ -76,9 +76,15 @@ class FileTelemetryLoggerTests(unittest.TestCase):
 
         try:
             with FileTelemetryLogger(temp_path) as logger:
-                logger.log("control", 1.0, {"yaw_error_deg": 5.0, "pitch_error_deg": 3.0, "state": 1.0})
-                logger.log("control", 2.0, {"yaw_error_deg": 2.0, "pitch_error_deg": 1.0, "state": 2.0})
-                logger.log("control", 3.0, {"yaw_error_deg": 1.0, "pitch_error_deg": 0.5, "state": 2.0})
+                logger.log(
+                    "control", 1.0, {"yaw_error_deg": 5.0, "pitch_error_deg": 3.0, "state": 1.0}
+                )
+                logger.log(
+                    "control", 2.0, {"yaw_error_deg": 2.0, "pitch_error_deg": 1.0, "state": 2.0}
+                )
+                logger.log(
+                    "control", 3.0, {"yaw_error_deg": 1.0, "pitch_error_deg": 0.5, "state": 2.0}
+                )
                 logger.log("switch", 2.5, {"track_id": 1.0})
 
                 metrics = logger.snapshot_metrics()
@@ -86,7 +92,9 @@ class FileTelemetryLoggerTests(unittest.TestCase):
             # 验证指标
             self.assertEqual(metrics["lock_rate"], 2.0 / 3.0)  # 2 个 LOCK / 3 个 control
             self.assertAlmostEqual(metrics["avg_abs_error_deg"], (5.0 + 2.0 + 1.0) / 3.0, places=5)
-            self.assertAlmostEqual(metrics["switches_per_min"], 1.0 * 60.0 / 2.0, places=5)  # 1 switch in 2s
+            self.assertAlmostEqual(
+                metrics["switches_per_min"], 1.0 * 60.0 / 2.0, places=5
+            )  # 1 switch in 2s
 
         finally:
             Path(temp_path).unlink(missing_ok=True)

@@ -8,18 +8,18 @@ Application entry points
 - ``run_demo``                 : quick synthetic demo (no camera needed).
 - ``run_camera_demo``          : live camera + YOLO + gimbal control loop.
 """
+
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
+from ..algebra import CameraModel, DistortionCoeffs, MountExtrinsics, PixelToGimbalTransform
 from ..config import (
     CameraConfig,
-    DriverLimitsConfig,
     SelectorConfig,
     SystemConfig,
     default_controller_config,
 )
-from ..algebra import CameraModel, DistortionCoeffs, MountExtrinsics, PixelToGimbalTransform
 from ..control import TwoAxisGimbalController
 from ..hardware import SimulatedGimbalDriver
 from ..hardware.driver import DriverLimits
@@ -31,30 +31,41 @@ from ..perception import (
     YoloSegTracker,
 )
 from ..telemetry import InMemoryTelemetryLogger
-from ..tools.simulation import SimTarget, SyntheticScene, WorldSimTarget, WorldCoordinateScene
+from ..tools.simulation import WorldCoordinateScene, WorldSimTarget
 from ..tools.tuning import grid_search_pid
 from .pipeline import VisionGimbalPipeline
-
 
 # ---------------------------------------------------------------------------
 # Camera model helper
 # ---------------------------------------------------------------------------
 
+
 def camera_model_from_config(cfg: CameraConfig) -> CameraModel:
     """Build CameraModel from CameraConfig dataclass."""
     dist = DistortionCoeffs(
-        k1=cfg.distortion_k1, k2=cfg.distortion_k2,
-        p1=cfg.distortion_p1, p2=cfg.distortion_p2,
+        k1=cfg.distortion_k1,
+        k2=cfg.distortion_k2,
+        p1=cfg.distortion_p1,
+        p2=cfg.distortion_p2,
         k3=cfg.distortion_k3,
     )
-    has_distortion = any(v != 0.0 for v in (
-        cfg.distortion_k1, cfg.distortion_k2, cfg.distortion_p1,
-        cfg.distortion_p2, cfg.distortion_k3,
-    ))
+    has_distortion = any(
+        v != 0.0
+        for v in (
+            cfg.distortion_k1,
+            cfg.distortion_k2,
+            cfg.distortion_p1,
+            cfg.distortion_p2,
+            cfg.distortion_k3,
+        )
+    )
     return CameraModel(
-        width=cfg.width, height=cfg.height,
-        fx=cfg.fx, fy=cfg.fy,
-        cx=cfg.cx, cy=cfg.cy,
+        width=cfg.width,
+        height=cfg.height,
+        fx=cfg.fx,
+        fy=cfg.fy,
+        cx=cfg.cx,
+        cy=cfg.cy,
         distortion=dist if has_distortion else None,
     )
 
@@ -68,7 +79,8 @@ def default_camera_model() -> CameraModel:
 # Simulation pipeline (for tuning / CI)
 # ---------------------------------------------------------------------------
 
-def build_sim_pipeline(camera: Optional[CameraModel] = None) -> VisionGimbalPipeline:
+
+def build_sim_pipeline(camera: CameraModel | None = None) -> VisionGimbalPipeline:
     cam = camera or default_camera_model()
     transform = PixelToGimbalTransform(cam)
     base_cfg = default_controller_config()
@@ -96,11 +108,12 @@ def build_sim_pipeline(camera: Optional[CameraModel] = None) -> VisionGimbalPipe
 # YOLO pipeline (for production / real camera)
 # ---------------------------------------------------------------------------
 
+
 def build_yolo_pipeline(
-    camera: Optional[CameraModel] = None,
+    camera: CameraModel | None = None,
     mount: MountExtrinsics = MountExtrinsics(),
     model_path: str = "yolo11n.pt",
-    class_whitelist: Optional[Sequence[str]] = None,
+    class_whitelist: Sequence[str] | None = None,
     confidence: float = 0.45,
     device: str = "",
 ) -> VisionGimbalPipeline:
@@ -137,15 +150,16 @@ def build_yolo_pipeline(
 # YOLO-Seg + BoT-SORT pipeline (recommended for production)
 # ---------------------------------------------------------------------------
 
+
 def build_yolo_seg_pipeline(
-    camera: Optional[CameraModel] = None,
+    camera: CameraModel | None = None,
     mount: MountExtrinsics = MountExtrinsics(),
     model_path: str = "yolo11n-seg.pt",
     tracker: str = "botsort.yaml",
-    class_whitelist: Optional[Sequence[str]] = None,
+    class_whitelist: Sequence[str] | None = None,
     confidence: float = 0.40,
     device: str = "",
-    body_provider: Optional[BodyMotionProvider] = None,
+    body_provider: BodyMotionProvider | None = None,
 ) -> VisionGimbalPipeline:
     """
     Build a pipeline using YOLO11n-Seg + BoT-SORT combined tracker.
@@ -200,9 +214,10 @@ def build_yolo_seg_pipeline(
 # Config-driven pipeline (recommended entry point)
 # ---------------------------------------------------------------------------
 
+
 def build_pipeline_from_config(
     cfg: SystemConfig,
-    body_provider: Optional[BodyMotionProvider] = None,
+    body_provider: BodyMotionProvider | None = None,
 ) -> VisionGimbalPipeline:
     """Build a complete pipeline from a SystemConfig (loaded from config.yaml).
 
@@ -249,6 +264,7 @@ def build_pipeline_from_config(
 # Quick demos
 # ---------------------------------------------------------------------------
 
+
 def run_demo(duration_s: float = 10.0, dt_s: float = 0.03) -> dict:
     """Run synthetic scene demo (no camera/YOLO needed).
 
@@ -267,30 +283,34 @@ def run_demo(duration_s: float = 10.0, dt_s: float = 0.03) -> dict:
         fy=cam.fy,
         cx=cam.cx,
         cy=cam.cy,
-        seed=11
+        seed=11,
     )
 
     # Add targets in world coordinates (angular position)
-    scene.add_target(WorldSimTarget(
-        world_yaw_deg=5.0,
-        world_pitch_deg=2.0,
-        vel_yaw_dps=2.0,  # 2 degrees per second
-        vel_pitch_dps=1.0,
-        bbox_width=75,
-        bbox_height=100,
-        confidence=0.92,
-        class_id="person"
-    ))
-    scene.add_target(WorldSimTarget(
-        world_yaw_deg=-8.0,
-        world_pitch_deg=-3.0,
-        vel_yaw_dps=-1.5,
-        vel_pitch_dps=0.8,
-        bbox_width=110,
-        bbox_height=90,
-        confidence=0.85,
-        class_id="vehicle"
-    ))
+    scene.add_target(
+        WorldSimTarget(
+            world_yaw_deg=5.0,
+            world_pitch_deg=2.0,
+            vel_yaw_dps=2.0,  # 2 degrees per second
+            vel_pitch_dps=1.0,
+            bbox_width=75,
+            bbox_height=100,
+            confidence=0.92,
+            class_id="person",
+        )
+    )
+    scene.add_target(
+        WorldSimTarget(
+            world_yaw_deg=-8.0,
+            world_pitch_deg=-3.0,
+            vel_yaw_dps=-1.5,
+            vel_pitch_dps=0.8,
+            bbox_width=110,
+            bbox_height=90,
+            confidence=0.85,
+            class_id="vehicle",
+        )
+    )
 
     ts = 0.0
     while ts < duration_s:
@@ -309,18 +329,19 @@ def run_demo(duration_s: float = 10.0, dt_s: float = 0.03) -> dict:
 def run_camera_demo(
     source: int = 0,
     model_path: str = "yolo11n.pt",
-    class_whitelist: Optional[Sequence[str]] = ("person",),
+    class_whitelist: Sequence[str] | None = ("person",),
     show_window: bool = True,
 ) -> None:
     """Live camera demo: YOLO11n detect + gimbal control loop."""
     import time
 
     import cv2
-    import numpy as np
 
     cam = default_camera_model()
     pipeline = build_yolo_pipeline(
-        camera=cam, model_path=model_path, class_whitelist=class_whitelist,
+        camera=cam,
+        model_path=model_path,
+        class_whitelist=class_whitelist,
     )
 
     cap = cv2.VideoCapture(source)
@@ -345,7 +366,9 @@ def run_camera_demo(
                     x, y, w, h = int(t.bbox.x), int(t.bbox.y), int(t.bbox.w), int(t.bbox.h)
                     cv2.rectangle(display, (x, y), (x + w, y + h), (0, 255, 0), 2)
                     label = f"ID:{t.track_id} {t.class_id} {t.confidence:.2f}"
-                    cv2.putText(display, label, (x, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    cv2.putText(
+                        display, label, (x, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
+                    )
 
                 cmd = output.command
                 info = (
@@ -353,7 +376,9 @@ def run_camera_demo(
                     f"Pitch:{cmd.pitch_rate_cmd_dps:+.1f} dps  "
                     f"State:{cmd.metadata.get('state', -1):.0f}"
                 )
-                cv2.putText(display, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
+                cv2.putText(
+                    display, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2
+                )
                 cv2.imshow("RWS Tracking", display)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     pipeline.stop()

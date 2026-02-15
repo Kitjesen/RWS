@@ -1,4 +1,5 @@
 """Event logger and metrics snapshot."""
+
 from __future__ import annotations
 
 import json
@@ -6,20 +7,19 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
-from typing import Dict, List, Optional, Type, Union
 
 
 @dataclass
 class EventRecord:
     event_type: str
     timestamp: float
-    payload: Dict[str, float]
+    payload: dict[str, float]
 
 
 @dataclass
 class InMemoryTelemetryLogger:
-    events: List[EventRecord] = field(default_factory=list)
-    max_events: Optional[int] = None  # None = unlimited, int = ring buffer
+    events: list[EventRecord] = field(default_factory=list)
+    max_events: int | None = None  # None = unlimited, int = ring buffer
     # Incremental counters for O(1) metrics
     _control_count: int = field(default=0, repr=False)
     _lock_count: int = field(default=0, repr=False)
@@ -29,9 +29,11 @@ class InMemoryTelemetryLogger:
     _last_control_ts: float = field(default=0.0, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
-    def log(self, event_type: str, timestamp: float, payload: Dict[str, float]) -> None:
+    def log(self, event_type: str, timestamp: float, payload: dict[str, float]) -> None:
         with self._lock:
-            self.events.append(EventRecord(event_type=event_type, timestamp=timestamp, payload=payload))
+            self.events.append(
+                EventRecord(event_type=event_type, timestamp=timestamp, payload=payload)
+            )
 
             # Ring buffer: drop oldest events if exceeding max_events
             if self.max_events is not None and len(self.events) > self.max_events:
@@ -51,7 +53,7 @@ class InMemoryTelemetryLogger:
             elif event_type == "switch":
                 self._switch_count += 1
 
-    def snapshot_metrics(self) -> Dict[str, float]:
+    def snapshot_metrics(self) -> dict[str, float]:
         with self._lock:
             if self._control_count == 0:
                 return {"lock_rate": 0.0, "avg_abs_error_deg": 0.0, "switches_per_min": 0.0}
@@ -83,7 +85,7 @@ class FileTelemetryLogger:
     - 线程安全（内部加锁）
     """
 
-    def __init__(self, file_path: Union[str, Path], append: bool = False) -> None:
+    def __init__(self, file_path: str | Path, append: bool = False) -> None:
         self.file_path = Path(file_path)
         mode = "a" if append else "w"
         self._file = open(self.file_path, mode, encoding="utf-8")
@@ -98,7 +100,7 @@ class FileTelemetryLogger:
         self._first_control_ts = 0.0
         self._last_control_ts = 0.0
 
-    def log(self, event_type: str, timestamp: float, payload: Dict[str, float]) -> None:
+    def log(self, event_type: str, timestamp: float, payload: dict[str, float]) -> None:
         with self._lock:
             if self._closed:
                 return
@@ -121,7 +123,7 @@ class FileTelemetryLogger:
             elif event_type == "switch":
                 self._switch_count += 1
 
-    def snapshot_metrics(self) -> Dict[str, float]:
+    def snapshot_metrics(self) -> dict[str, float]:
         with self._lock:
             if self._control_count == 0:
                 return {"lock_rate": 0.0, "avg_abs_error_deg": 0.0, "switches_per_min": 0.0}
@@ -139,14 +141,14 @@ class FileTelemetryLogger:
                 self._file.close()
                 self._closed = True
 
-    def __enter__(self) -> "FileTelemetryLogger":
+    def __enter__(self) -> FileTelemetryLogger:
         return self
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> bool:
         self.close()
         return False

@@ -1,8 +1,10 @@
 """Unit tests for WeightedTargetSelector."""
+
 import pytest
-from src.rws_tracking.perception.selector import WeightedTargetSelector
+
 from src.rws_tracking.config import SelectorConfig, SelectorWeights
-from src.rws_tracking.types import Track, BoundingBox
+from src.rws_tracking.perception.selector import WeightedTargetSelector
+from src.rws_tracking.types import BoundingBox, Track
 
 
 @pytest.fixture
@@ -147,7 +149,7 @@ class TestWeightedTargetSelector:
 
         # Third selection at t=1.5s (0.5s later, > min_hold_time_s)
         # Now switching is allowed
-        result3 = selector.select(tracks, timestamp=1.5)
+        selector.select(tracks, timestamp=1.5)
         # Result depends on scoring, but switching is now possible
 
     def test_switch_penalty(self, selector):
@@ -272,7 +274,7 @@ class TestEdgeCases:
     def test_many_tracks(self, selector):
         """Should handle many tracks efficiently."""
         tracks = [
-            create_track(i, (i*10, i*10, i*10+50, i*10+50), confidence=0.7 + i*0.001)
+            create_track(i, (i * 10, i * 10, i * 10 + 50, i * 10 + 50), confidence=0.7 + i * 0.001)
             for i in range(100)
         ]
         result = selector.select(tracks, timestamp=1.0)

@@ -11,14 +11,13 @@ This separates control-loop testing from YOLO detection testing:
 
 Optionally adds configurable noise to simulate detection imperfections.
 """
+
 from __future__ import annotations
 
 import math
 import random
 from dataclasses import dataclass
-from typing import List, Optional, TYPE_CHECKING
-
-import numpy as np
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import mujoco
@@ -29,11 +28,12 @@ from ...types import BoundingBox, Detection
 @dataclass
 class DetectionNoise:
     """Configurable noise to make ground truth less perfect."""
-    bbox_jitter_px: float = 0.0     # random offset on bbox center (pixels)
-    size_jitter_frac: float = 0.0   # random scale on bbox size (fraction, e.g. 0.05 = ±5%)
-    miss_rate: float = 0.0          # probability of returning no detection (0~1)
-    confidence_mean: float = 0.92   # simulated confidence
-    confidence_std: float = 0.03    # confidence noise
+
+    bbox_jitter_px: float = 0.0  # random offset on bbox center (pixels)
+    size_jitter_frac: float = 0.0  # random scale on bbox size (fraction, e.g. 0.05 = ±5%)
+    miss_rate: float = 0.0  # probability of returning no detection (0~1)
+    confidence_mean: float = 0.92  # simulated confidence
+    confidence_std: float = 0.03  # confidence noise
 
 
 class GroundTruthDetector:
@@ -52,14 +52,14 @@ class GroundTruthDetector:
 
     def __init__(
         self,
-        model: "mujoco.MjModel",
-        data: "mujoco.MjData",
+        model: mujoco.MjModel,
+        data: mujoco.MjData,
         target_body: str = "target",
         camera_name: str = "gimbal_cam",
         target_half_height: float = 0.85,
         target_half_width: float = 0.25,
         class_id: str = "person",
-        noise: Optional[DetectionNoise] = None,
+        noise: DetectionNoise | None = None,
         image_width: int = 1280,
         image_height: int = 720,
     ) -> None:
@@ -76,7 +76,7 @@ class GroundTruthDetector:
         self._img_w = image_width
         self._img_h = image_height
 
-    def detect(self, frame: object, timestamp: float) -> List[Detection]:
+    def detect(self, frame: object, timestamp: float) -> list[Detection]:
         """
         Project target to image and return a Detection.
 
@@ -158,9 +158,11 @@ class GroundTruthDetector:
 
         conf = max(0.1, min(1.0, random.gauss(n.confidence_mean, n.confidence_std)))
 
-        return [Detection(
-            bbox=BoundingBox(x=float(bx), y=float(by), w=float(bw), h=float(bh)),
-            confidence=float(conf),
-            class_id=self._class_id,
-            timestamp=timestamp,
-        )]
+        return [
+            Detection(
+                bbox=BoundingBox(x=float(bx), y=float(by), w=float(bw), h=float(bh)),
+                confidence=float(conf),
+                class_id=self._class_id,
+                timestamp=timestamp,
+            )
+        ]

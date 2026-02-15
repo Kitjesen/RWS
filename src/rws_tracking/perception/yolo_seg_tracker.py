@@ -16,10 +16,12 @@ Key features:
     - cv2.moments for sub-pixel precise centroid computation.
     - Single model.track() call — simpler and faster than two-step pipeline.
 """
+
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Union
 
 import cv2 as _cv2
 import numpy as np
@@ -72,10 +74,10 @@ class YoloSegTracker:
         confidence_threshold: float = 0.40,
         nms_iou_threshold: float = 0.45,
         tracker: str = "botsort.yaml",
-        class_whitelist: Optional[Sequence[str]] = None,
+        class_whitelist: Sequence[str] | None = None,
         device: str = "",
         img_size: int = 640,
-        kalman_config: Optional[Union[KalmanCAConfig, KalmanConfig]] = None,
+        kalman_config: KalmanCAConfig | KalmanConfig | None = None,
     ) -> None:
         from ultralytics import YOLO  # type: ignore[import-untyped]
 
@@ -86,14 +88,12 @@ class YoloSegTracker:
         self._device = device
         self._img_size = img_size
 
-        self._id_to_name: Dict[int, str] = self._model.names
-        self._allowed_ids: Optional[List[int]] = None
+        self._id_to_name: dict[int, str] = self._model.names
+        self._allowed_ids: list[int] | None = None
         if class_whitelist is not None:
             name_lower_map = {v.lower(): k for k, v in self._id_to_name.items()}
             self._allowed_ids = [
-                name_lower_map[n.lower()]
-                for n in class_whitelist
-                if n.lower() in name_lower_map
+                name_lower_map[n.lower()] for n in class_whitelist if n.lower() in name_lower_map
             ]
             if not self._allowed_ids:
                 logger.warning(
@@ -104,29 +104,33 @@ class YoloSegTracker:
         # Kalman filter configuration
         self._kalman_cfg = kalman_config or KalmanCAConfig()
         self._use_ca = isinstance(self._kalman_cfg, KalmanCAConfig)
-        self._filters: Dict[int, _KalmanFilter] = {}
-        self._filter_last_seen: Dict[int, float] = {}
-        self._first_seen: Dict[int, float] = {}
+        self._filters: dict[int, _KalmanFilter] = {}
+        self._filter_last_seen: dict[int, float] = {}
+        self._first_seen: dict[int, float] = {}
         self._last_ts: float = 0.0
 
         # Cache last raw ultralytics results (for visualization)
-        self._last_raw_results: Optional[list] = None
+        self._last_raw_results: list | None = None
 
         model_name = "CA (6-state)" if self._use_ca else "CV (4-state)"
         logger.info(
             "YoloSegTracker ready  model=%s  tracker=%s  conf=%.2f  "
             "kalman=%s  whitelist=%s  device=%s",
-            model_path, tracker, self._conf, model_name,
-            class_whitelist, device or "auto",
+            model_path,
+            tracker,
+            self._conf,
+            model_name,
+            class_whitelist,
+            device or "auto",
         )
 
     @property
-    def last_raw_results(self) -> Optional[list]:
+    def last_raw_results(self) -> list | None:
         """Last raw ultralytics results (for visualization / debug)."""
         return self._last_raw_results
 
     @property
-    def filters(self) -> Dict[int, _KalmanFilter]:
+    def filters(self) -> dict[int, _KalmanFilter]:
         """Per-track Kalman filters (read-only access for visualization)."""
         return self._filters
 
@@ -134,9 +138,7 @@ class YoloSegTracker:
     # Public API — matches the CombinedTracker protocol
     # ------------------------------------------------------------------
 
-    def detect_and_track(
-        self, frame: object, timestamp: float
-    ) -> List[Track]:
+    def detect_and_track(self, frame: object, timestamp: float) -> list[Track]:
         """
         Run YOLO-Seg + BoT-SORT on a single BGR frame.
 
@@ -168,7 +170,7 @@ class YoloSegTracker:
         )
         self._last_raw_results = results
 
-        tracks: List[Track] = []
+        tracks: list[Track] = []
         seen_ids: set = set()
 
         for result in results:
@@ -213,28 +215,30 @@ class YoloSegTracker:
                 kf = self._filters[tid]
                 filtered_pos = kf.position
                 filtered_vel = kf.velocity
-                filtered_acc = kf.acceleration if hasattr(kf, 'acceleration') else (0.0, 0.0)
+                filtered_acc = kf.acceleration if hasattr(kf, "acceleration") else (0.0, 0.0)
                 mask_center = filtered_pos if raw_mask_center is not None else None
 
-                tracks.append(Track(
-                    track_id=tid,
-                    bbox=bbox,
-                    confidence=conf,
-                    class_id=cls_name,
-                    first_seen_ts=self._first_seen[tid],
-                    last_seen_ts=timestamp,
-                    age_frames=1,
-                    misses=0,
-                    velocity_px_per_s=filtered_vel,
-                    acceleration_px_per_s2=filtered_acc,
-                    mask_center=mask_center,
-                ))
+                tracks.append(
+                    Track(
+                        track_id=tid,
+                        bbox=bbox,
+                        confidence=conf,
+                        class_id=cls_name,
+                        first_seen_ts=self._first_seen[tid],
+                        last_seen_ts=timestamp,
+                        age_frames=1,
+                        misses=0,
+                        velocity_px_per_s=filtered_vel,
+                        acceleration_px_per_s2=filtered_acc,
+                        mask_center=mask_center,
+                    )
+                )
 
         # Purge Kalman filters for tracks not seen recently (grace period)
         stale_ids = [
-            tid for tid in self._filters
-            if tid not in seen_ids
-            and (timestamp - self._filter_last_seen.get(tid, 0.0)) > 0.5
+            tid
+            for tid in self._filters
+            if tid not in seen_ids and (timestamp - self._filter_last_seen.get(tid, 0.0)) > 0.5
         ]
         for stale_id in stale_ids:
             del self._filters[stale_id]
@@ -255,9 +259,7 @@ class YoloSegTracker:
         return CentroidKalman2D(cx0=cx0, cy0=cy0, config=self._kalman_cfg)
 
     @staticmethod
-    def _compute_mask_centroid(
-        masks: object, idx: int
-    ) -> Optional[Tuple[float, float]]:
+    def _compute_mask_centroid(masks: object, idx: int) -> tuple[float, float] | None:
         """
         Extract the centroid of the i-th segmentation mask using cv2.moments.
 

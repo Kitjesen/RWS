@@ -5,8 +5,8 @@ numpy>=1.24.0         # Array math, coordinate transforms
 scipy>=1.11.0         # Signal processing (optional, for future filters)
 pyyaml>=6.0           # Configuration file support
 
-# SIL simulation (MuJoCo)
-mujoco>=3.0.0         # Physics simulation for closed-loop testing
+# SIL simulation (MuJoCo) - Optional, only needed for simulation testing
+# mujoco>=3.0.0         # Physics simulation for closed-loop testing
 
 # Hardware integration (optional)
 pyserial>=3.5         # Serial port communication for real gimbal/IMU

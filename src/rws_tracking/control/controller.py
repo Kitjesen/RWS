@@ -14,38 +14,38 @@ Features:
     - Latency compensation (extrapolate target position by estimated delay).
     - Scan pattern for SEARCH state.
 """
+
 from __future__ import annotations
 
 import logging
 import math
 from dataclasses import dataclass, replace
-from typing import Optional, Tuple
 
-from ..config import GimbalControllerConfig, PIDConfig
-
-logger = logging.getLogger(__name__)
 from ..algebra import PixelToGimbalTransform
+from ..config import GimbalControllerConfig, PIDConfig
 from ..decision.state_machine import TrackState, TrackStateMachine
 from ..types import BodyState, ControlCommand, GimbalFeedback, TargetError, TargetObservation
-from .ballistic import (
-    BallisticModel,
-    SimpleBallisticModel,
-    SimpleBallisticConfig,
-    TableBallisticModel,
-    TableBallisticConfig,
-)
 from .adaptive import (
-    ErrorBasedScheduler,
-    ErrorBasedSchedulerConfig,
     DistanceBasedScheduler,
     DistanceBasedSchedulerConfig,
+    ErrorBasedScheduler,
+    ErrorBasedSchedulerConfig,
     GainScheduler,
 )
+from .ballistic import (
+    BallisticModel,
+    SimpleBallisticConfig,
+    SimpleBallisticModel,
+    TableBallisticConfig,
+    TableBallisticModel,
+)
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # PID controller (reusable, axis-agnostic)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class PIDState:
@@ -64,7 +64,9 @@ class PID:
         if dt <= 0.0:
             return 0.0
         self.state.integral += error * dt
-        self.state.integral = max(-self.cfg.integral_limit, min(self.cfg.integral_limit, self.state.integral))
+        self.state.integral = max(
+            -self.cfg.integral_limit, min(self.cfg.integral_limit, self.state.integral)
+        )
         if self.state.first_call:
             self.state.prev_error = error
             self.state.first_call = False
@@ -109,13 +111,13 @@ class TwoAxisGimbalController:
         self._state_machine = TrackStateMachine(cfg)
         self._last_ts = 0.0
         self._last_cmd = (0.0, 0.0)
-        self._scan_start_ts: Optional[float] = None
+        self._scan_start_ts: float | None = None
         self._prev_state: TrackState = TrackState.SEARCH
-        self._last_error: Optional[TargetError] = None
-        self._last_target: Optional[TargetObservation] = None
+        self._last_error: TargetError | None = None
+        self._last_target: TargetObservation | None = None
 
         # 弹道补偿模型
-        self._ballistic_model: Optional[BallisticModel] = None
+        self._ballistic_model: BallisticModel | None = None
         if cfg.ballistic.enabled:
             if cfg.ballistic.model_type == "simple":
                 self._ballistic_model = SimpleBallisticModel(
@@ -136,7 +138,7 @@ class TwoAxisGimbalController:
                 )
 
         # 自适应PID增益调度
-        self._gain_scheduler: Optional[GainScheduler] = None
+        self._gain_scheduler: GainScheduler | None = None
         if cfg.adaptive_pid.enabled:
             if cfg.adaptive_pid.scheduler_type == "error_based":
                 self._gain_scheduler = ErrorBasedScheduler(
@@ -165,10 +167,10 @@ class TwoAxisGimbalController:
 
     def compute_command(
         self,
-        target: Optional[TargetObservation],
+        target: TargetObservation | None,
         feedback: GimbalFeedback,
         timestamp: float,
-        body_state: Optional[BodyState] = None,
+        body_state: BodyState | None = None,
     ) -> ControlCommand:
         """Compute gimbal rate command.
 
@@ -196,7 +198,9 @@ class TwoAxisGimbalController:
         # Detect state transitions
         if state != self._prev_state:
             logger.info(
-                "controller state: %s -> %s", self._prev_state.value, state.value,
+                "controller state: %s -> %s",
+                self._prev_state.value,
+                state.value,
             )
             if self._prev_state == TrackState.SEARCH and state == TrackState.TRACK:
                 self._last_cmd = (0.0, 0.0)
@@ -209,13 +213,17 @@ class TwoAxisGimbalController:
 
         if state in (TrackState.TRACK, TrackState.LOCK):
             if error is None:
-                return ControlCommand(timestamp=timestamp, yaw_rate_cmd_dps=0.0, pitch_rate_cmd_dps=0.0)
+                return ControlCommand(
+                    timestamp=timestamp, yaw_rate_cmd_dps=0.0, pitch_rate_cmd_dps=0.0
+                )
 
             # 自适应增益调度
             if self._gain_scheduler is not None:
                 err_mag = max(abs(error.yaw_error_deg), abs(error.pitch_error_deg))
                 bbox_area = self._last_target.bbox.area if self._last_target else 0.0
-                kp_mult, ki_mult, kd_mult = self._gain_scheduler.compute_multipliers(err_mag, bbox_area)
+                kp_mult, ki_mult, kd_mult = self._gain_scheduler.compute_multipliers(
+                    err_mag, bbox_area
+                )
 
                 # 临时调整增益
                 temp_yaw_cfg = replace(
@@ -236,20 +244,26 @@ class TwoAxisGimbalController:
                 temp_pitch_pid.state = self._pitch_pid.state
 
                 cmd_yaw = temp_yaw_pid.step(error.yaw_error_deg, dt, feedforward=vel_yaw_dps)
-                cmd_pitch = temp_pitch_pid.step(error.pitch_error_deg, dt, feedforward=vel_pitch_dps)
+                cmd_pitch = temp_pitch_pid.step(
+                    error.pitch_error_deg, dt, feedforward=vel_pitch_dps
+                )
 
                 self._yaw_pid.state = temp_yaw_pid.state
                 self._pitch_pid.state = temp_pitch_pid.state
             else:
                 # 标准PID
                 cmd_yaw = self._yaw_pid.step(error.yaw_error_deg, dt, feedforward=vel_yaw_dps)
-                cmd_pitch = self._pitch_pid.step(error.pitch_error_deg, dt, feedforward=vel_pitch_dps)
+                cmd_pitch = self._pitch_pid.step(
+                    error.pitch_error_deg, dt, feedforward=vel_pitch_dps
+                )
 
         elif state == TrackState.LOST:
             predicted = self._predict_lost_error(timestamp)
             if predicted is not None:
                 cmd_yaw = self._yaw_pid.step(predicted.yaw_error_deg, dt, feedforward=vel_yaw_dps)
-                cmd_pitch = self._pitch_pid.step(predicted.pitch_error_deg, dt, feedforward=vel_pitch_dps)
+                cmd_pitch = self._pitch_pid.step(
+                    predicted.pitch_error_deg, dt, feedforward=vel_pitch_dps
+                )
             else:
                 self._yaw_pid.reset()
                 self._pitch_pid.reset()
@@ -299,8 +313,8 @@ class TwoAxisGimbalController:
     # ------------------------------------------------------------------
 
     def _estimate_error(
-        self, target: Optional[TargetObservation], timestamp: float
-    ) -> Tuple[Optional[TargetError], float, float]:
+        self, target: TargetObservation | None, timestamp: float
+    ) -> tuple[TargetError | None, float, float]:
         """Returns (error, yaw_velocity_dps, pitch_velocity_dps)."""
         if target is None:
             return None, 0.0, 0.0
@@ -334,7 +348,7 @@ class TwoAxisGimbalController:
         self._last_target = target
         return error, vel_yaw_dps, vel_pitch_dps
 
-    def _pixel_velocity_to_angular(self, vx_px_s: float, vy_px_s: float) -> Tuple[float, float]:
+    def _pixel_velocity_to_angular(self, vx_px_s: float, vy_px_s: float) -> tuple[float, float]:
         """Convert pixel velocity to approximate angular velocity (deg/s)."""
         cam = self._transform.camera
         yaw_rate = math.degrees(vx_px_s / cam.fx)
@@ -345,7 +359,7 @@ class TwoAxisGimbalController:
     # Lost-state velocity prediction
     # ------------------------------------------------------------------
 
-    def _predict_lost_error(self, timestamp: float) -> Optional[TargetError]:
+    def _predict_lost_error(self, timestamp: float) -> TargetError | None:
         """Use constant-velocity model to predict target position during LOST."""
         if self._last_error is None or self._last_target is None:
             return None
@@ -374,7 +388,7 @@ class TwoAxisGimbalController:
     # Output smoothing & scan
     # ------------------------------------------------------------------
 
-    def _smooth_limit(self, yaw_cmd: float, pitch_cmd: float) -> Tuple[float, float]:
+    def _smooth_limit(self, yaw_cmd: float, pitch_cmd: float) -> tuple[float, float]:
         alpha = self._cfg.command_lpf_alpha
         y = alpha * yaw_cmd + (1.0 - alpha) * self._last_cmd[0]
         p = alpha * pitch_cmd + (1.0 - alpha) * self._last_cmd[1]
@@ -384,7 +398,7 @@ class TwoAxisGimbalController:
         self._last_cmd = (y, p)
         return y, p
 
-    def _scan_command(self, timestamp: float) -> Tuple[float, float]:
+    def _scan_command(self, timestamp: float) -> tuple[float, float]:
         if self._scan_start_ts is None:
             self._scan_start_ts = timestamp
         t = timestamp - self._scan_start_ts
@@ -392,7 +406,8 @@ class TwoAxisGimbalController:
         yaw_scan, pitch_scan = self._cfg.scan_pattern
         yaw = yaw_scan * self._cfg.scan_yaw_scale * math.sin(2.0 * math.pi * freq * t)
         pitch = (
-            pitch_scan * self._cfg.scan_pitch_scale
+            pitch_scan
+            * self._cfg.scan_pitch_scale
             * math.sin(2.0 * math.pi * freq * self._cfg.scan_pitch_freq_ratio * t)
         )
         return yaw, pitch

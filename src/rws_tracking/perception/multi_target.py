@@ -1,8 +1,9 @@
 """Multi-target selection and allocation for coordinated multi-gimbal systems."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+
 import numpy as np
 
 from ..types import TargetObservation, Track
@@ -11,6 +12,7 @@ from ..types import TargetObservation, Track
 @dataclass
 class TargetAssignment:
     """A target assigned to a specific executor (gimbal/weapon station)."""
+
     executor_id: int
     target: TargetObservation
     cost: float  # Assignment cost (e.g., angular distance)
@@ -24,11 +26,8 @@ class MultiTargetSelector:
     """
 
     def select_multiple(
-        self,
-        tracks: List[Track],
-        timestamp: float,
-        max_targets: int = 3
-    ) -> List[TargetObservation]:
+        self, tracks: list[Track], timestamp: float, max_targets: int = 3
+    ) -> list[TargetObservation]:
         """Select up to max_targets best targets from tracks.
 
         Parameters
@@ -64,13 +63,13 @@ class TargetAllocator:
             Number of available executors (gimbals/weapon stations)
         """
         self.num_executors = num_executors
-        self._last_assignments: List[Optional[int]] = [None] * num_executors
+        self._last_assignments: list[int | None] = [None] * num_executors
 
     def allocate(
         self,
-        targets: List[TargetObservation],
-        executor_positions: List[Tuple[float, float]],  # (yaw_deg, pitch_deg)
-    ) -> List[TargetAssignment]:
+        targets: list[TargetObservation],
+        executor_positions: list[tuple[float, float]],  # (yaw_deg, pitch_deg)
+    ) -> list[TargetAssignment]:
         """Allocate targets to executors using Hungarian algorithm.
 
         Parameters
@@ -100,11 +99,7 @@ class TargetAllocator:
                 # Cost = angular distance from executor to target
                 # (simplified - assumes target bbox center maps to angle)
                 # In real implementation, would use coordinate transform
-                cost = self._compute_cost(
-                    exec_yaw, exec_pitch,
-                    target,
-                    i, j
-                )
+                cost = self._compute_cost(exec_yaw, exec_pitch, target, i, j)
                 cost_matrix[i, j] = cost
 
         # Solve assignment problem
@@ -114,11 +109,13 @@ class TargetAllocator:
         result = []
         for executor_id, target_idx in enumerate(assignments):
             if target_idx is not None and target_idx < len(targets):
-                result.append(TargetAssignment(
-                    executor_id=executor_id,
-                    target=targets[target_idx],
-                    cost=cost_matrix[executor_id, target_idx]
-                ))
+                result.append(
+                    TargetAssignment(
+                        executor_id=executor_id,
+                        target=targets[target_idx],
+                        cost=cost_matrix[executor_id, target_idx],
+                    )
+                )
                 self._last_assignments[executor_id] = targets[target_idx].track_id
             else:
                 self._last_assignments[executor_id] = None
@@ -151,10 +148,7 @@ class TargetAllocator:
         approx_pitch_error = (cy - 360) / 360 * 20  # degrees
 
         # Angular distance
-        angular_dist = np.sqrt(
-            (approx_yaw_error) ** 2 +
-            (approx_pitch_error) ** 2
-        )
+        angular_dist = np.sqrt((approx_yaw_error) ** 2 + (approx_pitch_error) ** 2)
 
         cost = angular_dist
 
@@ -163,11 +157,11 @@ class TargetAllocator:
             cost *= 0.7  # 30% discount for continuity
 
         # Confidence bonus
-        cost *= (2.0 - target.confidence)  # Higher confidence = lower cost
+        cost *= 2.0 - target.confidence  # Higher confidence = lower cost
 
         return cost
 
-    def _hungarian_algorithm(self, cost_matrix: np.ndarray) -> List[Optional[int]]:
+    def _hungarian_algorithm(self, cost_matrix: np.ndarray) -> list[int | None]:
         """Solve assignment problem using Hungarian algorithm.
 
         Parameters
@@ -212,7 +206,7 @@ class TargetAllocator:
 
         return assignments
 
-    def _greedy_assignment(self, cost_matrix: np.ndarray) -> List[Optional[int]]:
+    def _greedy_assignment(self, cost_matrix: np.ndarray) -> list[int | None]:
         """Fallback greedy assignment (when scipy not available)."""
         n_executors, n_targets = cost_matrix.shape
         assignments = [None] * n_executors

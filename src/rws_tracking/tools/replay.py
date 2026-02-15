@@ -11,40 +11,42 @@ Usage:
     replay.print_summary()
     replay.compare_metrics(other_replay)
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from statistics import mean, stdev
-from typing import Dict, List, Optional, Union
 
 from ..telemetry.logger import EventRecord
 
 
 @dataclass
 class TelemetryReplay:
-    events: List[EventRecord] = field(default_factory=list)
+    events: list[EventRecord] = field(default_factory=list)
 
     # ------------------------------------------------------------------
     # Load
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_jsonl(cls, path: Union[str, Path]) -> TelemetryReplay:
+    def from_jsonl(cls, path: str | Path) -> TelemetryReplay:
         """Load events from a JSONL file exported by InMemoryTelemetryLogger."""
-        events: List[EventRecord] = []
-        with open(path, "r", encoding="utf-8") as f:
+        events: list[EventRecord] = []
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
                 d = json.loads(line)
-                events.append(EventRecord(
-                    event_type=d["event_type"],
-                    timestamp=d["timestamp"],
-                    payload=d["payload"],
-                ))
+                events.append(
+                    EventRecord(
+                        event_type=d["event_type"],
+                        timestamp=d["timestamp"],
+                        payload=d["payload"],
+                    )
+                )
         return cls(events=events)
 
     @classmethod
@@ -56,21 +58,28 @@ class TelemetryReplay:
     # Analysis
     # ------------------------------------------------------------------
 
-    def control_events(self) -> List[EventRecord]:
+    def control_events(self) -> list[EventRecord]:
         return [e for e in self.events if e.event_type == "control"]
 
-    def switch_events(self) -> List[EventRecord]:
+    def switch_events(self) -> list[EventRecord]:
         return [e for e in self.events if e.event_type == "switch"]
 
-    def metrics(self) -> Dict[str, float]:
+    def metrics(self) -> dict[str, float]:
         controls = self.control_events()
         switches = self.switch_events()
         if not controls:
-            return {"lock_rate": 0.0, "avg_abs_error_deg": 0.0, "p95_abs_error_deg": 0.0,
-                    "switches_per_min": 0.0, "error_stdev_deg": 0.0}
+            return {
+                "lock_rate": 0.0,
+                "avg_abs_error_deg": 0.0,
+                "p95_abs_error_deg": 0.0,
+                "switches_per_min": 0.0,
+                "error_stdev_deg": 0.0,
+            }
 
         abs_errors = sorted(
-            max(abs(e.payload.get("yaw_error_deg", 0.0)), abs(e.payload.get("pitch_error_deg", 0.0)))
+            max(
+                abs(e.payload.get("yaw_error_deg", 0.0)), abs(e.payload.get("pitch_error_deg", 0.0))
+            )
             for e in controls
         )
         lock_count = sum(1 for e in controls if e.payload.get("state") == 2.0)
@@ -111,7 +120,7 @@ class TelemetryReplay:
     # Extract time series for plotting
     # ------------------------------------------------------------------
 
-    def error_time_series(self) -> Dict[str, List[float]]:
+    def error_time_series(self) -> dict[str, list[float]]:
         """Return dict with 'time', 'yaw_error', 'pitch_error' lists."""
         controls = self.control_events()
         return {

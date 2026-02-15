@@ -1,4 +1,5 @@
 """Gimbal hardware driver abstraction (simulated implementation)."""
+
 from __future__ import annotations
 
 import logging
@@ -24,7 +25,7 @@ class DriverLimits:
     coulomb_friction_dps: float = 2.0  # 库仑摩擦（恒定阻力）
 
     @classmethod
-    def from_config(cls, cfg: DriverLimitsConfig) -> "DriverLimits":
+    def from_config(cls, cfg: DriverLimitsConfig) -> DriverLimits:
         """Create DriverLimits from a DriverLimitsConfig."""
         return cls(
             yaw_min_deg=cfg.yaw_min_deg,
@@ -58,20 +59,28 @@ class SimulatedGimbalDriver:
         self._pitch_cmd = 0.0
         self._last_ts = 0.0
 
-    def set_yaw_pitch_rate(self, yaw_rate_dps: float, pitch_rate_dps: float, timestamp: float) -> None:
+    def set_yaw_pitch_rate(
+        self, yaw_rate_dps: float, pitch_rate_dps: float, timestamp: float
+    ) -> None:
         self._integrate_to(timestamp)
         self._yaw_cmd = self._clip_rate(yaw_rate_dps)
         self._pitch_cmd = self._clip_rate(pitch_rate_dps)
         logger.debug(
             "cmd  yaw=%.2f dps  pitch=%.2f dps  t=%.3f",
-            self._yaw_cmd, self._pitch_cmd, timestamp,
+            self._yaw_cmd,
+            self._pitch_cmd,
+            timestamp,
         )
 
     def get_feedback(self, timestamp: float) -> GimbalFeedback:
         self._integrate_to(timestamp)
         logger.debug(
             "fb   yaw=%.2f°  pitch=%.2f°  rate=(%.2f, %.2f) dps  t=%.3f",
-            self._yaw, self._pitch, self._yaw_rate, self._pitch_rate, timestamp,
+            self._yaw,
+            self._pitch,
+            self._yaw_rate,
+            self._pitch_rate,
+            timestamp,
         )
         return GimbalFeedback(
             timestamp=timestamp,

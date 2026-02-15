@@ -1,11 +1,12 @@
 """Configuration hot-reload support using file watching."""
+
 from __future__ import annotations
 
 import logging
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from ..config import SystemConfig, load_config
 
@@ -54,9 +55,9 @@ class ConfigReloader:
         self.callback = callback
         self.check_interval = check_interval
 
-        self._last_mtime: Optional[float] = None
+        self._last_mtime: float | None = None
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
         logger.info("ConfigReloader initialized: %s", self.config_path)
 
@@ -164,15 +165,15 @@ class ConfigServer:
         self.port = port
         self.host = host
         self._app = None
-        self._server_thread: Optional[threading.Thread] = None
+        self._server_thread: threading.Thread | None = None
 
         try:
-            from flask import Flask, request, jsonify
+            from flask import Flask  # noqa: F401
+
             self._flask_available = True
         except ImportError:
             logger.warning(
-                "Flask not installed. ConfigServer requires Flask. "
-                "Install with: pip install flask"
+                "Flask not installed. ConfigServer requires Flask. Install with: pip install flask"
             )
             self._flask_available = False
 
@@ -181,15 +182,15 @@ class ConfigServer:
 
     def _setup_app(self) -> None:
         """Setup Flask app and routes."""
-        from flask import Flask, request, jsonify
+        from flask import Flask, jsonify, request
 
         app = Flask(__name__)
 
-        @app.route('/health', methods=['GET'])
+        @app.route("/health", methods=["GET"])
         def health():
-            return jsonify({'status': 'ok', 'pipeline': 'running'})
+            return jsonify({"status": "ok", "pipeline": "running"})
 
-        @app.route('/config/pid', methods=['POST'])
+        @app.route("/config/pid", methods=["POST"])
         def update_pid():
             """Update PID parameters.
 
@@ -203,39 +204,46 @@ class ConfigServer:
             """
             try:
                 data = request.json
-                axis = data.get('axis', 'yaw')
+                axis = data.get("axis", "yaw")
 
-                if axis == 'yaw':
+                if axis == "yaw":
                     pid_config = self.pipeline.controller._yaw_pid_cfg
-                elif axis == 'pitch':
+                elif axis == "pitch":
                     pid_config = self.pipeline.controller._pitch_pid_cfg
                 else:
-                    return jsonify({'error': f'Invalid axis: {axis}'}), 400
+                    return jsonify({"error": f"Invalid axis: {axis}"}), 400
 
                 # Update parameters
-                if 'kp' in data:
-                    pid_config.kp = float(data['kp'])
-                if 'ki' in data:
-                    pid_config.ki = float(data['ki'])
-                if 'kd' in data:
-                    pid_config.kd = float(data['kd'])
+                if "kp" in data:
+                    pid_config.kp = float(data["kp"])
+                if "ki" in data:
+                    pid_config.ki = float(data["ki"])
+                if "kd" in data:
+                    pid_config.kd = float(data["kd"])
 
-                logger.info("PID updated via API: %s axis, Kp=%.2f Ki=%.2f Kd=%.2f",
-                           axis, pid_config.kp, pid_config.ki, pid_config.kd)
+                logger.info(
+                    "PID updated via API: %s axis, Kp=%.2f Ki=%.2f Kd=%.2f",
+                    axis,
+                    pid_config.kp,
+                    pid_config.ki,
+                    pid_config.kd,
+                )
 
-                return jsonify({
-                    'status': 'ok',
-                    'axis': axis,
-                    'kp': pid_config.kp,
-                    'ki': pid_config.ki,
-                    'kd': pid_config.kd
-                })
+                return jsonify(
+                    {
+                        "status": "ok",
+                        "axis": axis,
+                        "kp": pid_config.kp,
+                        "ki": pid_config.ki,
+                        "kd": pid_config.kd,
+                    }
+                )
 
             except Exception as e:
                 logger.error("Failed to update PID: %s", e)
-                return jsonify({'error': str(e)}), 500
+                return jsonify({"error": str(e)}), 500
 
-        @app.route('/config/selector', methods=['POST'])
+        @app.route("/config/selector", methods=["POST"])
         def update_selector():
             """Update selector weights.
 
@@ -252,35 +260,37 @@ class ConfigServer:
                 data = request.json
                 weights = self.pipeline.selector._cfg.weights
 
-                if 'confidence' in data:
-                    weights.confidence = float(data['confidence'])
-                if 'size' in data:
-                    weights.size = float(data['size'])
-                if 'center_proximity' in data:
-                    weights.center_proximity = float(data['center_proximity'])
-                if 'track_age' in data:
-                    weights.track_age = float(data['track_age'])
-                if 'class_weight' in data:
-                    weights.class_weight = float(data['class_weight'])
+                if "confidence" in data:
+                    weights.confidence = float(data["confidence"])
+                if "size" in data:
+                    weights.size = float(data["size"])
+                if "center_proximity" in data:
+                    weights.center_proximity = float(data["center_proximity"])
+                if "track_age" in data:
+                    weights.track_age = float(data["track_age"])
+                if "class_weight" in data:
+                    weights.class_weight = float(data["class_weight"])
 
                 logger.info("Selector weights updated via API")
 
-                return jsonify({
-                    'status': 'ok',
-                    'weights': {
-                        'confidence': weights.confidence,
-                        'size': weights.size,
-                        'center_proximity': weights.center_proximity,
-                        'track_age': weights.track_age,
-                        'class_weight': weights.class_weight
+                return jsonify(
+                    {
+                        "status": "ok",
+                        "weights": {
+                            "confidence": weights.confidence,
+                            "size": weights.size,
+                            "center_proximity": weights.center_proximity,
+                            "track_age": weights.track_age,
+                            "class_weight": weights.class_weight,
+                        },
                     }
-                })
+                )
 
             except Exception as e:
                 logger.error("Failed to update selector: %s", e)
-                return jsonify({'error': str(e)}), 500
+                return jsonify({"error": str(e)}), 500
 
-        @app.route('/metrics', methods=['GET'])
+        @app.route("/metrics", methods=["GET"])
         def get_metrics():
             """Get current telemetry metrics."""
             try:
@@ -288,7 +298,7 @@ class ConfigServer:
                 return jsonify(metrics)
             except Exception as e:
                 logger.error("Failed to get metrics: %s", e)
-                return jsonify({'error': str(e)}), 500
+                return jsonify({"error": str(e)}), 500
 
         self._app = app
 

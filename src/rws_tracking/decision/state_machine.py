@@ -5,11 +5,11 @@ Decides which phase the system is in: Search / Track / Lock / Lost.
 This is a *decision*, not a *control* concern -- the controller only
 receives the resulting state and acts on it.
 """
+
 from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Optional
 
 from ..config import GimbalControllerConfig
 from ..types import TargetError
@@ -28,10 +28,10 @@ class TrackStateMachine:
     def __init__(self, cfg: GimbalControllerConfig) -> None:
         self._cfg = cfg
         self._state = TrackState.SEARCH
-        self._last_seen_ts: Optional[float] = None
-        self._lock_start_ts: Optional[float] = None
-        self._high_error_start_ts: Optional[float] = None
-        self._last_error: Optional[TargetError] = None
+        self._last_seen_ts: float | None = None
+        self._lock_start_ts: float | None = None
+        self._high_error_start_ts: float | None = None
+        self._last_error: TargetError | None = None
 
     @property
     def state(self) -> TrackState:
@@ -41,11 +41,13 @@ class TrackStateMachine:
         """Set state and log transitions."""
         if new_state != self._state:
             logger.info(
-                "state transition: %s -> %s", self._state.value, new_state.value,
+                "state transition: %s -> %s",
+                self._state.value,
+                new_state.value,
             )
             self._state = new_state
 
-    def update(self, error: Optional[TargetError], timestamp: float) -> TrackState:
+    def update(self, error: TargetError | None, timestamp: float) -> TrackState:
         if error is not None:
             self._last_seen_ts = timestamp
             self._last_error = error

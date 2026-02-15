@@ -1,8 +1,13 @@
-import json
 import tempfile
 import unittest
 from pathlib import Path
 
+from src.rws_tracking.algebra import (
+    CameraModel,
+    DistortionCoeffs,
+    MountExtrinsics,
+    PixelToGimbalTransform,
+)
 from src.rws_tracking.config import (
     SelectorConfig,
     SystemConfig,
@@ -10,25 +15,23 @@ from src.rws_tracking.config import (
     load_config,
     save_config,
 )
-from src.rws_tracking.algebra import (
-    CameraModel,
-    DistortionCoeffs,
-    MountExtrinsics,
-    PixelToGimbalTransform,
-)
 from src.rws_tracking.control import TwoAxisGimbalController
 from src.rws_tracking.decision.state_machine import TrackState, TrackStateMachine
 from src.rws_tracking.hardware import SimulatedGimbalDriver
-from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
+from src.rws_tracking.perception import (
+    PassthroughDetector,
+    SimpleIoUTracker,
+    WeightedTargetSelector,
+)
 from src.rws_tracking.pipeline import VisionGimbalPipeline, run_demo
 from src.rws_tracking.telemetry import InMemoryTelemetryLogger
 from src.rws_tracking.tools.replay import TelemetryReplay
-from src.rws_tracking.types import BoundingBox, GimbalFeedback, TargetError, TargetObservation, Track
-
+from src.rws_tracking.types import BoundingBox, TargetError, Track
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_cam() -> CameraModel:
     return CameraModel(width=1280, height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0)
@@ -51,6 +54,7 @@ def _make_pipeline() -> VisionGimbalPipeline:
 # ---------------------------------------------------------------------------
 # Coordinate transform tests
 # ---------------------------------------------------------------------------
+
 
 class CoordinateTransformTests(unittest.TestCase):
     def test_boresight_pixel_gives_zero_error(self) -> None:
@@ -88,8 +92,7 @@ class CoordinateTransformTests(unittest.TestCase):
             mount = MountExtrinsics(yaw_deg=mount_yaw)
             tf = PixelToGimbalTransform(cam, mount)
             yaw, pitch = tf.pixel_to_angle_error(cam.cx, cam.cy)
-            self.assertAlmostEqual(yaw, mount_yaw, places=2,
-                                   msg=f"mount yaw={mount_yaw}")
+            self.assertAlmostEqual(yaw, mount_yaw, places=2, msg=f"mount yaw={mount_yaw}")
             self.assertAlmostEqual(pitch, 0.0, places=2)
 
     def test_mount_pitch_direction_correct(self) -> None:
@@ -100,8 +103,7 @@ class CoordinateTransformTests(unittest.TestCase):
             tf = PixelToGimbalTransform(cam, mount)
             yaw, pitch = tf.pixel_to_angle_error(cam.cx, cam.cy)
             self.assertAlmostEqual(yaw, 0.0, places=2)
-            self.assertAlmostEqual(pitch, mount_pitch, places=2,
-                                   msg=f"mount pitch={mount_pitch}")
+            self.assertAlmostEqual(pitch, mount_pitch, places=2, msg=f"mount pitch={mount_pitch}")
 
     def test_mount_roll_no_boresight_shift(self) -> None:
         """mount roll should NOT shift the boresight (optical center stays zero)."""
@@ -114,7 +116,12 @@ class CoordinateTransformTests(unittest.TestCase):
 
     def test_distortion_model_does_not_crash(self) -> None:
         cam = CameraModel(
-            width=1280, height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0,
+            width=1280,
+            height=720,
+            fx=970.0,
+            fy=965.0,
+            cx=640.0,
+            cy=360.0,
             distortion=DistortionCoeffs(k1=-0.05, k2=0.01),
         )
         tf = PixelToGimbalTransform(cam)
@@ -135,10 +142,12 @@ class CoordinateTransformTests(unittest.TestCase):
 # Selector tests
 # ---------------------------------------------------------------------------
 
+
 class SelectorTests(unittest.TestCase):
     def test_selector_holds_target_within_min_hold_window(self) -> None:
         selector = WeightedTargetSelector(
-            frame_width=1280, frame_height=720,
+            frame_width=1280,
+            frame_height=720,
             config=SelectorConfig(min_hold_time_s=0.5, delta_threshold=0.1),
         )
         t0 = 1.0
@@ -153,6 +162,7 @@ class SelectorTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # State machine tests
 # ---------------------------------------------------------------------------
+
 
 class StateMachineTests(unittest.TestCase):
     def test_reaches_lock_and_lost(self) -> None:
@@ -178,6 +188,7 @@ class StateMachineTests(unittest.TestCase):
 # Pipeline demo test
 # ---------------------------------------------------------------------------
 
+
 class DemoTests(unittest.TestCase):
     def test_demo_metrics_have_expected_keys(self) -> None:
         metrics = run_demo(duration_s=2.0, dt_s=0.05)
@@ -189,6 +200,7 @@ class DemoTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Edge-case / boundary tests
 # ---------------------------------------------------------------------------
+
 
 class EdgeCaseTests(unittest.TestCase):
     def test_empty_frame_does_not_crash(self) -> None:
@@ -229,8 +241,10 @@ class EdgeCaseTests(unittest.TestCase):
 
     def test_rapid_target_switching_is_suppressed(self) -> None:
         from src.rws_tracking.config import SelectorWeights
+
         selector = WeightedTargetSelector(
-            frame_width=1280, frame_height=720,
+            frame_width=1280,
+            frame_height=720,
             config=SelectorConfig(
                 weights=SelectorWeights(switch_penalty=0.5),
                 min_hold_time_s=1.0,
@@ -245,7 +259,7 @@ class EdgeCaseTests(unittest.TestCase):
         ]
         selector.select(tracks_a, t)
         switches = 0
-        for i in range(20):
+        for _i in range(20):
             t += 0.05
             sel = selector.select(tracks_b, t)
             if sel.track_id == 2:
@@ -254,11 +268,20 @@ class EdgeCaseTests(unittest.TestCase):
 
     def test_velocity_field_propagated(self) -> None:
         selector = WeightedTargetSelector(
-            frame_width=1280, frame_height=720,
+            frame_width=1280,
+            frame_height=720,
             config=SelectorConfig(),
         )
-        track = Track(1, BoundingBox(600, 300, 80, 80), 0.9, "person", 0.0, 0.1,
-                      age_frames=10, velocity_px_per_s=(50.0, -20.0))
+        track = Track(
+            1,
+            BoundingBox(600, 300, 80, 80),
+            0.9,
+            "person",
+            0.0,
+            0.1,
+            age_frames=10,
+            velocity_px_per_s=(50.0, -20.0),
+        )
         obs = selector.select([track], 0.1)
         self.assertAlmostEqual(obs.velocity_px_per_s[0], 50.0)
         self.assertAlmostEqual(obs.velocity_px_per_s[1], -20.0)
@@ -267,6 +290,7 @@ class EdgeCaseTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Config load/save test
 # ---------------------------------------------------------------------------
+
 
 class ConfigTests(unittest.TestCase):
     def test_save_and_load_roundtrip(self) -> None:
@@ -284,9 +308,10 @@ class ConfigTests(unittest.TestCase):
 # Replay tool test
 # ---------------------------------------------------------------------------
 
+
 class ReplayTests(unittest.TestCase):
     def test_replay_from_logger(self) -> None:
-        metrics = run_demo(duration_s=2.0, dt_s=0.05)
+        run_demo(duration_s=2.0, dt_s=0.05)
         # run_demo uses InMemoryTelemetryLogger internally; test replay standalone
         logger = InMemoryTelemetryLogger()
         logger.log("control", 0.1, {"yaw_error_deg": 1.0, "pitch_error_deg": 0.5, "state": 1.0})
@@ -301,7 +326,9 @@ class ReplayTests(unittest.TestCase):
         logger.log("control", 1.0, {"yaw_error_deg": 2.0, "pitch_error_deg": 1.0, "state": 1.0})
         logger.log("switch", 1.0, {"track_id": 1.0})
         jsonl = logger.export_jsonl()
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+        ) as f:
             f.write(jsonl)
             path = f.name
         replay = TelemetryReplay.from_jsonl(path)

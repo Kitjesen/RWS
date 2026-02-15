@@ -1,7 +1,8 @@
 """Control layer interfaces -- implement these to swap control algorithms."""
+
 from __future__ import annotations
 
-from typing import Optional, Protocol
+from typing import Protocol
 
 from ..types import BodyState, ControlCommand, GimbalFeedback, TargetObservation
 
@@ -14,11 +15,11 @@ class GimbalController(Protocol):
         1. Create a class with a ``compute_command`` method matching this signature.
         2. Inject it into ``VisionGimbalPipeline`` via the ``controller`` parameter.
     """
+
     def compute_command(
         self,
-        target: Optional[TargetObservation],
+        target: TargetObservation | None,
         feedback: GimbalFeedback,
         timestamp: float,
-        body_state: Optional[BodyState] = None,
-    ) -> ControlCommand:
-        ...
+        body_state: BodyState | None = None,
+    ) -> ControlCommand: ...

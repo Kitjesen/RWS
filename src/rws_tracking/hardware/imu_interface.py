@@ -25,6 +25,7 @@ Example::
 
     pipeline = VisionGimbalPipeline(..., body_provider=MyDogSDKMotion())
 """
+
 from __future__ import annotations
 
 from typing import Protocol
@@ -43,5 +44,4 @@ class BodyMotionProvider(Protocol):
         All angles in degrees, angular rates in degrees per second.
     """
 
-    def get_body_state(self, timestamp: float) -> BodyState:
-        ...
+    def get_body_state(self, timestamp: float) -> BodyState: ...

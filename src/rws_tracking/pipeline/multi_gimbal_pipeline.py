@@ -1,9 +1,9 @@
 """Multi-gimbal pipeline for coordinated multi-target tracking."""
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional
 
 from ..control.interfaces import GimbalController
 from ..hardware.interfaces import GimbalDriver
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GimbalUnit:
     """A single gimbal unit with its controller and driver."""
+
     unit_id: int
     controller: GimbalController
     driver: GimbalDriver
@@ -28,9 +29,10 @@ class GimbalUnit:
 @dataclass
 class MultiGimbalOutputs:
     """Outputs from multi-gimbal pipeline step."""
-    assignments: List[TargetAssignment]
-    commands: List[ControlCommand]
-    all_targets: List[TargetObservation]
+
+    assignments: list[TargetAssignment]
+    commands: list[ControlCommand]
+    all_targets: list[TargetObservation]
 
 
 class MultiGimbalPipeline:
@@ -49,7 +51,7 @@ class MultiGimbalPipeline:
         tracker: Tracker,
         selector: WeightedMultiTargetSelector,
         allocator: TargetAllocator,
-        gimbal_units: List[GimbalUnit],
+        gimbal_units: list[GimbalUnit],
     ):
         """Initialize multi-gimbal pipeline.
 
@@ -72,10 +74,7 @@ class MultiGimbalPipeline:
         self.allocator = allocator
         self.gimbal_units = gimbal_units
 
-        logger.info(
-            "MultiGimbalPipeline initialized with %d gimbal units",
-            len(gimbal_units)
-        )
+        logger.info("MultiGimbalPipeline initialized with %d gimbal units", len(gimbal_units))
 
     def step(self, frame: object, timestamp: float) -> MultiGimbalOutputs:
         """Process one frame and update all gimbals.
@@ -108,18 +107,12 @@ class MultiGimbalPipeline:
                 feedback = unit.driver.get_feedback(timestamp)
                 cmd = unit.controller.compute_command(None, feedback, timestamp)
                 unit.driver.set_yaw_pitch_rate(
-                    cmd.yaw_rate_cmd_dps,
-                    cmd.pitch_rate_cmd_dps,
-                    timestamp
+                    cmd.yaw_rate_cmd_dps, cmd.pitch_rate_cmd_dps, timestamp
                 )
                 commands.append(cmd)
                 self._log_telemetry(unit, cmd, None, timestamp)
 
-            return MultiGimbalOutputs(
-                assignments=[],
-                commands=commands,
-                all_targets=[]
-            )
+            return MultiGimbalOutputs(assignments=[], commands=commands, all_targets=[])
 
         # 3. Get current gimbal positions
         executor_positions = []
@@ -146,11 +139,7 @@ class MultiGimbalPipeline:
             cmd = unit.controller.compute_command(target, feedback, timestamp)
 
             # Send to driver
-            unit.driver.set_yaw_pitch_rate(
-                cmd.yaw_rate_cmd_dps,
-                cmd.pitch_rate_cmd_dps,
-                timestamp
-            )
+            unit.driver.set_yaw_pitch_rate(cmd.yaw_rate_cmd_dps, cmd.pitch_rate_cmd_dps, timestamp)
 
             commands.append(cmd)
 
@@ -162,21 +151,17 @@ class MultiGimbalPipeline:
                     "Gimbal %d assigned target %d (cost=%.2f)",
                     unit.unit_id,
                     assignment.target.track_id,
-                    assignment.cost
+                    assignment.cost,
                 )
 
-        return MultiGimbalOutputs(
-            assignments=assignments,
-            commands=commands,
-            all_targets=targets
-        )
+        return MultiGimbalOutputs(assignments=assignments, commands=commands, all_targets=targets)
 
     def _log_telemetry(
         self,
         unit: GimbalUnit,
         command: ControlCommand,
-        target: Optional[TargetObservation],
-        timestamp: float
+        target: TargetObservation | None,
+        timestamp: float,
     ):
         """Log telemetry for a gimbal unit."""
         unit.telemetry.log(
@@ -190,5 +175,5 @@ class MultiGimbalPipeline:
                 "pitch_error_deg": command.metadata.get("pitch_error_deg", 0.0),
                 "state": command.metadata.get("state", 0.0),
                 "target_id": float(target.track_id) if target else -1.0,
-            }
+            },
         )

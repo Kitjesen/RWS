@@ -4,6 +4,7 @@ algebra - Camera model, distortion, mount extrinsics, coordinate transforms,
 
 Pure math / geometry, no business logic.
 """
+
 from .coordinate_transform import (
     CameraModel,
     DistortionCoeffs,
