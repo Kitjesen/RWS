@@ -1,56 +1,62 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.egg-info/
-dist/
+*$py.class
+*.so
+.Python
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
 *.egg
-.pytest_cache/
 
-# Virtual environment
-rws/
-.venv/
+# Virtual Environment
 venv/
+env/
+ENV/
+rws/
 
-# YOLO model weights (download at runtime)
-*.pt
-*.onnx
-*.engine
-*.trt
+# Testing
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# AI assistants
-.cursor/
-.claude/
-
-# OS
+*~
 .DS_Store
-Thumbs.db
-nul
 
-# Logs and telemetry exports
-*.jsonl
+# Logs
 *.log
-logs/
 
-# Training outputs
+# Model files
+*.pt
+*.pth
+*.onnx
 runs/
 
-# Dataset images & labels (too large for git, manage separately)
-dataset/images/
-dataset/labels/
-
-# Test videos (downloaded at runtime)
+# Data
+*.mp4
+*.avi
 test_videos/
 
-# Recorded output videos
-output/
+# Temporary test scripts (not in tests/ folder)
+/test_*.py
 
-# Vendor (cloned repos tracked separately)
-vendor/
+# OS
+Thumbs.db
