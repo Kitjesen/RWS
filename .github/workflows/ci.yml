@@ -37,6 +37,8 @@ jobs:
         pip install pytest pytest-cov pytest-xdist
         # Skip mujoco installation in CI (optional dependency, causes build issues)
         pip uninstall -y mujoco || true
+        # Install the package in editable mode so tests can import from src
+        pip install -e .
 
     - name: Run tests
       run: |
@@ -64,7 +66,7 @@ jobs:
     - name: Install linting tools
       run: |
         python -m pip install --upgrade pip
-        pip install ruff mypy
+        pip install ruff mypy types-PyYAML
 
     - name: Run ruff (linter + formatter check)
       run: |
