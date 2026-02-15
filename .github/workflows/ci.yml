@@ -41,8 +41,9 @@ jobs:
         pip install -e .
 
     - name: Run tests
-      continue-on-error: true
       run: |
+        # Add src to PYTHONPATH so tests can import from src
+        export PYTHONPATH="${PYTHONPATH}:${PWD}"
         pytest tests/ -v --cov=src/rws_tracking --cov-report=xml --cov-report=term -n auto
 
     - name: Upload coverage to Codecov
@@ -75,7 +76,6 @@ jobs:
         ruff format --check src/ tests/
 
     - name: Run mypy (type checking)
-      continue-on-error: true
       run: |
         pip install -r requirements.txt
         pip install types-PyYAML
