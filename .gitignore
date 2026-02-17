@@ -44,10 +44,10 @@ htmlcov/
 # Logs
 *.log
 
-# Model files
-*.pt
-*.pth
-*.onnx
+# Model files (except in models/ directory)
+/*.pt
+/*.pth
+/*.onnx
 runs/
 
 # Data
@@ -57,6 +57,10 @@ test_videos/
 
 # Temporary test scripts (not in tests/ folder)
 /test_*.py
+
+# Build artifacts
+.benchmarks/
+.ruff_cache/
 
 # OS
 Thumbs.db

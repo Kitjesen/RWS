@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/ -v --tb=short --no-header)",
+      "Bash(python -m src.rws_tracking.tools.sim.run_sil:*)",
+      "Bash(python -m pytest tests/test_tracking_flow.py -v)",
+      "Bash(python -m pytest tests/test_body_compensation.py -v)",
+      "Bash(ls -la \"D:\\\\robot\\\\code\\\\RWS\\\\src\\\\rws_tracking\\\\decision\"\" 2>/dev/null || echo \"decision目录不存在或为空 \")",
+      "Bash(python -m pytest tests/test_tracking_flow.py::ConfigTests::test_save_and_load_roundtrip -v)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python -m pytest tests/test_p2_improvements.py -v)",
+      "Bash(python:*)"
+    ]
+  }
+}

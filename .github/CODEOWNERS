@@ -1,0 +1,30 @@
+# CODEOWNERS file for automatic PR review assignments
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @Kitjesen
+
+# Core tracking system
+/src/rws_tracking/ @Kitjesen
+
+# API implementations
+/src/rws_tracking/api/ @Kitjesen
+
+# Hardware drivers
+/src/rws_tracking/hardware/ @Kitjesen
+
+# Documentation
+/docs/ @Kitjesen
+*.md @Kitjesen
+
+# CI/CD workflows
+/.github/ @Kitjesen
+
+# Configuration files
+/config.yaml @Kitjesen
+/pyproject.toml @Kitjesen
+/requirements.txt @Kitjesen
+
+# Tests
+/tests/ @Kitjesen
+/scripts/tests/ @Kitjesen

@@ -1,25 +1,67 @@
-# Core dependencies
-ultralytics>=8.3.0    # YOLO11n model & inference
-opencv-python>=4.8.0  # Image I/O, undistortion, display
-numpy>=1.24.0         # Array math, coordinate transforms
-scipy>=1.11.0         # Signal processing (optional, for future filters)
-pyyaml>=6.0           # Configuration file support
+# ============================================================================
+# RWS Tracking System - Dependencies
+# ============================================================================
 
-# SIL simulation (MuJoCo) - Optional, only needed for simulation testing
-# mujoco>=3.0.0         # Physics simulation for closed-loop testing
+# ----------------------------------------------------------------------------
+# Core Dependencies (Required)
+# ----------------------------------------------------------------------------
+ultralytics>=8.3.0      # YOLO11n model & inference
+opencv-python>=4.8.0    # Image I/O, undistortion, display
+numpy>=1.24.0,<2.0.0    # Array math, coordinate transforms
+scipy>=1.11.0           # Signal processing, optimization
+pyyaml>=6.0             # Configuration file support
 
-# Hardware integration (optional)
-pyserial>=3.5         # Serial port communication for real gimbal/IMU
-flask>=2.3.0          # HTTP API for config hot-reload (optional)
-paho-mqtt>=1.6.0      # MQTT telemetry (optional)
+# ----------------------------------------------------------------------------
+# Development Dependencies (Optional)
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+# Or: pip install -e ".[dev]"
+# ----------------------------------------------------------------------------
 
 # Testing
-pytest>=7.4.0         # Test framework
-pytest-cov>=4.1.0     # Coverage reporting
-pytest-xdist>=3.3.0   # Parallel test execution
-pytest-benchmark>=4.0.0  # Performance benchmarking
+pytest>=7.4.0           # Test framework
+pytest-cov>=4.1.0       # Coverage reporting
+pytest-xdist>=3.3.0     # Parallel test execution
+pytest-benchmark>=4.0.0 # Performance benchmarking
 
-# Code quality
-ruff>=0.1.0           # Linter and formatter
-mypy>=1.5.0           # Type checking
-safety>=2.3.0         # Security vulnerability scanning
+# Code Quality
+ruff>=0.1.0             # Fast linter and formatter
+mypy>=1.5.0             # Static type checking
+types-PyYAML            # Type stubs for PyYAML
+
+# ----------------------------------------------------------------------------
+# Optional Dependencies (Uncomment if needed)
+# ----------------------------------------------------------------------------
+
+# API Server (for remote control)
+flask>=2.3.0            # REST API server
+flask-cors>=4.0.0       # CORS support for API
+requests>=2.31.0        # HTTP client for API
+grpcio>=1.60.0          # gRPC framework
+grpcio-tools>=1.60.0    # gRPC protobuf compiler
+protobuf>=4.25.0        # Protocol buffers
+
+# SIL Simulation
+# mujoco>=3.0.0         # Physics simulation for closed-loop testing
+
+# Hardware Integration
+# pyserial>=3.5         # Serial port communication for gimbal/IMU
+# paho-mqtt>=1.6.0      # MQTT telemetry
+
+# Security
+# safety>=2.3.0         # Vulnerability scanning
+
+# ----------------------------------------------------------------------------
+# Installation Instructions
+# ----------------------------------------------------------------------------
+#
+# Basic installation:
+#   pip install -r requirements.txt
+#
+# Development installation:
+#   pip install -e ".[dev]"
+#
+# Full installation with optional dependencies:
+#   Uncomment the optional dependencies above and run:
+#   pip install -r requirements.txt
+#
+# ----------------------------------------------------------------------------

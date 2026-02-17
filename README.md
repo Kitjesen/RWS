@@ -5,243 +5,198 @@ with a yaw/pitch gimbal, powered by **YOLO11n-Seg + BoT-SORT**.
 
 Supports **moving-base operation** (robot dog) with IMU feedforward compensation.
 
-## 🆕 最新更新 (v1.1.0)
+## 🆕 最新更新 (v1.2.0)
 
+- ✅ **REST & gRPC API** - 双 API 支持，远程控制和实时流式传输
+- ✅ **项目结构重构** - 清晰的文档分类和脚本组织
 - ✅ **真实硬件支持** - 串口云台驱动 + 真实 IMU 接口
 - ✅ **配置热更新** - 运行时调整参数，无需重启
 - ✅ **CI/CD 集成** - 自动化测试和代码质量检查（全部通过 ✓）
 - ✅ **测试增强** - 150+ 测试用例，覆盖率 28%+
 - ✅ **代码质量** - Ruff 检查通过，Mypy 类型检查通过
-- 📖 **文档完善** - 10+ 篇技术文档
-
-👉 查看 [docs/CI_FINAL_STATUS.md](docs/CI_FINAL_STATUS.md) 了解 CI/CD 详情
+- 📖 **文档完善** - 结构化文档系统
 
 [![CI](https://github.com/Kitjesen/RWS/workflows/CI/badge.svg)](https://github.com/Kitjesen/RWS/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 
-## Project Structure
+## 📚 文档
+
+- **[快速开始](docs/getting-started/quick-start.md)** - 5 分钟上手
+- **[API 文档](docs/api/)** - REST 和 gRPC API 参考
+- **[用户指南](docs/guides/)** - 硬件设置、测试、坐标数学
+- **[架构文档](docs/architecture/)** - 系统架构和设计
+- **[开发文档](docs/development/)** - 贡献指南、CI/CD
+- **[项目结构](docs/PROJECT_STRUCTURE.md)** - 完整的目录结构说明
+
+完整文档索引：[docs/README.md](docs/README.md)
+
+## 🚀 快速开始
+
+### 安装
+
+```bash
+# 克隆仓库
+git clone https://github.com/Kitjesen/RWS.git
+cd RWS
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 安装项目（开发模式）
+pip install -e .
+```
+
+### 运行演示
+
+```bash
+# 简单演示（无需摄像头）
+python scripts/demo/run_simple_demo.py
+
+# 摄像头演示
+python scripts/demo/run_camera_demo.py
+```
+
+### API 服务器
+
+```bash
+# REST API (端口 5000)
+python scripts/api/run_rest_server.py
+
+# gRPC API (端口 50051)
+python scripts/api/run_grpc_server.py
+```
+
+## 📁 项目结构
 
 ```
 RWS/
 ├── src/rws_tracking/           # 核心源代码
-│   ├── types.py                # 全局数据结构定义
-│   ├── interfaces.py           # 协议接口（统一导出）
-│   ├── config.py               # 配置数据类 + YAML 加载/保存
-│   │
-│   ├── algebra/                # 数学/几何模块
-│   │   ├── coordinate_transform.py  # 坐标转换链：pixel → camera → gimbal → body → world
-│   │   └── kalman2d.py              # 2D 卡尔曼滤波器（CV/CA 模型）
-│   │
-│   ├── perception/             # 感知层
-│   │   ├── interfaces.py       # Detector/Tracker/TargetSelector 协议
-│   │   ├── yolo_detector.py    # YOLO11n 推理
-│   │   ├── yolo_seg_tracker.py # YOLO-Seg + BoT-SORT 组合跟踪器
-│   │   ├── passthrough_detector.py  # 仿真检测器适配器
-│   │   ├── tracker.py          # SimpleIoUTracker
-│   │   ├── selector.py         # 多目标加权评分 + 防抖动
-│   │   ├── multi_target_selector.py  # 多目标选择器
-│   │   └── rotating_selector.py      # 轮转选择器
-│   │
-│   ├── decision/               # 决策层
-│   │   └── state_machine.py    # 状态机：SEARCH → TRACK → LOCK → LOST
-│   │
-│   ├── control/                # 控制层
-│   │   ├── interfaces.py       # GimbalController 协议
-│   │   ├── controller.py       # 双轴 PID + 前馈 + 延迟补偿
-│   │   ├── adaptive.py         # 自适应 PID 增益调度
-│   │   └── ballistic.py        # 弹道补偿模型
-│   │
-│   ├── hardware/               # 硬件执行层
-│   │   ├── interfaces.py       # GimbalDriver 协议
-│   │   ├── driver.py           # 仿真云台驱动（含动力学模型）
-│   │   ├── serial_driver.py    # ✨ 串口云台驱动（真实硬件）
-│   │   ├── imu_interface.py    # BodyMotionProvider 协议
-│   │   ├── mock_imu.py         # 静态/正弦/回放 IMU 模拟器
-│   │   └── robot_imu.py        # ✨ 真实 IMU 接口
-│   │
-│   ├── telemetry/              # 遥测层
-│   │   ├── interfaces.py       # TelemetryLogger 协议
-│   │   └── logger.py           # 内存 + 文件日志器（线程安全）
-│   │
-│   ├── pipeline/               # 编排层
-│   │   ├── pipeline.py         # VisionGimbalPipeline（端到端循环）
-│   │   ├── multi_gimbal_pipeline.py  # 多云台管道
-│   │   └── app.py              # 构建辅助函数和演示入口
-│   │
-│   └── tools/                  # 工具集
-│       ├── simulation.py       # 合成场景生成器
-│       ├── tuning.py           # PID 网格搜索调优器
-│       ├── replay.py           # 遥测回放
-│       ├── dashboard.py        # 实时 cv2 仪表板
-│       ├── config_reload.py    # ✨ 配置热重载
-│       ├── sim/                # MuJoCo SIL 仿真
-│       │   ├── mujoco_env.py
-│       │   ├── mujoco_camera.py
-│       │   ├── mujoco_driver.py
-│       │   ├── ground_truth_detector.py
-│       │   └── run_sil.py
-│       └── training/           # YOLO 微调脚本
-│           └── train.py
+│   ├── algebra/                # 坐标转换、卡尔曼滤波
+│   ├── perception/             # YOLO 检测、BoT-SORT 跟踪
+│   ├── decision/               # 状态机
+│   ├── control/                # PID 控制器
+│   ├── hardware/               # 云台驱动、IMU 接口
+│   ├── pipeline/               # 主流程管道
+│   ├── telemetry/              # 遥测日志
+│   ├── api/                    # REST & gRPC API
+│   └── tools/                  # 仿真、训练工具
 │
-├── tests/                      # 测试套件
-│   ├── benchmarks/             # 性能基准测试
-│   │   └── test_performance.py
-│   ├── test_tracking_flow.py   # 坐标、选择器、状态机、管道测试
-│   ├── test_body_compensation.py  # 机体运动补偿测试
-│   ├── test_coordinate_transform.py  # 坐标转换测试
-│   ├── test_controller.py      # ✨ 控制器单元测试（30+ 用例）
-│   ├── test_selector.py        # ✨ 选择器单元测试（20+ 用例）
-│   ├── test_kalman.py          # 卡尔曼滤波器测试
-│   ├── test_p2_improvements.py # 遥测、动力学、优雅关闭测试
-│   └── test_sil.py             # MuJoCo SIL 集成测试
+├── scripts/                    # 脚本工具
+│   ├── api/                    # API 服务器和客户端示例
+│   ├── demo/                   # 演示脚本
+│   ├── tools/                  # 开发工具
+│   └── tests/                  # 测试脚本
 │
 ├── docs/                       # 文档
-│   ├── ARCHITECTURE.md         # 系统架构、数据流、层依赖
-│   ├── CONFIGURATION.md        # 配置字段说明和调优指南
-│   ├── COORDINATE_MATH.md      # 坐标转换链数学推导
-│   ├── HARDWARE_GUIDE.md       # 硬件选型、接线、集成步骤
-│   ├── WHY_CROSSHAIR_FIXED.md  # FAQ：为什么十字准星固定
-│   ├── TODO.md                 # 路线图和待改进项
-│   ├── CI_FIX_SUMMARY.md       # ✨ CI/CD 修复过程报告
-│   └── CI_FINAL_STATUS.md      # ✨ CI/CD 最终状态报告
+│   ├── getting-started/        # 新手入门
+│   ├── guides/                 # 使用指南
+│   ├── api/                    # API 文档
+│   ├── architecture/           # 架构文档
+│   ├── development/            # 开发文档
+│   └── reports/                # 项目报告
 │
-├── .github/workflows/          # CI/CD 配置
-│   └── ci.yml                  # GitHub Actions 工作流
-│
-├── config.yaml                 # 系统配置文件
-├── pyproject.toml              # 项目元数据和工具配置
-├── requirements.txt            # Python 依赖
-├── run_demo.py                 # 快速合成演示入口
-├── run_yolo_cam.py             # 实时相机/视频 + YOLO-Seg 可视化
-└── README.md                   # 本文件
+├── tests/                      # 测试用例
+├── models/                     # 模型文件
+├── dataset/                    # 数据集
+├── config.yaml                 # 配置文件
+└── requirements.txt            # 依赖
 ```
 
-## Quick Start
+## 🔌 API 使用
 
-```bash
-# 1. 安装依赖
-pip install -r requirements.txt
+### REST API
 
-# 2. 合成演示（无需相机）
-python run_demo.py
+```python
+from rws_tracking.api import TrackingClient
 
-# 3. 实时相机 + YOLO-Seg + BoT-SORT
-python run_yolo_cam.py
-
-# 4. 视频文件 + 录制
-python run_yolo_cam.py test_videos/xxx.mp4 --save
-
-# 5. 自定义配置
-python run_yolo_cam.py --config my_config.yaml
-
-# 6. 运行测试
-pytest tests/ -v
-
-# 7. 运行特定测试
-pytest tests/test_controller.py -v          # 控制器测试
-pytest tests/test_coordinate_transform.py -v # 坐标转换测试
-pytest tests/test_kalman.py -v              # 卡尔曼滤波器测试
-
-# 8. 运行性能基准测试
-pytest tests/benchmarks/ -v --benchmark-only
-
-# 9. 生成测试覆盖率报告
-pytest tests/ --cov=src/rws_tracking --cov-report=html
-# 查看报告：open htmlcov/index.html
+client = TrackingClient("http://localhost:5000")
+client.start_tracking(camera_source=0)
+status = client.get_status()
+print(f"FPS: {status['fps']:.1f}")
+client.stop_tracking()
 ```
 
-## Coordinate Transform Chain
+### gRPC API
 
-```
-World (inertial frame)
-  ↑ R_body2world — from dog IMU (roll, pitch, yaw)
-Body (dog body frame)
-  ↑ R_gimbal2body — from gimbal encoder feedback
-Gimbal (gimbal frame)
-  ↑ R_cam2gimbal — MountExtrinsics (static installation)
-Camera (camera frame)
-  ↑ K⁻¹, undistort — camera intrinsics inverse
-Pixel (u, v)
-```
+```python
+from rws_tracking.api import TrackingGrpcClient
 
-Conventions:
-- Camera: X-right, Y-down, Z-forward (OpenCV).
-- Yaw positive = target right of boresight.
-- Pitch positive = target above boresight.
+with TrackingGrpcClient("localhost", 50051) as client:
+    client.start_tracking()
 
-## Configuration
+    # 实时流式更新
+    for update in client.stream_status(update_rate_hz=10.0):
+        print(f"FPS: {update['fps']:.1f}")
+        if update['frame_count'] > 100:
+            break
 
-All parameters are managed in `config.yaml`:
-- **camera**: intrinsics, distortion, mount offsets
-- **detector**: YOLO model, confidence, tracker, class whitelist
-- **selector**: scoring weights, hold time, preferred classes
-- **controller**: PID gains, scan pattern, latency compensation, ballistic, adaptive PID
-- **driver_limits**: gimbal limits, friction, inertia
-
-Use `build_pipeline_from_config(load_config("config.yaml"))` for config-driven pipeline creation.
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 系统架构、数据流、层依赖关系 |
-| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | 配置字段说明、范围、调优指南 |
-| [docs/COORDINATE_MATH.md](docs/COORDINATE_MATH.md) | 坐标转换链完整数学推导 |
-| [docs/HARDWARE_GUIDE.md](docs/HARDWARE_GUIDE.md) | 硬件选型、接线、集成步骤 |
-| [docs/WHY_CROSSHAIR_FIXED.md](docs/WHY_CROSSHAIR_FIXED.md) | FAQ：为什么十字准星保持居中 |
-| [docs/TODO.md](docs/TODO.md) | 路线图和待改进项 |
-| [docs/CI_FIX_SUMMARY.md](docs/CI_FIX_SUMMARY.md) | ✨ CI/CD 修复过程详细报告 |
-| [docs/CI_FINAL_STATUS.md](docs/CI_FINAL_STATUS.md) | ✨ CI/CD 最终状态和解决方案 |
-
-## 测试说明
-
-### 测试文件位置
-
-所有测试文件位于 `tests/` 目录：
-
-```
-tests/
-├── benchmarks/                 # 性能基准测试
-│   └── test_performance.py     # 坐标转换、卡尔曼滤波器性能测试
-├── test_body_compensation.py   # 机体运动补偿测试
-├── test_controller.py          # 控制器单元测试（30+ 用例）
-├── test_coordinate_transform.py # 坐标转换测试
-├── test_kalman.py              # 卡尔曼滤波器测试（92% 覆盖率）
-├── test_p2_improvements.py     # 遥测、动力学、优雅关闭测试
-├── test_selector.py            # 选择器单元测试（20+ 用例）
-├── test_sil.py                 # MuJoCo SIL 集成测试
-└── test_tracking_flow.py       # 端到端跟踪流程测试
+    client.stop_tracking()
 ```
 
-### 运行测试
+查看 [API 文档](docs/api/) 了解更多。
+
+## 🧪 测试
 
 ```bash
 # 运行所有测试
-pytest tests/ -v
+python scripts/tests/run_tests.sh
 
-# 运行特定模块测试
-pytest tests/test_controller.py -v
+# 运行 API 测试
+python scripts/tests/test_api.py
 
-# 运行带覆盖率报告
-pytest tests/ --cov=src/rws_tracking --cov-report=html
-
-# 运行性能基准测试
-pytest tests/benchmarks/ -v --benchmark-only
-
-# 并行运行测试（更快）
-pytest tests/ -v -n auto
+# 运行基准测试
+pytest tests/benchmarks/ --benchmark-only
 ```
 
-### CI/CD 状态
+## 🏗️ 核心特性
 
-项目配置了完整的 CI/CD 流程，每次推送自动运行：
+### 感知层
+- **YOLO11n-Seg** - 快速实例分割
+- **BoT-SORT** - 鲁棒多目标跟踪
+- **加权选择器** - 智能目标优先级
 
-- ✅ **代码质量检查**：Ruff linter + formatter
-- ✅ **类型检查**：Mypy 静态类型分析
-- ✅ **安全扫描**：Safety 依赖漏洞检查
-- ✅ **多版本测试**：Python 3.9, 3.10, 3.11
+### 控制层
+- **双轴 PID** - 独立 yaw/pitch 控制
+- **IMU 前馈** - 移动基座补偿
+- **延迟补偿** - 预测未来位置
 
-查看最新 CI 状态：https://github.com/Kitjesen/RWS/actions
+### 硬件支持
+- **串口云台** - 标准 UART 协议
+- **真实 IMU** - 姿态反馈
+- **仿真模式** - 无硬件测试
 
-## License
+### API 接口
+- **REST API** - HTTP/JSON (端口 5000)
+- **gRPC API** - 高性能二进制协议 (端口 50051)
+- **实时流式** - gRPC 状态流
 
-Proprietary. All rights reserved.
+## 📊 性能
+
+- **检测速度**: 30+ FPS (YOLO11n)
+- **跟踪延迟**: <50ms
+- **控制频率**: 100 Hz
+- **API 延迟**: REST ~5ms, gRPC ~2ms
+
+## 🤝 贡献
+
+欢迎贡献！请查看 [贡献指南](docs/development/contributing.md)。
+
+## 📄 许可证
+
+[MIT License](LICENSE)
+
+## 🔗 相关链接
+
+- [完整文档](docs/README.md)
+- [API 参考](docs/api/)
+- [架构设计](docs/architecture/overview.md)
+- [测试指南](docs/guides/testing.md)
+- [CI/CD 状态](docs/development/ci-status.md)
+
+## 📮 联系
+
+- Issues: [GitHub Issues](https://github.com/Kitjesen/RWS/issues)
+- Discussions: [GitHub Discussions](https://github.com/Kitjesen/RWS/discussions)

@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+package rws_tracking;
+
+// RWS Tracking gRPC Service
+service TrackingService {
+  // Health check
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Start tracking
+  rpc StartTracking(StartTrackingRequest) returns (StartTrackingResponse);
+
+  // Stop tracking
+  rpc StopTracking(StopTrackingRequest) returns (StopTrackingResponse);
+
+  // Get status
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+
+  // Set gimbal position (absolute)
+  rpc SetGimbalPosition(SetGimbalPositionRequest) returns (SetGimbalPositionResponse);
+
+  // Set gimbal rate (velocity)
+  rpc SetGimbalRate(SetGimbalRateRequest) returns (SetGimbalRateResponse);
+
+  // Get telemetry
+  rpc GetTelemetry(GetTelemetryRequest) returns (GetTelemetryResponse);
+
+  // Update configuration
+  rpc UpdateConfig(UpdateConfigRequest) returns (UpdateConfigResponse);
+
+  // Stream status updates (real-time)
+  rpc StreamStatus(StreamStatusRequest) returns (stream StatusUpdate);
+}
+
+// ============================================================================
+// Health Check
+// ============================================================================
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  string service = 2;
+}
+
+// ============================================================================
+// Start Tracking
+// ============================================================================
+
+message StartTrackingRequest {
+  oneof camera_source {
+    int32 camera_id = 1;
+    string video_path = 2;
+  }
+}
+
+message StartTrackingResponse {
+  bool success = 1;
+  string message = 2;
+  string error = 3;
+}
+
+// ============================================================================
+// Stop Tracking
+// ============================================================================
+
+message StopTrackingRequest {}
+
+message StopTrackingResponse {
+  bool success = 1;
+  string message = 2;
+  string error = 3;
+}
+
+// ============================================================================
+// Get Status
+// ============================================================================
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  bool running = 1;
+  int64 frame_count = 2;
+  int64 error_count = 3;
+  string last_error = 4;
+  double fps = 5;
+  GimbalState gimbal = 6;
+}
+
+message GimbalState {
+  double yaw_deg = 1;
+  double pitch_deg = 2;
+  double yaw_rate_dps = 3;
+  double pitch_rate_dps = 4;
+}
+
+// ============================================================================
+// Set Gimbal Position
+// ============================================================================
+
+message SetGimbalPositionRequest {
+  double yaw_deg = 1;
+  double pitch_deg = 2;
+}
+
+message SetGimbalPositionResponse {
+  bool success = 1;
+  string error = 2;
+  GimbalPosition target = 3;
+  GimbalPosition current = 4;
+}
+
+message GimbalPosition {
+  double yaw_deg = 1;
+  double pitch_deg = 2;
+}
+
+// ============================================================================
+// Set Gimbal Rate
+// ============================================================================
+
+message SetGimbalRateRequest {
+  double yaw_rate_dps = 1;
+  double pitch_rate_dps = 2;
+}
+
+message SetGimbalRateResponse {
+  bool success = 1;
+  string error = 2;
+  GimbalRate command = 3;
+}
+
+message GimbalRate {
+  double yaw_rate_dps = 1;
+  double pitch_rate_dps = 2;
+}
+
+// ============================================================================
+// Get Telemetry
+// ============================================================================
+
+message GetTelemetryRequest {}
+
+message GetTelemetryResponse {
+  bool success = 1;
+  string error = 2;
+  map<string, double> metrics = 3;
+}
+
+// ============================================================================
+// Update Config
+// ============================================================================
+
+message UpdateConfigRequest {
+  string config_json = 1;  // JSON-encoded configuration
+}
+
+message UpdateConfigResponse {
+  bool success = 1;
+  string message = 2;
+  string error = 3;
+}
+
+// ============================================================================
+// Stream Status
+// ============================================================================
+
+message StreamStatusRequest {
+  double update_rate_hz = 1;  // Desired update rate (default: 10 Hz)
+}
+
+message StatusUpdate {
+  double timestamp = 1;
+  bool running = 2;
+  int64 frame_count = 3;
+  double fps = 4;
+  GimbalState gimbal = 5;
+}
