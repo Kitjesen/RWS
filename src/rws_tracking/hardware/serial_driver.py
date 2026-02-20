@@ -45,6 +45,9 @@ class SerialGimbalDriver:
         baudrate: int = 115200,
         protocol: GimbalProtocol = GimbalProtocol.CUSTOM,
         timeout: float = 0.1,
+        address: int = 0x01,
+        yaw_limit_deg: float = 180.0,
+        pitch_limit_deg: float = 90.0,
     ):
         """Initialize serial gimbal driver.
 
@@ -58,11 +61,20 @@ class SerialGimbalDriver:
             Communication protocol
         timeout : float
             Serial read timeout in seconds
+        address : int
+            Device address for PELCO-D protocol (default: 0x01)
+        yaw_limit_deg : float
+            Yaw position limit in degrees (default: ±180)
+        pitch_limit_deg : float
+            Pitch position limit in degrees (default: ±90)
         """
         self.port = port
         self.baudrate = baudrate
         self.protocol = protocol
         self.timeout = timeout
+        self._address = address
+        self._yaw_limit = abs(yaw_limit_deg)
+        self._pitch_limit = abs(pitch_limit_deg)
 
         self._serial = None
         self._yaw_deg = 0.0
@@ -70,6 +82,7 @@ class SerialGimbalDriver:
         self._yaw_rate_dps = 0.0
         self._pitch_rate_dps = 0.0
         self._last_feedback_time = 0.0
+        self._last_cmd_time = 0.0
 
         self._connect()
 
@@ -119,6 +132,14 @@ class SerialGimbalDriver:
             logger.warning("Serial port not open, command ignored")
             return
 
+        # Integrate position from last command time
+        if self._last_cmd_time > 0.0:
+            dt = max(timestamp - self._last_cmd_time, 0.0)
+            self._yaw_deg += self._yaw_rate_dps * dt
+            self._pitch_deg += self._pitch_rate_dps * dt
+            self._clamp_position()
+        self._last_cmd_time = timestamp
+
         # Store commanded rates
         self._yaw_rate_dps = yaw_rate_dps
         self._pitch_rate_dps = pitch_rate_dps
@@ -129,7 +150,7 @@ class SerialGimbalDriver:
         elif self.protocol == GimbalProtocol.PELCO_D:
             self._send_pelco_d_command(yaw_rate_dps, pitch_rate_dps)
         elif self.protocol == GimbalProtocol.PWM:
-            self._send_pwm_command(yaw_rate_dps, pitch_rate_dps)
+            self._send_pwm_command(yaw_rate_dps, pitch_rate_dps, timestamp)
         else:
             logger.warning("Unsupported protocol: %s", self.protocol)
 
@@ -272,21 +293,25 @@ class SerialGimbalDriver:
 
         self._serial.write(packet)
 
-    def _send_pwm_command(self, yaw_rate: float, pitch_rate: float) -> None:
+    def _send_pwm_command(
+        self, yaw_rate: float, pitch_rate: float, timestamp: float = 0.0
+    ) -> None:
         """Send PWM servo command.
 
         Note: This requires a PWM controller (e.g., Arduino, PCA9685).
         The serial protocol here is application-specific.
+
+        Parameters
+        ----------
+        yaw_rate : float
+            Yaw rate in degrees per second.
+        pitch_rate : float
+            Pitch rate in degrees per second.
+        timestamp : float
+            Current timestamp, used to compute dt for position integration.
         """
-        # Example: Send ASCII command "Y<angle>,P<angle>\n"
-        # This assumes an Arduino sketch that parses this format
-
-        # Integrate rates to get target angles (simplified)
-        dt = 0.033  # Assume 30Hz
-        target_yaw = self._yaw_deg + yaw_rate * dt
-        target_pitch = self._pitch_deg + pitch_rate * dt
-
-        command = f"Y{target_yaw:.2f},P{target_pitch:.2f}\n"
+        # Current integrated position is already updated in set_yaw_pitch_rate
+        command = f"Y{self._yaw_deg:.2f},P{self._pitch_deg:.2f}\n"
         self._serial.write(command.encode("ascii"))
 
     def _read_custom_feedback(self) -> None:
@@ -330,13 +355,49 @@ class SerialGimbalDriver:
     def _read_pelco_d_feedback(self) -> None:
         """Read feedback using PELCO-D protocol.
 
-        Note: PELCO-D typically doesn't provide continuous feedback.
-        This is a placeholder for query-response implementations.
+        Sends PELCO-D Query Pan/Tilt Position commands and parses responses.
+
+        Query Pan Position:  [0xFF, addr, 0x00, 0x51, 0x00, 0x00, checksum]
+        Query Tilt Position: [0xFF, addr, 0x00, 0x53, 0x00, 0x00, checksum]
+
+        Response format (7 bytes):
+        [0xFF, addr, 0x00, 0x59/0x5B, pos_high, pos_low, checksum]
+
+        Position is encoded as uint16: 0-35999 representing 0.00-359.99 degrees.
         """
-        # PELCO-D query commands exist but are not standardized
-        # Most implementations don't provide real-time feedback
-        # Fall back to integration
-        pass
+        addr = self._address
+
+        # --- Query Pan Position ---
+        pan_query = bytearray([0xFF, addr, 0x00, 0x51, 0x00, 0x00])
+        pan_query.append(sum(pan_query[1:]) % 256)
+        try:
+            self._serial.write(pan_query)
+            pan_resp = self._serial.read(7)
+            if len(pan_resp) == 7 and pan_resp[0] == 0xFF and pan_resp[3] == 0x59:
+                pan_pos = (pan_resp[4] << 8) | pan_resp[5]
+                # Convert 0-35999 to -180..+180 degrees
+                pan_deg = pan_pos / 100.0
+                if pan_deg > 180.0:
+                    pan_deg -= 360.0
+                self._yaw_deg = pan_deg
+        except Exception as e:
+            logger.debug("PELCO-D pan query failed: %s", e)
+
+        # --- Query Tilt Position ---
+        tilt_query = bytearray([0xFF, addr, 0x00, 0x53, 0x00, 0x00])
+        tilt_query.append(sum(tilt_query[1:]) % 256)
+        try:
+            self._serial.write(tilt_query)
+            tilt_resp = self._serial.read(7)
+            if len(tilt_resp) == 7 and tilt_resp[0] == 0xFF and tilt_resp[3] == 0x5B:
+                tilt_pos = (tilt_resp[4] << 8) | tilt_resp[5]
+                # Convert 0-35999 to -90..+90 degrees
+                tilt_deg = tilt_pos / 100.0
+                if tilt_deg > 180.0:
+                    tilt_deg -= 360.0
+                self._pitch_deg = tilt_deg
+        except Exception as e:
+            logger.debug("PELCO-D tilt query failed: %s", e)
 
     def _integrate_position(self, timestamp: float) -> None:
         """Integrate commanded rates to estimate position (when no feedback)."""
@@ -350,10 +411,12 @@ class SerialGimbalDriver:
 
         self._yaw_deg += self._yaw_rate_dps * dt
         self._pitch_deg += self._pitch_rate_dps * dt
+        self._clamp_position()
 
-        # Clamp to reasonable limits
-        self._yaw_deg = max(-180, min(180, self._yaw_deg))
-        self._pitch_deg = max(-90, min(90, self._pitch_deg))
+    def _clamp_position(self) -> None:
+        """Clamp position to configured limits."""
+        self._yaw_deg = max(-self._yaw_limit, min(self._yaw_limit, self._yaw_deg))
+        self._pitch_deg = max(-self._pitch_limit, min(self._pitch_limit, self._pitch_deg))
 
     def close(self) -> None:
         """Close serial connection."""

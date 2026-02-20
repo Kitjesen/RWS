@@ -272,6 +272,155 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             context.set_code(grpc.StatusCode.INTERNAL)
             context.set_details(str(e))
 
+    def StreamFrames(
+        self, request: tracking_pb2.StreamFramesRequest, context: grpc.ServicerContext
+    ) -> Iterator[tracking_pb2.VideoFrame]:
+        """Stream annotated video frames via gRPC."""
+        max_fps = request.max_fps if request.max_fps > 0 else 15.0
+        interval = 1.0 / max_fps
+
+        logger.info(f"Starting gRPC video stream at {max_fps} Hz")
+
+        try:
+            while context.is_active():
+                # Get latest frame from buffer
+                result = self.api._frame_buffer.get_latest(timeout=2.0)
+                if result is None:
+                    continue
+
+                frame, ts = result
+
+                # Fast rate limiting
+                now = time.monotonic()
+                if now - getattr(self, "_last_frame_sent", 0) < interval:
+                    continue
+                self._last_frame_sent = now
+
+                # Encode to JPEG
+                encoder = self.api._video_cfg
+                import cv2
+                encode_param = [cv2.IMWRITE_JPEG_QUALITY, request.jpeg_quality if request.jpeg_quality > 0 else encoder.jpeg_quality]
+                
+                # Handle scaling
+                scale = request.scale_factor if request.scale_factor > 0 else encoder.scale_factor
+                if 0 < scale < 1.0:
+                    h, w = frame.shape[:2]
+                    frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
+
+                h, w = frame.shape[:2]
+                success, encoded = cv2.imencode(".jpg", frame, encode_param)
+                if not success:
+                    continue
+
+                # Build target overlays metadata
+                targets = []
+                if request.annotate:
+                    for track in self.api._last_tracks:
+                        vx, vy = getattr(track, "velocity_px_per_s", (0.0, 0.0))
+                        bbox = getattr(track, "bbox", None)
+                        if bbox is None:
+                            continue
+                            
+                        targets.append(tracking_pb2.DetectedTarget(
+                            track_id=track.track_id,
+                            class_id=track.class_id,
+                            confidence=track.confidence,
+                            bbox=tracking_pb2.BoundingBoxMsg(
+                                x=bbox.x, y=bbox.y, w=bbox.w, h=bbox.h
+                            ),
+                            velocity_x=vx,
+                            velocity_y=vy,
+                            is_selected=(track.track_id == self.api._selected_target_id)
+                        ))
+
+                yield tracking_pb2.VideoFrame(
+                    timestamp=ts,
+                    jpeg_data=encoded.tobytes(),
+                    width=w,
+                    height=h,
+                    frame_number=self.api.frame_count,
+                    targets=targets
+                )
+
+        except Exception as e:
+            logger.error(f"StreamFrames error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+
+    def GetSafetyStatus(
+        self, request: tracking_pb2.GetSafetyStatusRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.GetSafetyStatusResponse:
+        """Get safety status."""
+        try:
+            if not self.api.pipeline or not self.api.pipeline._safety_manager:
+                return tracking_pb2.GetSafetyStatusResponse(fire_authorized=False, blocked_reason="Safety manager not enabled")
+            
+            # Since SafetyManager is evaluated per-frame, we might not have a global state getter easily accessible,
+            # but we can poll the Interlock and NFZ manager.
+            sm = self.api.pipeline._safety_manager
+            fb = self.api.pipeline.driver.get_feedback(time.monotonic())
+            nfz_res = sm._nfz.check(fb.yaw_deg, fb.pitch_deg)
+            inter_res = sm._interlock.check()
+            
+            fire_authorized = inter_res.authorized and not nfz_res.fire_blocked
+            reasons = []
+            if nfz_res.fire_blocked: reasons.append(f"NFZ:{nfz_res.active_zone_id}")
+            reasons.extend(inter_res.blocked_reasons)
+            
+            return tracking_pb2.GetSafetyStatusResponse(
+                fire_authorized=fire_authorized,
+                blocked_reason="; ".join(reasons),
+                active_zone=nfz_res.active_zone_id or "",
+                operator_override=inter_res.operator_auth,
+                emergency_stop=inter_res.emergency_stop
+            )
+        except Exception as e:
+            logger.error(f"GetSafetyStatus error: {e}")
+            return tracking_pb2.GetSafetyStatusResponse(fire_authorized=False, blocked_reason=str(e))
+
+    def SetOperatorAuth(
+        self, request: tracking_pb2.SetOperatorAuthRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.SetOperatorAuthResponse:
+        try:
+            if self.api.pipeline and self.api.pipeline._safety_manager:
+                self.api.pipeline._safety_manager.set_operator_auth(request.authorized)
+            return tracking_pb2.SetOperatorAuthResponse(success=True)
+        except Exception as e:
+            return tracking_pb2.SetOperatorAuthResponse(success=False, error=str(e))
+
+    def EmergencyStop(
+        self, request: tracking_pb2.EmergencyStopRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.EmergencyStopResponse:
+        try:
+            if self.api.pipeline and self.api.pipeline._safety_manager:
+                self.api.pipeline._safety_manager.set_emergency_stop(request.activate)
+                if request.activate:
+                    self.api.set_gimbal_rate(0.0, 0.0) # Stop movement
+            return tracking_pb2.EmergencyStopResponse(success=True, emergency_stop_active=request.activate)
+        except Exception as e:
+            return tracking_pb2.EmergencyStopResponse(success=False, error=str(e))
+
+    def GetThreatAssessment(
+        self, request: tracking_pb2.GetThreatAssessmentRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.GetThreatAssessmentResponse:
+        try:
+            response = tracking_pb2.GetThreatAssessmentResponse()
+            if self.api.pipeline and self.api.pipeline._engagement_queue:
+                for t in self.api.pipeline._engagement_queue.queue:
+                    response.threats.append(tracking_pb2.ThreatTarget(
+                        track_id=t.track_id,
+                        threat_score=t.threat_score,
+                        distance_score=t.distance_score,
+                        velocity_score=t.velocity_score,
+                        class_score=t.class_score,
+                        heading_score=t.heading_score,
+                        priority_rank=t.priority_rank
+                    ))
+            return response
+        except Exception as e:
+            logger.error(f"GetThreatAssessment error: {e}")
+            return tracking_pb2.GetThreatAssessmentResponse()
+
 
 def serve(
     host: str = "0.0.0.0",

@@ -81,6 +81,30 @@ controller:
   scan_pitch_freq_ratio: 0.7      # pitch 频率 / yaw 频率
   latency_compensation_s: 0.033   # 补偿约 1 帧延迟 (30Hz)
 
+# 弹道补偿（controller 内置）
+  ballistic:
+    enabled: false
+    model_type: "simple"          # "simple" | "table" | "physics"
+    target_height_m: 1.8
+    # Simple 模型
+    quadratic_a: 0.001
+    quadratic_b: 0.01
+    quadratic_c: 0.0
+    # Physics 模型 (model_type="physics" 时生效)
+    muzzle_velocity_mps: 900.0
+    bc_g7: 0.223
+    mass_kg: 0.0098
+    caliber_m: 0.00762
+
+  # 自适应 PID 增益调度
+  adaptive_pid:
+    enabled: false
+    scheduler_type: "error_based"
+    low_error_threshold_deg: 1.0
+    high_error_threshold_deg: 5.0
+    low_error_kp_scale: 0.6
+    high_error_kp_scale: 1.5
+
 # 云台驱动限位与动力学参数
 driver_limits:
   yaw_min_deg: -160.0
@@ -92,3 +116,111 @@ driver_limits:
   inertia_time_constant_s: 0.05   # 一阶惯性时间常数
   static_friction_dps: 0.5        # 静摩擦阈值
   coulomb_friction_dps: 2.0       # 库仑摩擦
+
+# ============================================================
+# v1.1 扩展模块 — 完整射击链路
+# ============================================================
+
+# 弹丸物理参数 (用于 pipeline 级弹道解算)
+projectile:
+  enabled: false                  # true 启用物理弹道解算
+  muzzle_velocity_mps: 850.0     # 枪口初速 (m/s)
+  ballistic_coefficient: 0.4     # 弹道系数 (G1)
+  projectile_mass_kg: 0.0098     # 弹丸质量 (kg)
+  projectile_diameter_m: 0.00762 # 弹丸口径 (m)
+  drag_model: "g1"               # "g1" | "g7"
+
+# 射击环境
+environment:
+  temperature_c: 15.0
+  pressure_hpa: 1013.25
+  humidity_pct: 50.0
+  wind_speed_mps: 0.0
+  wind_direction_deg: 0.0
+  altitude_m: 0.0
+
+# 射击提前量
+lead_angle:
+  enabled: false
+  use_acceleration: true          # 使用加速度项 (二阶预测)
+  max_lead_deg: 5.0               # 提前量角度上限 (°)
+  min_confidence: 0.3             # 最低置信度阈值
+  velocity_smoothing_alpha: 0.7   # 速度平滑系数
+  target_height_m: 1.8
+  convergence_iterations: 3       # 飞行时间迭代次数
+
+# 轨迹规划 (目标切换平滑过渡)
+trajectory:
+  enabled: false
+  max_rate_dps: 180.0             # 最大角速度 (°/s)
+  max_acceleration_dps2: 720.0    # 最大角加速度 (°/s²)
+  settling_threshold_deg: 0.5     # 到达判定阈值 (°)
+  use_s_curve: false              # S-曲线模式 (减少 jerk)
+  max_jerk_dps3: 3600.0
+  min_switch_interval_s: 0.3      # 最小切换间隔 (防抖)
+
+# 多目标交战
+engagement:
+  enabled: false
+  strategy: "threat_first"        # "threat_first" | "nearest_first" | "sector_sweep"
+  max_engagement_range_m: 500.0
+  min_threat_threshold: 0.1
+  distance_decay_m: 50.0
+  velocity_norm_px_s: 200.0
+  target_height_m: 1.8
+  sector_size_deg: 30.0
+  weights:
+    distance: 0.30
+    velocity: 0.25
+    class_threat: 0.20
+    heading: 0.15
+    size: 0.10
+
+# 安全系统
+safety:
+  enabled: false
+  nfz_slow_down_margin_deg: 5.0   # 禁射区缓冲带宽度 (°)
+  interlock:
+    require_operator_auth: true
+    min_lock_time_s: 1.0
+    min_engagement_range_m: 5.0
+    max_engagement_range_m: 500.0
+    system_check_interval_s: 1.0
+    heartbeat_timeout_s: 5.0
+  zones: []                       # 禁射区列表, 见下方示例
+  # zones:
+  #   - zone_id: "nfz_building"
+  #     center_yaw_deg: 45.0
+  #     center_pitch_deg: 10.0
+  #     radius_deg: 15.0
+  #     zone_type: "no_fire"
+  #   - zone_id: "caution_road"
+  #     center_yaw_deg: -30.0
+  #     center_pitch_deg: 0.0
+  #     radius_deg: 10.0
+  #     zone_type: "caution"
+
+# 激光测距仪
+rangefinder:
+  enabled: false
+  type: "simulated"               # "simulated" | "serial"
+  max_range_m: 1500.0
+  min_range_m: 1.0
+  noise_std_m: 0.5
+  failure_rate: 0.05
+  max_laser_age_s: 0.5
+  target_height_m: 1.8
+  serial_port: ""
+  serial_baud: 9600
+
+# 视频流
+video_stream:
+  enabled: false
+  jpeg_quality: 70
+  max_fps: 30.0
+  scale_factor: 1.0
+  buffer_size: 3
+  annotate_detections: true
+  annotate_tracks: true
+  annotate_crosshair: true
+  annotate_safety_zones: false

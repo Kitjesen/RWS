@@ -1,6 +1,6 @@
 """
-YoloSegTracker: YOLO11-Seg + BoT-SORT combined detection & tracking.
-=====================================================================
+YoloSegTracker: YOLO11-Seg + BoT-SORT + Re-ID recovery.
+=========================================================
 
 Responsibilities (single):
     - Run YOLO-Seg inference with built-in BoT-SORT/ByteTrack tracking.
@@ -8,7 +8,12 @@ Responsibilities (single):
     - Replaces separate YoloDetector + SimpleIoUTracker for production use.
 
 Key features:
-    - BoT-SORT maintains stable track IDs with re-identification.
+    - BoT-SORT maintains stable track IDs (first-pass association).
+    - **Second-pass Re-ID recovery**: when BoT-SORT assigns a new ID after
+      occlusion, the appearance gallery matches it against recently lost tracks
+      using cosine similarity on MobileNetV3-Small features.  If a confident
+      match is found, the original ID is restored — solving the occlusion
+      ID-switch problem without modifying BoT-SORT internals.
     - Instance segmentation masks give pixel-tight contours (no oversized boxes).
     - Per-track **Constant-Acceleration Kalman filter** on mask centroid:
       smooth position, robust velocity, estimated acceleration, and
@@ -33,6 +38,8 @@ from ..algebra.kalman2d import (
     KalmanConfig,
 )
 from ..types import BoundingBox, Track
+from .appearance_gallery import AppearanceGallery, GalleryConfig
+from .reid_extractor import ReIDConfig, ReIDExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +85,9 @@ class YoloSegTracker:
         device: str = "",
         img_size: int = 640,
         kalman_config: KalmanCAConfig | KalmanConfig | None = None,
+        enable_reid: bool = False,
+        reid_config: ReIDConfig | None = None,
+        gallery_config: GalleryConfig | None = None,
     ) -> None:
         from ultralytics import YOLO  # type: ignore[import-untyped]
 
@@ -112,14 +122,37 @@ class YoloSegTracker:
         # Cache last raw ultralytics results (for visualization)
         self._last_raw_results: list | None = None
 
+        # Re-ID recovery layer (second-pass after BoT-SORT)
+        self._reid_enabled = enable_reid
+        self._reid_extractor: ReIDExtractor | None = None
+        self._gallery: AppearanceGallery | None = None
+        self._known_botsort_ids: set[int] = set()
+        self._id_remap: dict[int, int] = {}
+        self._feature_cache: dict[int, np.ndarray] = {}
+        self._feature_cache_age: dict[int, int] = {}
+        self._feature_refresh_interval: int = 3
+
+        # Selective ReID (Fast-Deep-OC-SORT, Bayar 2024): track last-frame
+        # bboxes to compute IoU → decide if feature extraction is needed.
+        self._prev_bboxes: dict[int, tuple[float, float, float, float]] = {}
+        self._selective_iou_threshold: float = 0.20
+        self._selective_extractions: int = 0
+        self._selective_skips: int = 0
+
+        if enable_reid:
+            self._reid_extractor = ReIDExtractor(reid_config)
+            self._gallery = AppearanceGallery(gallery_config)
+            logger.info("Re-ID recovery layer ENABLED")
+
         model_name = "CA (6-state)" if self._use_ca else "CV (4-state)"
         logger.info(
             "YoloSegTracker ready  model=%s  tracker=%s  conf=%.2f  "
-            "kalman=%s  whitelist=%s  device=%s",
+            "kalman=%s  reid=%s  whitelist=%s  device=%s",
             model_path,
             tracker,
             self._conf,
             model_name,
+            enable_reid,
             class_whitelist,
             device or "auto",
         )
@@ -133,6 +166,26 @@ class YoloSegTracker:
     def filters(self) -> dict[int, _KalmanFilter]:
         """Per-track Kalman filters (read-only access for visualization)."""
         return self._filters
+
+    @property
+    def gallery(self) -> AppearanceGallery | None:
+        """Appearance gallery (read-only access for stats / debug)."""
+        return self._gallery
+
+    @property
+    def reid_stats(self) -> dict[str, int]:
+        """Live Re-ID statistics for monitoring."""
+        if not self._reid_enabled or self._gallery is None:
+            return {"enabled": 0, "active": 0, "lost": 0, "remaps": len(self._id_remap),
+                    "extractions": 0, "skips": 0}
+        return {
+            "enabled": 1,
+            "active": self._gallery.active_count,
+            "lost": self._gallery.lost_count,
+            "remaps": len(self._id_remap),
+            "extractions": self._selective_extractions,
+            "skips": self._selective_skips,
+        }
 
     # ------------------------------------------------------------------
     # Public API — matches the CombinedTracker protocol
@@ -234,6 +287,10 @@ class YoloSegTracker:
                     )
                 )
 
+        # ── Re-ID second-pass recovery ──
+        if self._reid_enabled and isinstance(frame, np.ndarray):
+            tracks = self._apply_reid_recovery(frame, tracks, seen_ids, timestamp)
+
         # Purge Kalman filters for tracks not seen recently (grace period)
         stale_ids = [
             tid
@@ -247,6 +304,234 @@ class YoloSegTracker:
 
         self._last_ts = timestamp
         return tracks
+
+    # ------------------------------------------------------------------
+    # Re-ID recovery layer
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _bbox_iou(a: tuple[float, float, float, float],
+                  b: tuple[float, float, float, float]) -> float:
+        """IoU for (x, y, w, h) boxes."""
+        ax1, ay1, aw, ah = a
+        bx1, by1, bw, bh = b
+        ax2, ay2 = ax1 + aw, ay1 + ah
+        bx2, by2 = bx1 + bw, by1 + bh
+        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+        if inter <= 0.0:
+            return 0.0
+        union = aw * ah + bw * bh - inter
+        return float(inter / union) if union > 1e-6 else 0.0
+
+    def _is_risky(self, track: Track, all_prev_bboxes: dict) -> bool:
+        """Selective ReID (Fast-Deep-OC-SORT, Bayar 2024, Sec.3.1-3.3).
+
+        A detection is "non-risky" (safe to skip feature extraction) when:
+          1. It has exactly ONE confirmed tracklet with IoU > threshold.
+          2. Aspect ratio similarity is high (Eq.2-3 from the paper).
+
+        Non-risky detections can be matched purely by motion/IoU — extracting
+        their features wastes compute and can even *hurt* accuracy by confusing
+        the feature matcher with similar-looking people.
+        """
+        if not all_prev_bboxes:
+            return True
+
+        cur_bbox = (track.bbox.x, track.bbox.y, track.bbox.w, track.bbox.h)
+        iou_threshold = self._selective_iou_threshold
+
+        candidates = 0
+        for prev_bbox in all_prev_bboxes.values():
+            iou = self._bbox_iou(cur_bbox, prev_bbox)
+            if iou > iou_threshold:
+                pw, ph = prev_bbox[2], prev_bbox[3]
+                cw, ch = cur_bbox[2], cur_bbox[3]
+                if pw > 1 and ph > 1 and cw > 1 and ch > 1:
+                    import math
+                    v = 1.0 - (4.0 / (math.pi * math.pi)) * (
+                        math.atan(cw / ch) - math.atan(pw / ph)
+                    ) ** 2
+                    alpha_ars = v / ((1.0 - iou) + v) if (1.0 - iou + v) > 1e-6 else 1.0
+                    if alpha_ars < 0.6:
+                        continue
+                candidates += 1
+
+        return candidates != 1
+
+    def _apply_reid_recovery(
+        self,
+        frame: np.ndarray,
+        tracks: list[Track],
+        seen_ids: set[int],
+        timestamp: float,
+    ) -> list[Track]:
+        """Second-pass Re-ID with Selective extraction and Feature Decay.
+
+        Paper-guided optimizations:
+        - **Selective ReID** (Fast-Deep-OC-SORT): Only extract features for
+          "risky" detections (new IDs, ambiguous IoU, near other tracks).
+          Non-risky detections skip extraction entirely → ~50% fewer CNN calls.
+        - **Feature Decay** (ibid., Sec.3.4): When extraction is skipped for a
+          track, decay the gallery feature's influence: ``α' ← α' × α``.
+          Prevents stale features from dominating after long non-extraction.
+        - **Dynamic Appearance** (Deep OC-SORT): confidence-modulated EMA.
+        - **Adaptive Weighting** (Deep OC-SORT): discriminativeness boost.
+        - **OCM** (OC-SORT): raw-observation velocity for lost track prediction.
+        """
+        assert self._reid_extractor is not None
+        assert self._gallery is not None
+
+        if not tracks:
+            self._gallery.retire_missing(set(), timestamp)
+            self._gallery.purge_expired(timestamp)
+            return tracks
+
+        need_extract_idx: list[int] = []
+        skip_idx: list[int] = []
+        cached_idx: list[int] = []
+
+        for i, track in enumerate(tracks):
+            bid = track.track_id
+            is_new = bid not in self._known_botsort_ids and bid not in self._id_remap
+
+            if is_new:
+                need_extract_idx.append(i)
+                continue
+
+            risky = self._is_risky(track, self._prev_bboxes)
+
+            if not risky and bid in self._feature_cache:
+                skip_idx.append(i)
+                self._selective_skips += 1
+                continue
+
+            cache_age = self._feature_cache_age.get(bid, 999)
+            if cache_age >= self._feature_refresh_interval or bid not in self._feature_cache:
+                need_extract_idx.append(i)
+            else:
+                cached_idx.append(i)
+
+        features_map: dict[int, np.ndarray] = {}
+
+        if need_extract_idx:
+            bboxes = [(tracks[i].bbox.x, tracks[i].bbox.y,
+                        tracks[i].bbox.w, tracks[i].bbox.h) for i in need_extract_idx]
+            feats = self._reid_extractor.extract(frame, bboxes)
+            for j, i in enumerate(need_extract_idx):
+                bid = tracks[i].track_id
+                if j < len(feats):
+                    features_map[bid] = feats[j]
+                    self._feature_cache[bid] = feats[j]
+                    self._feature_cache_age[bid] = 0
+            self._selective_extractions += len(need_extract_idx)
+
+        for i in cached_idx:
+            bid = tracks[i].track_id
+            features_map[bid] = self._feature_cache[bid]
+            self._feature_cache_age[bid] = self._feature_cache_age.get(bid, 0) + 1
+
+        for i in skip_idx:
+            bid = tracks[i].track_id
+            features_map[bid] = self._feature_cache[bid]
+            self._feature_cache_age[bid] = self._feature_cache_age.get(bid, 0) + 1
+
+        new_tracks: list[Track] = []
+        current_visible_ids: set[int] = set()
+        positions: dict[int, tuple[float, float]] = {}
+        velocities: dict[int, tuple[float, float]] = {}
+        sizes: dict[int, tuple[float, float]] = {}
+        next_prev_bboxes: dict[int, tuple[float, float, float, float]] = {}
+
+        for track in tracks:
+            botsort_id = track.track_id
+            feat = features_map.get(botsort_id)
+
+            final_id = botsort_id
+            center = track.mask_center or track.bbox.center
+            cur_bbox = (track.bbox.x, track.bbox.y, track.bbox.w, track.bbox.h)
+
+            if botsort_id in self._id_remap:
+                final_id = self._id_remap[botsort_id]
+
+            elif botsort_id not in self._known_botsort_ids and feat is not None:
+                match = self._gallery.query_lost(
+                    feat,
+                    timestamp,
+                    position_hint=center,
+                    bbox_hint=cur_bbox,
+                    query_velocity=track.velocity_px_per_s,
+                )
+                if match is not None:
+                    old_id = match.old_track_id
+                    self._id_remap[botsort_id] = old_id
+                    final_id = old_id
+
+                    if botsort_id in self._filters:
+                        self._filters[old_id] = self._filters.pop(botsort_id)
+                        self._filter_last_seen[old_id] = self._filter_last_seen.pop(
+                            botsort_id, timestamp
+                        )
+                        self._first_seen[old_id] = self._first_seen.pop(
+                            botsort_id, timestamp
+                        )
+
+                    seen_ids.discard(botsort_id)
+                    seen_ids.add(old_id)
+
+                    logger.info(
+                        "Re-ID REMAP: botsort_id=%d → recovered_id=%d  fused=%.3f  sim=%.3f",
+                        botsort_id, old_id, match.fused_score, match.similarity,
+                    )
+
+            self._known_botsort_ids.add(botsort_id)
+
+            was_skipped = botsort_id in {tracks[i].track_id for i in skip_idx}
+
+            if feat is not None:
+                self._gallery.update_active(
+                    final_id, feat, timestamp,
+                    confidence=track.confidence,
+                    position=center,
+                    feature_decay=was_skipped,
+                )
+            current_visible_ids.add(final_id)
+
+            positions[final_id] = center
+            velocities[final_id] = track.velocity_px_per_s
+            sizes[final_id] = (track.bbox.w, track.bbox.h)
+            next_prev_bboxes[final_id] = cur_bbox
+
+            if final_id != botsort_id:
+                track = Track(
+                    track_id=final_id,
+                    bbox=track.bbox,
+                    confidence=track.confidence,
+                    class_id=track.class_id,
+                    first_seen_ts=self._first_seen.get(final_id, track.first_seen_ts),
+                    last_seen_ts=track.last_seen_ts,
+                    age_frames=track.age_frames,
+                    misses=track.misses,
+                    velocity_px_per_s=track.velocity_px_per_s,
+                    acceleration_px_per_s2=track.acceleration_px_per_s2,
+                    mask_center=track.mask_center,
+                )
+
+            new_tracks.append(track)
+
+        self._prev_bboxes = next_prev_bboxes
+
+        active_bids = {t.track_id for t in tracks}
+        stale_cache = [k for k in self._feature_cache if k not in active_bids]
+        for k in stale_cache:
+            del self._feature_cache[k]
+            self._feature_cache_age.pop(k, None)
+
+        self._gallery.retire_missing(current_visible_ids, timestamp, positions, velocities, sizes)
+        self._gallery.purge_expired(timestamp)
+
+        return new_tracks
 
     # ------------------------------------------------------------------
     # Internal helpers

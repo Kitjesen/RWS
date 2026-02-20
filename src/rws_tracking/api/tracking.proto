@@ -30,6 +30,21 @@ service TrackingService {
 
   // Stream status updates (real-time)
   rpc StreamStatus(StreamStatusRequest) returns (stream StatusUpdate);
+
+  // Stream video frames (annotated JPEG)
+  rpc StreamFrames(StreamFramesRequest) returns (stream VideoFrame);
+
+  // Get safety status
+  rpc GetSafetyStatus(GetSafetyStatusRequest) returns (GetSafetyStatusResponse);
+
+  // Set operator authorization
+  rpc SetOperatorAuth(SetOperatorAuthRequest) returns (SetOperatorAuthResponse);
+
+  // Emergency stop
+  rpc EmergencyStop(EmergencyStopRequest) returns (EmergencyStopResponse);
+
+  // Get threat assessment
+  rpc GetThreatAssessment(GetThreatAssessmentRequest) returns (GetThreatAssessmentResponse);
 }
 
 // ============================================================================
@@ -175,4 +190,102 @@ message StatusUpdate {
   int64 frame_count = 3;
   double fps = 4;
   GimbalState gimbal = 5;
+}
+
+// ============================================================================
+// Stream Video Frames
+// ============================================================================
+
+message StreamFramesRequest {
+  double max_fps = 1;            // Desired frame rate (default: 15 Hz)
+  double scale_factor = 2;       // Resolution scale (0-1, default: 0.5)
+  int32 jpeg_quality = 3;        // JPEG quality (1-100, default: 70)
+  bool annotate = 4;             // Include detection/track overlays
+}
+
+message VideoFrame {
+  double timestamp = 1;
+  bytes jpeg_data = 2;           // JPEG-encoded frame
+  int32 width = 3;
+  int32 height = 4;
+  int64 frame_number = 5;
+  repeated DetectedTarget targets = 6;   // Detected targets in this frame
+}
+
+message DetectedTarget {
+  int32 track_id = 1;
+  string class_id = 2;
+  float confidence = 3;
+  BoundingBoxMsg bbox = 4;
+  float velocity_x = 5;         // px/s
+  float velocity_y = 6;         // px/s
+  bool is_selected = 7;         // Currently selected for tracking
+}
+
+message BoundingBoxMsg {
+  float x = 1;
+  float y = 2;
+  float w = 3;
+  float h = 4;
+}
+
+// ============================================================================
+// Safety Status
+// ============================================================================
+
+message GetSafetyStatusRequest {}
+
+message GetSafetyStatusResponse {
+  bool fire_authorized = 1;
+  string blocked_reason = 2;
+  string active_zone = 3;
+  bool operator_override = 4;
+  bool emergency_stop = 5;
+}
+
+// ============================================================================
+// Operator Authorization
+// ============================================================================
+
+message SetOperatorAuthRequest {
+  bool authorized = 1;
+}
+
+message SetOperatorAuthResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ============================================================================
+// Emergency Stop
+// ============================================================================
+
+message EmergencyStopRequest {
+  bool activate = 1;            // true = engage, false = release
+}
+
+message EmergencyStopResponse {
+  bool success = 1;
+  bool emergency_stop_active = 2;
+  string error = 3;
+}
+
+// ============================================================================
+// Threat Assessment
+// ============================================================================
+
+message GetThreatAssessmentRequest {}
+
+message GetThreatAssessmentResponse {
+  repeated ThreatTarget threats = 1;
+}
+
+message ThreatTarget {
+  int32 track_id = 1;
+  float threat_score = 2;
+  float distance_score = 3;
+  float velocity_score = 4;
+  float class_score = 5;
+  float heading_score = 6;
+  int32 priority_rank = 7;
 }

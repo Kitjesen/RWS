@@ -23,8 +23,8 @@ from dataclasses import dataclass, replace
 
 from ..algebra import PixelToGimbalTransform
 from ..config import GimbalControllerConfig, PIDConfig
-from ..decision.state_machine import TrackState, TrackStateMachine
-from ..types import BodyState, ControlCommand, GimbalFeedback, TargetError, TargetObservation
+from ..types import BodyState, ControlCommand, GimbalFeedback, TargetError, TargetObservation, TrackState
+from .interfaces import StateMachineProtocol
 from .adaptive import (
     DistanceBasedScheduler,
     DistanceBasedSchedulerConfig,
@@ -34,11 +34,13 @@ from .adaptive import (
 )
 from .ballistic import (
     BallisticModel,
+    PhysicsBallisticModel,
     SimpleBallisticConfig,
     SimpleBallisticModel,
     TableBallisticConfig,
     TableBallisticModel,
 )
+from ..types import ProjectileParams
 
 logger = logging.getLogger(__name__)
 
@@ -103,12 +105,15 @@ class TwoAxisGimbalController:
         self,
         transform: PixelToGimbalTransform,
         cfg: GimbalControllerConfig,
+        *,
+        state_machine: StateMachineProtocol | None = None,
+        ballistic_model: BallisticModel | None = None,
+        gain_scheduler: GainScheduler | None = None,
     ) -> None:
         self._transform = transform
         self._cfg = cfg
         self._yaw_pid = PID(cfg.yaw_pid)
         self._pitch_pid = PID(cfg.pitch_pid)
-        self._state_machine = TrackStateMachine(cfg)
         self._last_ts = 0.0
         self._last_cmd = (0.0, 0.0)
         self._scan_start_ts: float | None = None
@@ -116,9 +121,16 @@ class TwoAxisGimbalController:
         self._last_error: TargetError | None = None
         self._last_target: TargetObservation | None = None
 
-        # 弹道补偿模型
-        self._ballistic_model: BallisticModel | None = None
-        if cfg.ballistic.enabled:
+        # 状态机：外部注入优先，否则内部创建默认实现
+        if state_machine is not None:
+            self._state_machine = state_machine
+        else:
+            from ..decision.state_machine import TrackStateMachine
+            self._state_machine = TrackStateMachine(cfg)
+
+        # 弹道补偿模型：外部注入优先，否则按配置创建
+        self._ballistic_model: BallisticModel | None = ballistic_model
+        if self._ballistic_model is None and cfg.ballistic.enabled:
             if cfg.ballistic.model_type == "simple":
                 self._ballistic_model = SimpleBallisticModel(
                     SimpleBallisticConfig(
@@ -136,10 +148,20 @@ class TwoAxisGimbalController:
                         compensation_table=cfg.ballistic.compensation_table,
                     )
                 )
+            elif cfg.ballistic.model_type == "physics":
+                self._ballistic_model = PhysicsBallisticModel(
+                    projectile=ProjectileParams(
+                        muzzle_velocity_mps=cfg.ballistic.muzzle_velocity_mps,
+                        ballistic_coefficient=cfg.ballistic.bc_g7,
+                        projectile_mass_kg=cfg.ballistic.mass_kg,
+                        projectile_diameter_m=cfg.ballistic.caliber_m,
+                    ),
+                    target_height_m=cfg.ballistic.target_height_m,
+                )
 
-        # 自适应PID增益调度
-        self._gain_scheduler: GainScheduler | None = None
-        if cfg.adaptive_pid.enabled:
+        # 自适应PID增益调度：外部注入优先，否则按配置创建
+        self._gain_scheduler: GainScheduler | None = gain_scheduler
+        if self._gain_scheduler is None and cfg.adaptive_pid.enabled:
             if cfg.adaptive_pid.scheduler_type == "error_based":
                 self._gain_scheduler = ErrorBasedScheduler(
                     ErrorBasedSchedulerConfig(

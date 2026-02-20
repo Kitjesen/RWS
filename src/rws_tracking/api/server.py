@@ -2,7 +2,8 @@
 REST API Server for RWS Tracking System
 ========================================
 
-Provides HTTP endpoints for controlling the tracking system.
+Provides HTTP endpoints for controlling the tracking system,
+including video streaming (MJPEG), safety management, and threat assessment.
 """
 
 from __future__ import annotations
@@ -14,13 +15,19 @@ from dataclasses import asdict
 from typing import Any
 
 import numpy as np
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 from ..config import SystemConfig, load_config
 from ..hardware.imu_interface import BodyMotionProvider
 from ..pipeline import VisionGimbalPipeline, build_pipeline_from_config
 from ..types import BodyState
+from .video_stream import (
+    FrameAnnotator,
+    FrameBuffer,
+    MJPEGStreamer,
+    VideoStreamConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +48,7 @@ class TrackingAPI:
         self,
         config_path: str = "config.yaml",
         body_provider: BodyMotionProvider | None = None,
+        video_config: VideoStreamConfig | None = None,
     ):
         self.config_path = config_path
         self.config = load_config(config_path)
@@ -56,6 +64,16 @@ class TrackingAPI:
         self.frame_count = 0
         self.error_count = 0
         self.last_error: str | None = None
+
+        # Video streaming
+        self._video_cfg = video_config or VideoStreamConfig(enabled=True)
+        self._frame_buffer = FrameBuffer(max_size=self._video_cfg.buffer_size)
+        self._annotator = FrameAnnotator(self._video_cfg)
+        self._mjpeg_streamer = MJPEGStreamer(self._frame_buffer, self._video_cfg)
+
+        # Last known tracks for annotation
+        self._last_tracks: list = []
+        self._selected_target_id: int | None = None
 
     def start_tracking(self, camera_source: int | str = 0) -> dict[str, Any]:
         """Start the tracking pipeline."""
@@ -194,17 +212,84 @@ class TrackingAPI:
             return {"success": False, "error": str(e)}
 
     def update_config(self, config_dict: dict[str, Any]) -> dict[str, Any]:
-        """Update configuration (requires restart)."""
+        """Update configuration with live hot-reload support.
+
+        Supports hot-updating the following sections without restart:
+        - ``pid``: PID gains (yaw/pitch kp, ki, kd)
+        - ``selector``: Target selector weights
+        - ``safety_zones``: Add/remove no-fire zones
+
+        Other config keys are stored but require a restart to take effect.
+        """
         try:
-            # Validate and update config
-            # This is a simplified version - you may want more validation
+            applied: list[str] = []
+
+            # --- Hot-reload PID parameters ---
+            if "pid" in config_dict and self.pipeline is not None:
+                pid_data = config_dict["pid"]
+                ctrl = self.pipeline.controller
+                for axis in ("yaw", "pitch"):
+                    axis_data = pid_data.get(axis)
+                    if axis_data is None:
+                        continue
+                    pid_obj = ctrl._yaw_pid if axis == "yaw" else ctrl._pitch_pid
+                    for param in ("kp", "ki", "kd"):
+                        if param in axis_data:
+                            pid_obj.cfg = type(pid_obj.cfg)(
+                                **{
+                                    **{
+                                        f.name: getattr(pid_obj.cfg, f.name)
+                                        for f in pid_obj.cfg.__dataclass_fields__.values()
+                                    },
+                                    param: float(axis_data[param]),
+                                }
+                            )
+                    applied.append(f"pid.{axis}")
+
+            # --- Hot-reload selector weights ---
+            if "selector" in config_dict and self.pipeline is not None:
+                sel_data = config_dict["selector"]
+                sel = self.pipeline.selector
+                if hasattr(sel, "_cfg") and hasattr(sel._cfg, "weights"):
+                    weights = sel._cfg.weights
+                    for key in ("confidence", "size", "center_proximity", "track_age", "class_weight"):
+                        if key in sel_data:
+                            setattr(weights, key, float(sel_data[key]))
+                    applied.append("selector")
+
+            # --- Hot-reload safety zones ---
+            if "safety_zones" in config_dict and self.pipeline is not None:
+                zones_data = config_dict["safety_zones"]
+                sm = self.pipeline._safety_manager
+                if sm is not None:
+                    from ..types import SafetyZone
+                    if zones_data.get("action") == "add" and "zone" in zones_data:
+                        z = zones_data["zone"]
+                        sm.add_no_fire_zone(SafetyZone(**z))
+                        applied.append("safety_zones.add")
+                    elif zones_data.get("action") == "remove" and "zone_id" in zones_data:
+                        sm.remove_no_fire_zone(zones_data["zone_id"])
+                        applied.append("safety_zones.remove")
+
+            # --- Store remaining keys for restart-required updates ---
+            stored: list[str] = []
             for key, value in config_dict.items():
-                if hasattr(self.config, key):
-                    setattr(self.config, key, value)
+                if key not in ("pid", "selector", "safety_zones"):
+                    if hasattr(self.config, key):
+                        setattr(self.config, key, value)
+                        stored.append(key)
+
+            msg_parts = []
+            if applied:
+                msg_parts.append(f"Hot-applied: {', '.join(applied)}")
+            if stored:
+                msg_parts.append(f"Stored (restart to apply): {', '.join(stored)}")
 
             return {
                 "success": True,
-                "message": "Config updated (restart required to apply)",
+                "message": "; ".join(msg_parts) if msg_parts else "No changes applied",
+                "hot_applied": applied,
+                "stored": stored,
             }
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -224,10 +309,32 @@ class TrackingAPI:
                     continue
 
                 ts = time.monotonic()
-                self.pipeline.step(frame, ts)
+                outputs = self.pipeline.step(frame, ts)
 
                 self.frame_count += 1
                 self.last_frame_time = ts
+
+                # Update tracking info for video stream
+                if hasattr(outputs, 'tracks'):
+                    self._last_tracks = outputs.tracks
+                elif hasattr(outputs, 'all_targets'):
+                    self._last_tracks = outputs.all_targets
+
+                if outputs.selected_target is not None:
+                    self._selected_target_id = outputs.selected_target.track_id
+                else:
+                    self._selected_target_id = None
+
+                # Push annotated frame to video buffer
+                if self._video_cfg.enabled:
+                    state_text = f"FPS:{1.0 / max(ts - self.last_frame_time, 0.001):.0f} F:{self.frame_count}"
+                    annotated = self._annotator.annotate(
+                        frame,
+                        tracks=self._last_tracks,
+                        selected_id=self._selected_target_id,
+                        status_text=state_text,
+                    )
+                    self._frame_buffer.push(annotated, ts)
 
             except Exception as e:
                 logger.error(f"Error in tracking loop: {e}")
@@ -305,6 +412,60 @@ def create_flask_app(api: TrackingAPI) -> Flask:
 
         result = api.update_config(data)
         return jsonify(result)
+
+    # ------------------------------------------------------------------
+    # Video streaming endpoints
+    # ------------------------------------------------------------------
+
+    @app.route("/api/video/feed")
+    def video_feed():
+        """MJPEG video stream endpoint.
+
+        Usage in browser: <img src="http://host:port/api/video/feed" />
+        """
+        if not api._video_cfg.enabled:
+            return jsonify({"error": "Video streaming is disabled"}), 503
+
+        return Response(
+            api._mjpeg_streamer.generate(),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+        )
+
+    @app.route("/api/video/snapshot")
+    def video_snapshot():
+        """Get a single JPEG snapshot of the current frame."""
+        result = api._frame_buffer.get_latest(timeout=2.0)
+        if result is None:
+            return jsonify({"error": "No frame available"}), 503
+
+        import cv2
+
+        frame, ts = result
+        quality = int(request.args.get("quality", api._video_cfg.jpeg_quality))
+        encode_param = [cv2.IMWRITE_JPEG_QUALITY, quality]
+        success, encoded = cv2.imencode(".jpg", frame, encode_param)
+        if not success:
+            return jsonify({"error": "Encoding failed"}), 500
+
+        return Response(
+            encoded.tobytes(),
+            mimetype="image/jpeg",
+            headers={"X-Timestamp": str(ts)},
+        )
+
+    @app.route("/api/video/config", methods=["GET"])
+    def video_config():
+        """Get current video stream configuration."""
+        cfg = api._video_cfg
+        return jsonify({
+            "enabled": cfg.enabled,
+            "jpeg_quality": cfg.jpeg_quality,
+            "max_fps": cfg.max_fps,
+            "scale_factor": cfg.scale_factor,
+            "annotate_detections": cfg.annotate_detections,
+            "annotate_tracks": cfg.annotate_tracks,
+            "annotate_crosshair": cfg.annotate_crosshair,
+        })
 
     return app
 

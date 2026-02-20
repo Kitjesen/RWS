@@ -46,6 +46,27 @@
 - [ ] **弹道补偿单元测试**
   - `SimpleBallisticModel`：边界输入（bbox 高度为 0、极大值）、二次函数拟合精度。
   - `TableBallisticModel`：插值精度、表长度不一致、外推边界。
+  - `PhysicsBallisticModel`：与解析解对比、风偏精度、RK4 收敛性。
+
+- [ ] **射击提前量单元测试**
+  - `LeadAngleCalculator`：静止目标提前量为 0、匀速目标置信度、加速度影响。
+  - 迭代收敛验证。
+
+- [ ] **轨迹规划单元测试**
+  - 梯形/三角曲线参数正确性、双轴同步、时间采样一致性。
+
+- [ ] **威胁评估单元测试**
+  - `ThreatAssessor`：多目标排序稳定性、各分量权重线性组合验证。
+  - `EngagementQueue`：advance/skip/reset 逻辑。
+
+- [ ] **安全系统单元测试**
+  - `NoFireZoneManager`：区域内外判定、缓冲带降速因子。
+  - `SafetyInterlock`：各联锁条件 AND 逻辑、心跳超时。
+  - `SafetyManager`：NFZ + interlock 联合检查。
+
+- [ ] **视频流单元测试**
+  - `FrameBuffer`：线程安全、满缓冲丢弃策略。
+  - `MJPEGStreamer`：帧率限制、编码正确性。
 
 - [ ] **自适应 PID 单元测试**
   - `ErrorBasedScheduler`：增益连续性（边界无跳变）、极端误差输入。
@@ -63,6 +84,7 @@
 - [ ] **性能基准测试**
   - Pipeline 单帧端到端延迟 benchmark（含感知 + 决策 + 控制）。
   - 坐标变换单次调用耗时 benchmark。
+  - 弹道解算 (PhysicsBallisticModel) 单次调用耗时。
   - 用于回归检测：版本迭代后性能不能下降超过阈值。
   - 工具建议：`pytest-benchmark` 或手动 `time.perf_counter` 计时。
 
@@ -91,12 +113,17 @@
 - [ ] **夜视 / 红外模态支持**
   - YOLO 模型需针对红外图像微调，检测器支持多模态输入。
 
+- [ ] **3D 位置估计**
+  - 当前仅 2D 图像空间，考虑双目/LiDAR 融合实现 3D 目标定位。
+
 ### 控制增强
 
-- [ ] **多目标同时跟踪与分配**
-  - 当前为单目标 → 单控制器。
-  - 多云台 / 多武器站协同需扩展为多目标分配策略（匈牙利算法）。
-  - 涉及 `TargetSelector` 接口变更和 `Pipeline` 多实例编排。
+- [ ] **物理弹道模型实弹标定**
+  - `PhysicsBallisticModel` 已实现 RK4 积分求解，需实弹测试标定阻力系数。
+  - 与查表模型对比验证精度。
+
+- [ ] **弹道-提前量集成优化**
+  - 当前弹道补偿和提前量分别计算，考虑联合优化（弹道+运动预测+风偏一体化）。
 
 ### 工具链
 
@@ -117,11 +144,19 @@
   - 方案 A：YAML 文件监听（`watchdog`），检测到变更后重新加载。
   - 方案 B：轻量 HTTP/gRPC API，支持运行时参数调整。
 
-- [ ] **网络化遥测后端**
-  - 新增 `MqttTelemetryLogger` 或 `GrpcStreamLogger`，实现远程实时监控。
-
 - [ ] **帧率自适应降级**
   - 监测实际帧率，低于阈值时自动降级（降低分辨率 / 跳帧 / 切换轻量模型）。
+
+### 安全增强
+
+- [ ] **敌我识别 (IFF) 集成**
+  - 结合目标 Re-ID + 类别分类 + 外部 IFF 信号，防止误击友方。
+
+- [ ] **多操作员协同**
+  - 支持多操作员分别控制不同云台，权限隔离。
+
+- [ ] **审计日志**
+  - 所有射击授权/拒绝事件、操作员操作、安全事件记录到不可篡改日志。
 
 ---
 
@@ -163,12 +198,26 @@
 | 入口脚本 | `run_yolo_cam.py` 配置与主系统统一 |
 | 文档 | ARCHITECTURE.md、CONFIGURATION.md、COORDINATE_MATH.md |
 
-### P4 — 新功能（已实现部分）
+### P4 — 新功能（已实现）
 
 | 功能 | 说明 |
 |------|-----|
 | 自适应 PID | ErrorBasedScheduler + DistanceBasedScheduler |
 | 弹道补偿 | SimpleBallisticModel + TableBallisticModel |
+| **物理弹道模型** | PhysicsBallisticModel — RK4 积分、G1/G7 阻力曲线、风偏、环境参数 |
+| **射击提前量** | LeadAngleCalculator — 目标运动预测 + 弹丸飞行时间融合、置信度评估 |
+| **云台轨迹规划** | GimbalTrajectoryPlanner — 梯形速度曲线、双轴同步、防抖切换 |
+| **威胁评估** | ThreatAssessor — 多维度威胁打分（距离/速度/类别/朝向/大小） |
+| **交战排序** | EngagementQueue — 按威胁/距离/扇区三种策略排序，队列管理 |
+| **安全系统** | SafetyManager = NoFireZoneManager + SafetyInterlock（禁射区/联锁/紧急停止） |
+| **激光测距** | RangefinderProvider + SimulatedRangefinder + DistanceFusion 距离融合 |
+| **视频流传输** | MJPEG over HTTP + gRPC 帧流 + FrameBuffer + FrameAnnotator |
 | 实时仪表盘 | RealtimeDashboard（cv2 四面板可视化） |
 | 配置工厂 | `build_pipeline_from_config(SystemConfig)` |
 | `camera_model_from_config()` | 从 CameraConfig 构建 CameraModel |
+| **全局配置扩展** | SystemConfig 新增 8 个配置节（弹丸/环境/提前量/轨迹/交战/安全/测距/视频流） |
+| **射击链路集成** | pipeline.step() 扩展为 12 步完整数据流（感知→评估→选择→距离→弹道→提前量→安全→PID→限速→驱动→遥测→推帧） |
+| **工厂函数增强** | build_pipeline_from_config() 自动创建注入全部扩展组件，config 驱动开关 |
+| **Lazy Import** | 顶层/pipeline `__init__` 改为 `__getattr__` 惰性导入，避免 cv2/ultralytics 被意外拉入 |
+| **save_config 修复** | tuple→list 递归转换，修复 YAML roundtrip 失败 |
+| **集成测试** | test_shooting_chain.py — 18 用例覆盖全链路端到端 |

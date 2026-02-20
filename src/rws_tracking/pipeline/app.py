@@ -224,6 +224,11 @@ def build_pipeline_from_config(
     Uses YOLO-Seg + BoT-SORT combined tracker.  Camera intrinsics, detector
     parameters, selector weights, controller PID, and driver limits are all
     sourced from *cfg*.
+
+    Automatically creates and injects all v1.1 extension components
+    (threat assessment, distance fusion, ballistic solver, lead angle,
+    safety system, trajectory planner, video stream) when their config
+    sections are enabled.
     """
     cam = camera_model_from_config(cfg.camera)
     mount = MountExtrinsics(
@@ -244,6 +249,181 @@ def build_pipeline_from_config(
         img_size=det.img_size,
     )
 
+    # ---- v1.1 扩展组件 (按 config 启用) ----
+
+    # 威胁评估 (桥接 config 层类型 → engagement 模块类型)
+    threat_assessor = None
+    engagement_queue = None
+    if cfg.engagement.enabled:
+        from ..decision.engagement import EngagementConfig as EConfig
+        from ..decision.engagement import EngagementQueue, ThreatAssessor, ThreatWeights
+
+        eng_cfg = EConfig(
+            weights=ThreatWeights(
+                distance=cfg.engagement.weights.distance,
+                velocity=cfg.engagement.weights.velocity,
+                class_threat=cfg.engagement.weights.class_threat,
+                heading=cfg.engagement.weights.heading,
+                size=cfg.engagement.weights.size,
+            ),
+            strategy=cfg.engagement.strategy,
+            max_engagement_range_m=cfg.engagement.max_engagement_range_m,
+            min_threat_threshold=cfg.engagement.min_threat_threshold,
+            distance_decay_m=cfg.engagement.distance_decay_m,
+            velocity_norm_px_s=cfg.engagement.velocity_norm_px_s,
+            target_height_m=cfg.engagement.target_height_m,
+            sector_size_deg=cfg.engagement.sector_size_deg,
+        )
+        threat_assessor = ThreatAssessor(
+            frame_width=cam.width,
+            frame_height=cam.height,
+            camera_fy=cam.fy,
+            config=eng_cfg,
+        )
+        engagement_queue = EngagementQueue(config=eng_cfg)
+
+    # 测距仪 + 距离融合
+    rangefinder = None
+    distance_fusion = None
+    if cfg.rangefinder.enabled:
+        from ..hardware.rangefinder import (
+            DistanceFusion,
+            SimulatedRangefinder,
+            SimulatedRangefinderConfig,
+        )
+
+        rf_cfg = SimulatedRangefinderConfig(
+            noise_std_m=cfg.rangefinder.noise_std_m,
+            max_range_m=cfg.rangefinder.max_range_m,
+            min_range_m=cfg.rangefinder.min_range_m,
+            failure_rate=cfg.rangefinder.failure_rate,
+        )
+        rangefinder = SimulatedRangefinder(
+            config=rf_cfg,
+            camera_fy=cam.fy,
+            target_height_m=cfg.rangefinder.target_height_m,
+        )
+        distance_fusion = DistanceFusion(
+            max_laser_age_s=cfg.rangefinder.max_laser_age_s,
+            camera_fy=cam.fy,
+            target_height_m=cfg.rangefinder.target_height_m,
+        )
+
+    # 物理弹道解算 (独立于 controller 内置弹道, 用于 pipeline 级别的完整解)
+    ballistic_solver = None
+    if cfg.projectile.enabled:
+        from ..control.ballistic import PhysicsBallisticModel
+        from ..types import ProjectileParams
+
+        ballistic_solver = PhysicsBallisticModel(
+            projectile=ProjectileParams(
+                muzzle_velocity_mps=cfg.projectile.muzzle_velocity_mps,
+                bc_g7=cfg.projectile.ballistic_coefficient,
+                mass_kg=cfg.projectile.projectile_mass_kg,
+                caliber_m=cfg.projectile.projectile_diameter_m,
+            ),
+            target_height_m=cfg.controller.ballistic.target_height_m,
+        )
+
+    # 射击提前量 (需要弹道模型作为 FlightTimeProvider)
+    lead_calculator = None
+    if cfg.lead_angle.enabled:
+        from ..control.lead_angle import LeadAngleCalculator
+        from ..control.lead_angle import LeadAngleConfig as LAConfig
+
+        la_cfg = LAConfig(
+            enabled=cfg.lead_angle.enabled,
+            use_acceleration=cfg.lead_angle.use_acceleration,
+            max_lead_deg=cfg.lead_angle.max_lead_deg,
+            min_confidence=cfg.lead_angle.min_confidence,
+            velocity_smoothing_alpha=cfg.lead_angle.velocity_smoothing_alpha,
+            target_height_m=cfg.lead_angle.target_height_m,
+            convergence_iterations=cfg.lead_angle.convergence_iterations,
+        )
+
+        # 如果有弹道解算器, 用它作为飞行时间源; 否则用简单估算
+        if ballistic_solver is not None and hasattr(ballistic_solver, "compute_flight_time"):
+            ftp = ballistic_solver
+        else:
+            from ..control.lead_angle import SimpleFlightTimeProvider
+
+            ftp = SimpleFlightTimeProvider(muzzle_velocity_mps=900.0)
+
+        lead_calculator = LeadAngleCalculator(
+            transform=transform,
+            flight_time_provider=ftp,
+            config=la_cfg,
+        )
+
+    # 安全系统 (桥接 config 层的 SafetyConfig → safety 模块的 SafetyManagerConfig)
+    safety_manager = None
+    if cfg.safety.enabled:
+        from ..safety.interlock import SafetyInterlockConfig
+        from ..safety.manager import SafetyManager, SafetyManagerConfig
+        from ..types import SafetyZone
+
+        interlock_cfg = SafetyInterlockConfig(
+            require_operator_auth=cfg.safety.interlock.require_operator_auth,
+            min_lock_time_s=cfg.safety.interlock.min_lock_time_s,
+            min_engagement_range_m=cfg.safety.interlock.min_engagement_range_m,
+            max_engagement_range_m=cfg.safety.interlock.max_engagement_range_m,
+            system_check_interval_s=cfg.safety.interlock.system_check_interval_s,
+            heartbeat_timeout_s=cfg.safety.interlock.heartbeat_timeout_s,
+        )
+        zones = tuple(
+            SafetyZone(
+                zone_id=z.zone_id,
+                center_yaw_deg=z.center_yaw_deg,
+                center_pitch_deg=z.center_pitch_deg,
+                radius_deg=z.radius_deg,
+                zone_type=z.zone_type,
+            )
+            for z in cfg.safety.zones
+        )
+        safety_manager = SafetyManager(
+            SafetyManagerConfig(
+                interlock=interlock_cfg,
+                nfz_slow_down_margin_deg=cfg.safety.nfz_slow_down_margin_deg,
+                zones=zones,
+            )
+        )
+
+    # 轨迹规划
+    trajectory_planner = None
+    if cfg.trajectory.enabled:
+        from ..control.trajectory import GimbalTrajectoryPlanner
+        from ..control.trajectory import TrajectoryConfig as TConfig
+
+        tc = TConfig(
+            max_rate_dps=cfg.trajectory.max_rate_dps,
+            max_acceleration_dps2=cfg.trajectory.max_acceleration_dps2,
+            settling_threshold_deg=cfg.trajectory.settling_threshold_deg,
+            use_s_curve=cfg.trajectory.use_s_curve,
+            max_jerk_dps3=cfg.trajectory.max_jerk_dps3,
+            min_switch_interval_s=cfg.trajectory.min_switch_interval_s,
+        )
+        trajectory_planner = GimbalTrajectoryPlanner(tc)
+
+    # 视频流
+    frame_buffer = None
+    frame_annotator = None
+    if cfg.video_stream.enabled:
+        from ..api.video_stream import FrameAnnotator, FrameBuffer
+        from ..api.video_stream import VideoStreamConfig as VSConfig
+
+        vs_cfg = VSConfig(
+            enabled=cfg.video_stream.enabled,
+            jpeg_quality=cfg.video_stream.jpeg_quality,
+            max_fps=cfg.video_stream.max_fps,
+            scale_factor=cfg.video_stream.scale_factor,
+            buffer_size=cfg.video_stream.buffer_size,
+            annotate_detections=cfg.video_stream.annotate_detections,
+            annotate_tracks=cfg.video_stream.annotate_tracks,
+            annotate_crosshair=cfg.video_stream.annotate_crosshair,
+        )
+        frame_buffer = FrameBuffer(max_size=cfg.video_stream.buffer_size)
+        frame_annotator = FrameAnnotator(config=vs_cfg)
+
     return VisionGimbalPipeline(
         detector=PassthroughDetector(),
         tracker=SimpleIoUTracker(),
@@ -257,6 +437,16 @@ def build_pipeline_from_config(
         telemetry=InMemoryTelemetryLogger(),
         combined_tracker=seg_tracker,
         body_provider=body_provider,
+        threat_assessor=threat_assessor,
+        engagement_queue=engagement_queue,
+        distance_fusion=distance_fusion,
+        rangefinder=rangefinder,
+        ballistic_solver=ballistic_solver,
+        lead_calculator=lead_calculator,
+        safety_manager=safety_manager,
+        trajectory_planner=trajectory_planner,
+        frame_buffer=frame_buffer,
+        frame_annotator=frame_annotator,
     )
 
 
@@ -314,9 +504,9 @@ def run_demo(duration_s: float = 10.0, dt_s: float = 0.03) -> dict:
 
     ts = 0.0
     while ts < duration_s:
-        # Get current gimbal position
-        gimbal_yaw = pipeline.driver._yaw
-        gimbal_pitch = pipeline.driver._pitch
+        fb = pipeline.driver.get_feedback(ts)
+        gimbal_yaw = fb.yaw_deg
+        gimbal_pitch = fb.pitch_deg
 
         # Generate detections considering gimbal rotation
         frame = scene.step(dt_s, gimbal_yaw, gimbal_pitch)

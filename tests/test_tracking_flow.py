@@ -16,7 +16,8 @@ from src.rws_tracking.config import (
     save_config,
 )
 from src.rws_tracking.control import TwoAxisGimbalController
-from src.rws_tracking.decision.state_machine import TrackState, TrackStateMachine
+from src.rws_tracking.decision.state_machine import TrackStateMachine
+from src.rws_tracking.types import TrackState
 from src.rws_tracking.hardware import SimulatedGimbalDriver
 from src.rws_tracking.perception import (
     PassthroughDetector,

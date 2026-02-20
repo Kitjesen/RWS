@@ -8,7 +8,7 @@ Thank you for your interest in contributing to RWS! This document provides guide
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/RWS.git
+   git clone https://github.com/Kitjesen/RWS.git
    cd RWS
    ```
 

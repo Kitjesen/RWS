@@ -9,19 +9,11 @@ receives the resulting state and acts on it.
 from __future__ import annotations
 
 import logging
-from enum import Enum
 
 from ..config import GimbalControllerConfig
-from ..types import TargetError
+from ..types import TargetError, TrackState
 
 logger = logging.getLogger(__name__)
-
-
-class TrackState(str, Enum):
-    SEARCH = "search"
-    TRACK = "track"
-    LOCK = "lock"
-    LOST = "lost"
 
 
 class TrackStateMachine:

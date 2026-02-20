@@ -192,7 +192,7 @@ class ConfigServer:
 
         @app.route("/config/pid", methods=["POST"])
         def update_pid():
-            """Update PID parameters.
+            """Update PID parameters at runtime.
 
             Request body:
             {
@@ -206,36 +206,47 @@ class ConfigServer:
                 data = request.json
                 axis = data.get("axis", "yaw")
 
+                ctrl = self.pipeline.controller
                 if axis == "yaw":
-                    pid_config = self.pipeline.controller._yaw_pid_cfg
+                    pid_obj = ctrl._yaw_pid
                 elif axis == "pitch":
-                    pid_config = self.pipeline.controller._pitch_pid_cfg
+                    pid_obj = ctrl._pitch_pid
                 else:
                     return jsonify({"error": f"Invalid axis: {axis}"}), 400
 
-                # Update parameters
-                if "kp" in data:
-                    pid_config.kp = float(data["kp"])
-                if "ki" in data:
-                    pid_config.ki = float(data["ki"])
-                if "kd" in data:
-                    pid_config.kd = float(data["kd"])
+                # Build updated config via dataclass replace
+                from dataclasses import fields as dc_fields
+
+                cfg = pid_obj.cfg
+                updates = {}
+                for param in ("kp", "ki", "kd"):
+                    if param in data:
+                        updates[param] = float(data[param])
+
+                if updates:
+                    new_cfg = type(cfg)(
+                        **{
+                            f.name: updates.get(f.name, getattr(cfg, f.name))
+                            for f in dc_fields(cfg)
+                        }
+                    )
+                    pid_obj.cfg = new_cfg
 
                 logger.info(
                     "PID updated via API: %s axis, Kp=%.2f Ki=%.2f Kd=%.2f",
                     axis,
-                    pid_config.kp,
-                    pid_config.ki,
-                    pid_config.kd,
+                    pid_obj.cfg.kp,
+                    pid_obj.cfg.ki,
+                    pid_obj.cfg.kd,
                 )
 
                 return jsonify(
                     {
                         "status": "ok",
                         "axis": axis,
-                        "kp": pid_config.kp,
-                        "ki": pid_config.ki,
-                        "kd": pid_config.kd,
+                        "kp": pid_obj.cfg.kp,
+                        "ki": pid_obj.cfg.ki,
+                        "kd": pid_obj.cfg.kd,
                     }
                 )
 

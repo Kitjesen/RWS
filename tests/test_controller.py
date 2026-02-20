@@ -6,7 +6,7 @@ from src.rws_tracking.algebra.coordinate_transform import (
     CameraModel,
     PixelToGimbalTransform,
 )
-from src.rws_tracking.config import ControllerConfig, PIDConfig
+from src.rws_tracking.config import GimbalControllerConfig, PIDConfig
 from src.rws_tracking.control.controller import TwoAxisGimbalController
 from src.rws_tracking.types import (
     BodyState,
@@ -46,7 +46,7 @@ def pid_config():
 @pytest.fixture
 def controller_config(pid_config):
     """Create default controller config."""
-    return ControllerConfig(
+    return GimbalControllerConfig(
         yaw_pid=pid_config,
         pitch_pid=pid_config,
         max_rate_dps=180.0,
@@ -72,7 +72,7 @@ def controller(camera_model, controller_config):
     transform = PixelToGimbalTransform(camera_model)
     return TwoAxisGimbalController(
         transform=transform,
-        config=controller_config,
+        cfg=controller_config,
     )
 
 
@@ -123,7 +123,7 @@ class TestPIDControl:
 
         # Should command positive yaw rate (turn right)
         assert cmd.yaw_rate_cmd_dps > 0
-        assert cmd.state.name == "TRACK"
+        assert cmd.metadata["state"] == 1.0
 
     def test_integral_accumulation(self, controller):
         """I term should accumulate over time."""
@@ -189,7 +189,7 @@ class TestStateMachine:
         """Initial state should be SEARCH."""
         feedback = create_feedback()
         cmd = controller.compute_command(None, feedback, timestamp=1.0)
-        assert cmd.state.name == "SEARCH"
+        assert cmd.metadata["state"] == 0.0
 
     def test_search_to_track(self, controller):
         """Should transition from SEARCH to TRACK when target appears."""
@@ -197,12 +197,12 @@ class TestStateMachine:
 
         # No target: SEARCH
         cmd1 = controller.compute_command(None, feedback, timestamp=1.0)
-        assert cmd1.state.name == "SEARCH"
+        assert cmd1.metadata["state"] == 0.0
 
         # Target appears: TRACK
         target = create_target((640, 360, 740, 460))
         cmd2 = controller.compute_command(target, feedback, timestamp=1.1)
-        assert cmd2.state.name == "TRACK"
+        assert cmd2.metadata["state"] == 1.0
 
     def test_track_to_lock(self, controller):
         """Should transition to LOCK when error is small and stable."""
@@ -215,7 +215,7 @@ class TestStateMachine:
             cmd = controller.compute_command(target, feedback, timestamp=1.0 + i * 0.1)
 
         # Should eventually lock
-        assert cmd.state.name == "LOCK"
+        assert cmd.metadata["state"] == 2.0
 
     def test_lock_to_track_on_large_error(self, controller):
         """Should drop from LOCK to TRACK if error increases."""
@@ -230,7 +230,7 @@ class TestStateMachine:
         target_far = create_target((800, 360, 900, 460))
         cmd = controller.compute_command(target_far, feedback, timestamp=3.0)
 
-        assert cmd.state.name == "TRACK"
+        assert cmd.metadata["state"] == 1.0
 
     def test_track_to_lost(self, controller):
         """Should transition to LOST when target disappears."""
@@ -239,11 +239,11 @@ class TestStateMachine:
 
         # Track target
         cmd1 = controller.compute_command(target, feedback, timestamp=1.0)
-        assert cmd1.state.name == "TRACK"
+        assert cmd1.metadata["state"] == 1.0
 
         # Target disappears
         cmd2 = controller.compute_command(None, feedback, timestamp=1.1)
-        assert cmd2.state.name == "LOST"
+        assert cmd2.metadata["state"] == 3.0
 
     def test_lost_to_search_timeout(self, controller):
         """Should return to SEARCH after lost timeout."""
@@ -256,7 +256,7 @@ class TestStateMachine:
 
         # Wait past lost_timeout_s (1.5s)
         cmd = controller.compute_command(None, feedback, timestamp=3.0)
-        assert cmd.state.name == "SEARCH"
+        assert cmd.metadata["state"] == 0.0
 
 
 class TestLatencyCompensation:
@@ -282,7 +282,7 @@ class TestLatencyCompensation:
         cmd = controller.compute_command(target, feedback, timestamp=1.0)
 
         # Should still work without prediction
-        assert cmd.state.name == "TRACK"
+        assert cmd.metadata["state"] == 1.0
 
 
 class TestBodyMotionCompensation:
@@ -318,7 +318,7 @@ class TestBodyMotionCompensation:
         cmd = controller.compute_command(target, feedback, timestamp=1.0)
 
         # Should work normally
-        assert cmd.state.name == "TRACK"
+        assert cmd.metadata["state"] == 1.0
 
 
 class TestScanPattern:

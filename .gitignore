@@ -62,5 +62,16 @@ test_videos/
 .benchmarks/
 .ruff_cache/
 
+# Vendored third-party (use pip dependency instead)
+vendor/
+
+# Output / generated files
+output/
+bus.jpg
+
+# Node.js
+node_modules/
+package-lock.json
+
 # OS
 Thumbs.db

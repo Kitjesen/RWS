@@ -5,15 +5,17 @@ with a yaw/pitch gimbal, powered by **YOLO11n-Seg + BoT-SORT**.
 
 Supports **moving-base operation** (robot dog) with IMU feedforward compensation.
 
-## 🆕 最新更新 (v1.2.0)
+## 🆕 最新更新 (v1.3.0)
 
-- ✅ **REST & gRPC API** - 双 API 支持，远程控制和实时流式传输
-- ✅ **项目结构重构** - 清晰的文档分类和脚本组织
-- ✅ **真实硬件支持** - 串口云台驱动 + 真实 IMU 接口
-- ✅ **配置热更新** - 运行时调整参数，无需重启
-- ✅ **CI/CD 集成** - 自动化测试和代码质量检查（全部通过 ✓）
-- ✅ **测试增强** - 150+ 测试用例，覆盖率 28%+
-- ✅ **代码质量** - Ruff 检查通过，Mypy 类型检查通过
+- ✅ **Flutter Web Dashboard** - 实时可视化监控界面（误差曲线、云台姿态、PID 调参）
+- ✅ **PELCO-D 协议完善** - 串口反馈解析 + PWM 占空比控制
+- ✅ **配置热更新修复** - YAML 实时重载全链路打通
+- ✅ **安全模块** - 禁射区、射击链、联锁机制
+- ✅ **弹道计算** - 提前角 + 弹道轨迹建模
+- ✅ **测试全覆盖** - 30+ 测试文件，覆盖全部核心模块
+- ✅ **REST & gRPC API** - 双 API 支持 + 视频流端点
+- ✅ **真实硬件支持** - 串口云台驱动 + 激光测距仪 + IMU 接口
+- ✅ **CI/CD 集成** - Ruff + Mypy + pytest 自动化
 - 📖 **文档完善** - 结构化文档系统
 
 [![CI](https://github.com/Kitjesen/RWS/workflows/CI/badge.svg)](https://github.com/Kitjesen/RWS/actions)
@@ -76,31 +78,26 @@ RWS/
 ├── src/rws_tracking/           # 核心源代码
 │   ├── algebra/                # 坐标转换、卡尔曼滤波
 │   ├── perception/             # YOLO 检测、BoT-SORT 跟踪
-│   ├── decision/               # 状态机
-│   ├── control/                # PID 控制器
-│   ├── hardware/               # 云台驱动、IMU 接口
+│   ├── decision/               # 状态机、交战队列
+│   ├── control/                # PID 控制、弹道计算、提前角
+│   ├── hardware/               # 串口云台 (PELCO-D)、IMU、激光测距
+│   ├── safety/                 # 禁射区、射击链、联锁
 │   ├── pipeline/               # 主流程管道
 │   ├── telemetry/              # 遥测日志
-│   ├── api/                    # REST & gRPC API
+│   ├── api/                    # REST & gRPC API + 视频流
+│   ├── config/                 # 配置加载与热更新
 │   └── tools/                  # 仿真、训练工具
 │
+├── frontend/                   # Flutter Web Dashboard
+│   ├── lib/models/             # 数据模型
+│   ├── lib/services/           # API 客户端 & Provider
+│   ├── lib/screens/            # 页面 (响应式布局)
+│   └── lib/widgets/            # 组件 (误差图表、云台可视化、PID 面板)
+│
+├── tests/                      # 30+ 测试文件
+├── docs/                       # 结构化文档
 ├── scripts/                    # 脚本工具
-│   ├── api/                    # API 服务器和客户端示例
-│   ├── demo/                   # 演示脚本
-│   ├── tools/                  # 开发工具
-│   └── tests/                  # 测试脚本
-│
-├── docs/                       # 文档
-│   ├── getting-started/        # 新手入门
-│   ├── guides/                 # 使用指南
-│   ├── api/                    # API 文档
-│   ├── architecture/           # 架构文档
-│   ├── development/            # 开发文档
-│   └── reports/                # 项目报告
-│
-├── tests/                      # 测试用例
 ├── models/                     # 模型文件
-├── dataset/                    # 数据集
 ├── config.yaml                 # 配置文件
 └── requirements.txt            # 依赖
 ```
@@ -151,6 +148,23 @@ python scripts/tests/test_api.py
 pytest tests/benchmarks/ --benchmark-only
 ```
 
+## 🖥️ Flutter Web Dashboard
+
+实时可视化监控界面，支持响应式三栏 / 两栏 / 移动端布局。
+
+```bash
+cd frontend
+flutter pub get
+flutter run -d chrome
+```
+
+功能面板：
+- **视频流** - MJPEG 实时画面 + 状态角标
+- **误差图表** - Yaw/Pitch 跟踪误差历史曲线 (fl_chart)
+- **云台姿态** - 极坐标可视化当前角度与误差环
+- **PID 调参** - 滑块实时调整 Kp/Ki/Kd 并下发
+- **系统指标** - 锁定率、平均误差、目标切换频率
+
 ## 🏗️ 核心特性
 
 ### 感知层
@@ -161,16 +175,24 @@ pytest tests/benchmarks/ --benchmark-only
 ### 控制层
 - **双轴 PID** - 独立 yaw/pitch 控制
 - **IMU 前馈** - 移动基座补偿
-- **延迟补偿** - 预测未来位置
+- **提前角计算** - 运动目标预判
+- **弹道建模** - 弹丸轨迹与落点补偿
+
+### 安全层
+- **禁射区 (NFZ)** - 多边形 / 圆形区域屏蔽
+- **射击链** - 多级确认流程
+- **联锁机制** - 硬件 / 软件双重保险
 
 ### 硬件支持
-- **串口云台** - 标准 UART 协议
+- **串口云台** - PELCO-D 协议 (含反馈解析 + PWM)
+- **激光测距仪** - 目标距离实时获取
 - **真实 IMU** - 姿态反馈
 - **仿真模式** - 无硬件测试
 
 ### API 接口
 - **REST API** - HTTP/JSON (端口 5000)
 - **gRPC API** - 高性能二进制协议 (端口 50051)
+- **视频流** - MJPEG / Snapshot 端点
 - **实时流式** - gRPC 状态流
 
 ## 📊 性能
