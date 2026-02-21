@@ -96,7 +96,8 @@ def draw_overlay(
                            cv2.MARKER_CROSS, 18, 2)
 
         # Predicted trajectory (parabolic arc — fading dots with connecting line)
-        kf = tracker.filters.get(trk.track_id)
+        _tracklet = tracker._mot.active_tracks.get(trk.track_id)
+        kf = _tracklet.kf if _tracklet is not None else None
         if kf is not None:
             trail = []
             dt_step = PREDICT_HORIZON_S / PREDICT_STEPS

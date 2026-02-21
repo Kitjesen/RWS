@@ -168,8 +168,8 @@ def main():
         results.append(run_test(t_b, vpath, "BoT+OSNet", MAX))
         del t_b
 
-        # C: FusionMOT (self-built)
-        print("\n--- C: FusionMOT (self-built tracker) ---")
+        # C: FusionMOT (self-built, Kalman CA internal)
+        print("\n--- C: FusionMOT (self-built tracker + Kalman CA) ---")
         t_c = FusionSegTracker(
             model_path="yolo11n-seg.pt",
             confidence_threshold=0.35,
@@ -179,7 +179,6 @@ def main():
             img_size=640,
             reid_config=ReIDConfig(backbone="osnet_x1_0", device=""),
             mot_config=FusionMOTConfig(),
-            kalman_config=KalmanCAConfig(),
         )
         results.append(run_test(t_c, vpath, "FusionMOT", MAX))
         del t_c

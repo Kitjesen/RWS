@@ -46,6 +46,8 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from ..algebra.kalman2d import CentroidKalmanCA, KalmanCAConfig
+
 logger = logging.getLogger(__name__)
 
 _UNMATCHED = 1e6
@@ -69,6 +71,9 @@ class FusionMOTConfig:
     iou_gate: float = 0.05
     appearance_gate: float = 0.15
     motion_gate_px: float = 250.0
+    use_mahalanobis: bool = True
+    mahalanobis_sigma: float = 6.0
+    min_motion_gate_px: float = 80.0
 
     # Track lifecycle
     confirm_frames: int = 2
@@ -88,25 +93,58 @@ class FusionMOTConfig:
     lost_appearance_gate: float = 0.10
     lost_match_threshold: float = 0.80
 
+    # Kalman filter
+    kalman_config: KalmanCAConfig = field(default_factory=KalmanCAConfig)
 
-@dataclass
+
 class _Tracklet:
-    """Internal tracklet state."""
+    """Internal tracklet state with embedded Kalman CA filter."""
 
-    track_id: int
-    feature_ema: np.ndarray | None = None
-    feature_bank: list = field(default_factory=list)
-    bbox: np.ndarray = field(default_factory=lambda: np.zeros(4))  # x,y,w,h
-    last_position: np.ndarray = field(default_factory=lambda: np.zeros(2))
-    velocity: np.ndarray = field(default_factory=lambda: np.zeros(2))
-    height_ema: float = 0.0
-    confidence: float = 0.0
-    state: str = "tentative"  # tentative → confirmed → lost → deleted
-    frames_since_update: int = 0
-    total_frames: int = 0
-    last_ts: float = 0.0
-    created_ts: float = 0.0
-    observations: list = field(default_factory=list)  # OCM: [(cx, cy, ts)]
+    __slots__ = (
+        "track_id", "kf", "feature_ema", "feature_bank", "bbox",
+        "height_ema", "confidence", "state", "frames_since_update",
+        "total_frames", "last_ts", "created_ts",
+    )
+
+    def __init__(self, track_id: int, cx: float, cy: float,
+                 kalman_cfg: KalmanCAConfig) -> None:
+        self.track_id = track_id
+        self.kf = CentroidKalmanCA(cx0=cx, cy0=cy, config=kalman_cfg)
+        self.feature_ema: np.ndarray | None = None
+        self.feature_bank: list = []
+        self.bbox = np.zeros(4, dtype=np.float64)  # x, y, w, h
+        self.height_ema: float = 0.0
+        self.confidence: float = 0.0
+        self.state: str = "tentative"
+        self.frames_since_update: int = 0
+        self.total_frames: int = 0
+        self.last_ts: float = 0.0
+        self.created_ts: float = 0.0
+
+    @property
+    def position(self) -> np.ndarray:
+        """Kalman-filtered position (cx, cy)."""
+        p = self.kf.position
+        return np.array([p[0], p[1]], dtype=np.float64)
+
+    @property
+    def velocity(self) -> np.ndarray:
+        """Kalman-filtered velocity (vx, vy) in px/s."""
+        v = self.kf.velocity
+        return np.array([v[0], v[1]], dtype=np.float64)
+
+    @property
+    def pos_covariance(self) -> np.ndarray:
+        """2x2 position covariance from Kalman state."""
+        P = self.kf._P
+        return P[:2, :2].copy()
+
+    def predicted_bbox(self) -> np.ndarray:
+        """Bbox with Kalman-predicted center, preserving last w/h."""
+        pos = self.position
+        w, h = self.bbox[2], self.bbox[3]
+        return np.array([pos[0] - w / 2, pos[1] - h / 2, w, h],
+                        dtype=np.float64)
 
 
 class FusionMOT:
@@ -128,12 +166,14 @@ class FusionMOT:
         self._tracklets: dict[int, _Tracklet] = {}
         self._next_id = 1
         self._frame_count = 0
+        self._last_global_ts: float = 0.0
 
         logger.info("FusionMOT initialized  weights=(iou=%.2f, app=%.2f, "
-                     "motion=%.2f, height=%.2f)  stage2_iou=%.2f",
+                     "motion=%.2f, height=%.2f)  kalman=CA(6-state)  "
+                     "mahalanobis=%s(σ=%.1f)",
                      self._cfg.w_iou, self._cfg.w_appearance,
                      self._cfg.w_motion, self._cfg.w_height,
-                     self._cfg.stage2_iou_gate)
+                     self._cfg.use_mahalanobis, self._cfg.mahalanobis_sigma)
 
     @property
     def active_tracks(self) -> dict[int, _Tracklet]:
@@ -160,16 +200,16 @@ class FusionMOT:
         list of (track_id, bbox_xywh, confidence) for confirmed tracks
         """
         self._frame_count += 1
-        dt = 0.033  # will be overridden
+        dt = max(timestamp - self._last_global_ts, 1e-3) if self._last_global_ts > 0 else 0.033
+        self._last_global_ts = timestamp
 
-        if self._tracklets:
-            any_t = next(iter(self._tracklets.values()))
-            dt = max(timestamp - any_t.last_ts, 1e-3) if any_t.last_ts > 0 else 0.033
-
-        # Predict step: advance all tracklets by velocity
+        # Kalman predict: advance ALL tracklets using CA model (parabolic)
         for t in self._tracklets.values():
-            t.last_position = t.last_position + t.velocity * dt
-            t.bbox[:2] = t.last_position - t.bbox[2:4] / 2
+            t.kf.predict(dt)
+            # Sync bbox position from Kalman state
+            pos = t.position
+            t.bbox[0] = pos[0] - t.bbox[2] / 2
+            t.bbox[1] = pos[1] - t.bbox[3] / 2
 
         N = len(bboxes)
         if N == 0:
@@ -292,67 +332,87 @@ class FusionMOT:
         det_bboxes: np.ndarray,
         det_features: np.ndarray | None,
     ) -> np.ndarray:
-        """Build fused cost matrix: (num_tracks, num_dets).
+        """Build fused cost matrix using Kalman-predicted positions.
 
-        cost = w_iou * (1 - IoU) + w_app * (1 - cosine) + w_motion * motion_dist + w_height * height_dist
+        Motion distance uses **Mahalanobis distance** when enabled: the
+        Kalman covariance provides an uncertainty-aware gate that adapts
+        per-track — a track with high uncertainty (just initialized or
+        recovering) gets a wider gate automatically, while a well-tracked
+        target has a tight gate that rejects false matches.
 
-        Gated entries are set to _UNMATCHED.
+        cost = w_iou·(1-IoU) + w_app·(1-cosine)/2 + w_motion·mahal_norm + w_height·h_diff
         """
         M = len(track_ids)
         N = len(det_bboxes)
         cost = np.full((M, N), _UNMATCHED, dtype=np.float64)
 
         cfg = self._cfg
-        det_centers = det_bboxes[:, :2] + det_bboxes[:, 2:4] / 2  # (N, 2)
-        det_heights = det_bboxes[:, 3]  # (N,)
+        det_centers = det_bboxes[:, :2] + det_bboxes[:, 2:4] / 2
+        det_heights = det_bboxes[:, 3]
 
         for i, tid in enumerate(track_ids):
             t = self._tracklets[tid]
-            t_bbox = t.bbox  # (4,) x, y, w, h
-            t_center = t.last_position  # (2,)
-            t_height = t.height_ema if t.height_ema > 1.0 else t_bbox[3]
+            t_pred_bbox = t.predicted_bbox()
+            t_center = t.position
+            t_height = t.height_ema if t.height_ema > 1.0 else t.bbox[3]
+
+            # Precompute inverse covariance for Mahalanobis
+            if cfg.use_mahalanobis:
+                cov = t.pos_covariance
+                cov_reg = cov + np.eye(2) * 1e-4
+                try:
+                    cov_inv = np.linalg.inv(cov_reg)
+                except np.linalg.LinAlgError:
+                    cov_inv = np.eye(2) / (cfg.motion_gate_px ** 2)
+            else:
+                cov_inv = None
 
             for j in range(N):
-                # --- IoU distance ---
-                iou = self._iou(t_bbox, det_bboxes[j])
+                # --- IoU distance (using Kalman-predicted bbox) ---
+                iou = self._iou(t_pred_bbox, det_bboxes[j])
                 if iou < cfg.iou_gate and t.state != "lost":
-                    continue  # gate: skip if no spatial overlap (except lost)
+                    continue
                 iou_cost = 1.0 - iou
 
-                # --- Motion distance (Kalman-free: direct position match) ---
-                dx = det_centers[j, 0] - t_center[0]
-                dy = det_centers[j, 1] - t_center[1]
-                dist = (dx * dx + dy * dy) ** 0.5
-                gate_r = cfg.motion_gate_px
-                if t.state == "lost":
-                    lost_dt = max(0.033, 0.0)
-                    gate_r *= (1.0 + t.frames_since_update * 0.5)
-                if dist > gate_r:
-                    continue  # gate: too far
-                motion_cost = min(dist / max(gate_r, 1.0), 1.0)
+                # --- Motion distance (Kalman-predicted center) ---
+                delta = det_centers[j] - t_center
+                eucl_dist = float(np.linalg.norm(delta))
+                if cov_inv is not None:
+                    mahal_sq = float(delta @ cov_inv @ delta)
+                    mahal_ok = mahal_sq <= cfg.mahalanobis_sigma ** 2
+                    pixel_ok = eucl_dist <= cfg.min_motion_gate_px
+                    if not (mahal_ok or pixel_ok) and t.state != "lost":
+                        continue
+                    motion_cost = min(mahal_sq ** 0.5 / cfg.mahalanobis_sigma, 1.0)
+                    if pixel_ok and not mahal_ok:
+                        motion_cost = min(eucl_dist / cfg.motion_gate_px, 1.0)
+                else:
+                    gate_r = cfg.motion_gate_px
+                    if t.state == "lost":
+                        gate_r *= (1.0 + t.frames_since_update * 0.5)
+                    if eucl_dist > gate_r:
+                        continue
+                    motion_cost = min(eucl_dist / max(gate_r, 1.0), 1.0)
 
                 # --- Appearance distance ---
-                app_cost = 0.5  # neutral if no features
+                app_cost = 0.5
                 if det_features is not None and t.feature_ema is not None:
                     cos_sim = float(t.feature_ema @ det_features[j])
-                    # Also check feature bank (best-of-K)
                     if t.feature_bank:
                         bank_sims = [float(f @ det_features[j])
                                      for f, _, _ in t.feature_bank[-cfg.feature_bank_size:]]
                         bank_best = max(bank_sims)
                         cos_sim = max(cos_sim, 0.7 * cos_sim + 0.3 * bank_best)
-
                     if cos_sim < cfg.appearance_gate and t.state != "lost":
-                        continue  # gate: appearance too different
-                    app_cost = (1.0 - cos_sim) / 2.0  # map [-1,1] → [0,1]
+                        continue
+                    app_cost = (1.0 - cos_sim) / 2.0
 
-                # --- Height distance (Hybrid-SORT weak cue) ---
+                # --- Height distance (Hybrid-SORT) ---
                 h_cost = 0.0
                 if t_height > 1.0 and det_heights[j] > 1.0:
                     h_ratio = min(t_height, det_heights[j]) / max(t_height, det_heights[j])
                     h_cost = 1.0 - h_ratio
 
-                # --- Fuse ---
                 total = (cfg.w_iou * iou_cost
                          + cfg.w_appearance * app_cost
                          + cfg.w_motion * motion_cost
@@ -369,10 +429,10 @@ class FusionMOT:
     ) -> np.ndarray:
         """Cost matrix for lost track recovery (Stage 3).
 
-        Compared to Stage 1:
-        - Much wider motion gate (lost tracks may have drifted)
-        - Appearance-dominant weighting (motion is unreliable for lost tracks)
-        - Feature bank matching (best-of-K across temporal history)
+        Uses Kalman-predicted position (which keeps drifting forward even
+        during occlusion thanks to the CA model), with a much wider
+        Mahalanobis gate — lost tracks accumulate covariance, so the gate
+        widens naturally.
         """
         M = len(track_ids)
         N = len(det_bboxes)
@@ -384,62 +444,55 @@ class FusionMOT:
 
         for i, tid in enumerate(track_ids):
             t = self._tracklets[tid]
-            t_center = t.last_position
+            t_center = t.position  # Kalman-predicted even when lost
             t_height = t.height_ema if t.height_ema > 1.0 else t.bbox[3]
-            lost_frames = t.frames_since_update
 
             for j in range(N):
-                # Wider motion gate for lost tracks
-                dx = det_centers[j, 0] - t_center[0]
-                dy = det_centers[j, 1] - t_center[1]
-                dist = (dx * dx + dy * dy) ** 0.5
+                delta = det_centers[j] - t_center
+                dist = float(np.linalg.norm(delta))
                 gate_r = cfg.motion_gate_px * cfg.lost_motion_gate_multiplier
-                gate_r *= (1.0 + lost_frames * 0.3)
+                gate_r *= (1.0 + t.frames_since_update * 0.3)
                 if dist > gate_r:
                     continue
                 motion_cost = min(dist / max(gate_r, 1.0), 1.0)
 
-                # Appearance matching with feature bank
                 app_cost = 0.5
                 if det_features is not None and t.feature_ema is not None:
                     cos_sim = float(t.feature_ema @ det_features[j])
-                    # Bank matching: best of K
                     if t.feature_bank:
                         bank_sims = [float(f @ det_features[j])
                                      for f, _, _ in t.feature_bank]
                         bank_best = max(bank_sims)
                         cos_sim = max(cos_sim, bank_best)
-
                     if cos_sim < cfg.lost_appearance_gate:
                         continue
                     app_cost = (1.0 - cos_sim) / 2.0
 
-                # Height
                 h_cost = 0.0
                 if t_height > 1.0 and det_heights[j] > 1.0:
                     h_ratio = min(t_height, det_heights[j]) / max(t_height, det_heights[j])
                     h_cost = 1.0 - h_ratio
 
-                # Lost recovery: appearance-dominant weighting
+                pred_bbox = t.predicted_bbox()
                 total = (0.15 * motion_cost
                          + 0.65 * app_cost
                          + 0.10 * h_cost
-                         + 0.10 * (1.0 - self._iou(t.bbox, det_bboxes[j])))
+                         + 0.10 * (1.0 - self._iou(pred_bbox, det_bboxes[j])))
                 cost[i, j] = total
 
         return cost
 
     def _build_iou_cost(self, track_ids: list[int],
                         det_bboxes: np.ndarray) -> np.ndarray:
-        """IoU-only cost matrix for ByteTrack Stage 2."""
+        """IoU-only cost matrix for ByteTrack Stage 2 (Kalman-predicted bboxes)."""
         M = len(track_ids)
         N = len(det_bboxes)
         cost = np.full((M, N), _UNMATCHED, dtype=np.float64)
 
         for i, tid in enumerate(track_ids):
-            t_bbox = self._tracklets[tid].bbox
+            pred_bbox = self._tracklets[tid].predicted_bbox()
             for j in range(N):
-                iou = self._iou(t_bbox, det_bboxes[j])
+                iou = self._iou(pred_bbox, det_bboxes[j])
                 if iou > self._cfg.stage2_iou_gate:
                     cost[i, j] = 1.0 - iou
 
@@ -475,18 +528,17 @@ class FusionMOT:
 
         t = _Tracklet(
             track_id=tid,
-            bbox=bbox.copy(),
-            last_position=center.copy(),
-            velocity=np.zeros(2),
-            height_ema=float(bbox[3]),
-            confidence=conf,
-            state="tentative",
-            frames_since_update=0,
-            total_frames=1,
-            last_ts=ts,
-            created_ts=ts,
-            observations=[(float(center[0]), float(center[1]), ts)],
+            cx=float(center[0]),
+            cy=float(center[1]),
+            kalman_cfg=self._cfg.kalman_config,
         )
+        t.bbox = bbox.copy()
+        t.height_ema = float(bbox[3])
+        t.confidence = conf
+        t.state = "tentative"
+        t.total_frames = 1
+        t.last_ts = ts
+        t.created_ts = ts
 
         if feat is not None:
             f = feat.copy()
@@ -503,15 +555,12 @@ class FusionMOT:
                          feat: np.ndarray | None, ts: float) -> None:
         t = self._tracklets[tid]
         center = bbox[:2] + bbox[2:4] / 2
-        dt = max(ts - t.last_ts, 1e-3)
 
-        # Velocity from position delta (smoothed)
-        new_vel = (center - t.last_position) / dt
-        alpha_v = 0.7
-        t.velocity = alpha_v * t.velocity + (1.0 - alpha_v) * new_vel
+        # Kalman measurement update (fuses position observation into state)
+        t.kf.update(float(center[0]), float(center[1]))
 
+        # Store observed bbox (w/h from detection, position from Kalman)
         t.bbox = bbox.copy()
-        t.last_position = center.copy()
         t.confidence = conf
         t.frames_since_update = 0
         t.total_frames += 1
@@ -521,29 +570,22 @@ class FusionMOT:
         if bbox[3] > 1.0:
             t.height_ema = 0.9 * t.height_ema + 0.1 * float(bbox[3])
 
-        # OCM: store observations
-        t.observations.append((float(center[0]), float(center[1]), ts))
-        if len(t.observations) > 10:
-            t.observations = t.observations[-10:]
-
-        # Appearance update (Dynamic Appearance EMA)
+        # Appearance update (Dynamic Appearance EMA, Deep OC-SORT)
         if feat is not None and t.feature_ema is not None:
             f = feat.copy()
             n = np.linalg.norm(f)
             if n > 1e-6:
                 f /= n
-            # Confidence-modulated alpha (Deep OC-SORT)
             sigma = 0.4
             if conf > sigma:
                 a = 0.9 + 0.1 * (1.0 - (conf - sigma) / (1.0 - sigma))
             else:
-                a = 1.0  # reject low-confidence features
+                a = 1.0
             t.feature_ema = a * t.feature_ema + (1.0 - a) * f
             en = np.linalg.norm(t.feature_ema)
             if en > 1e-6:
                 t.feature_ema /= en
 
-            # Feature bank
             if conf > sigma:
                 t.feature_bank.append((f.copy(), conf, ts))
                 if len(t.feature_bank) > self._cfg.feature_bank_size:
@@ -589,12 +631,17 @@ class FusionMOT:
             del self._tracklets[tid]
 
     def _get_output(self, timestamp: float) -> list[tuple[int, np.ndarray, float]]:
-        """Return confirmed tracks (including those within patience window)."""
+        """Return confirmed tracks with Kalman-smoothed bboxes.
+
+        During patience frames (no measurement yet), the Kalman CA model
+        provides parabolic extrapolation — much more accurate than the
+        old linear velocity × dt.
+        """
         results: list[tuple[int, np.ndarray, float]] = []
         for t in self._tracklets.values():
             if t.state == "confirmed":
                 if t.frames_since_update <= self._cfg.lost_patience:
-                    results.append((t.track_id, t.bbox.copy(), t.confidence))
+                    results.append((t.track_id, t.predicted_bbox(), t.confidence))
         return results
 
     # ------------------------------------------------------------------
@@ -621,3 +668,4 @@ class FusionMOT:
         self._tracklets.clear()
         self._next_id = 1
         self._frame_count = 0
+        self._last_global_ts = 0.0
