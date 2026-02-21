@@ -1,16 +1,18 @@
 """
-Lightweight Re-ID Feature Extractor.
-=====================================
+Re-ID Feature Extractor.
+=========================
 
-Extracts appearance feature vectors from image crops using a MobileNetV3-Small
-backbone (torchvision, ImageNet pretrained). No external model downloads needed.
+Extracts appearance feature vectors from image crops for person
+re-identification.  Supports two backbones:
 
-Design decisions:
-    - MobileNetV3-Small: ~2.5M params, ~60ms per batch on CPU, real-time capable.
-    - 576-dim features from the penultimate layer, L2-normalized for cosine similarity.
-    - Batch inference for efficiency when multiple crops arrive per frame.
-    - Input normalization matches ImageNet conventions.
-    - Crop resize to 128x256 (W x H) to preserve person-like aspect ratio.
+    - **osnet_x1_0** (default): OSNet trained on MSMT17 person Re-ID dataset
+      (4101 identities).  512-dim features, ~2.2M params.  Dramatically better
+      at distinguishing different people compared to generic classifiers.
+      Weights auto-downloaded from HuggingFace on first use.
+
+    - **mobilenet**: MobileNetV3-Small with ImageNet weights.  576-dim features,
+      ~2.5M params.  Fast but NOT trained for person discrimination — only
+      suitable as a fallback when OSNet weights are unavailable.
 
 The extractor is stateless — it only transforms image crops to feature vectors.
 Matching and gallery management belong to AppearanceGallery (separation of concerns).
@@ -36,6 +38,8 @@ class ReIDConfig:
 
     Attributes
     ----------
+    backbone : str
+        "osnet_x1_0" (person Re-ID, recommended) or "mobilenet" (fallback).
     crop_width : int
         Crop resize width in pixels.
     crop_height : int
@@ -46,6 +50,7 @@ class ReIDConfig:
         Maximum batch size for inference.
     """
 
+    backbone: str = "osnet_x1_0"
     crop_width: int = 128
     crop_height: int = 256
     device: str = ""
@@ -59,27 +64,27 @@ class ReIDExtractor:
 
         extractor = ReIDExtractor()
         features = extractor.extract(frame, bboxes)
-        # features: np.ndarray, shape (N, 576), L2-normalized rows
+        # features: np.ndarray, shape (N, feature_dim), L2-normalized rows
     """
-
-    _FEATURE_DIM = 576  # MobileNetV3-Small avgpool output
 
     def __init__(self, config: ReIDConfig | None = None) -> None:
         cfg = config or ReIDConfig()
         self._crop_w = cfg.crop_width
         self._crop_h = cfg.crop_height
         self._batch_size = cfg.batch_size
+        self._backbone_name = cfg.backbone
 
         if cfg.device and cfg.device != "auto":
             self._device = torch.device(cfg.device)
         else:
             self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self._model = self._build_model()
+        self._model, self._FEATURE_DIM = self._build_model(cfg.backbone)
         self._transform = self._build_transform()
 
         logger.info(
-            "ReIDExtractor ready  backbone=MobileNetV3-Small  dim=%d  device=%s  crop=%dx%d",
+            "ReIDExtractor ready  backbone=%s  dim=%d  device=%s  crop=%dx%d",
+            cfg.backbone,
             self._FEATURE_DIM,
             self._device,
             self._crop_w,
@@ -107,8 +112,8 @@ class ReIDExtractor:
         Returns
         -------
         np.ndarray
-            Shape ``(N, 576)``, L2-normalized feature vectors.
-            Returns shape ``(0, 576)`` if bboxes is empty.
+            Shape ``(N, feature_dim)``, L2-normalized feature vectors.
+            Returns shape ``(0, feature_dim)`` if bboxes is empty.
         """
         if not bboxes:
             return np.empty((0, self._FEATURE_DIM), dtype=np.float32)
@@ -123,24 +128,29 @@ class ReIDExtractor:
     def extract_single(
         self, frame: np.ndarray, x: float, y: float, w: float, h: float
     ) -> np.ndarray:
-        """Extract feature for a single bbox. Returns shape ``(576,)``."""
+        """Extract feature for a single bbox. Returns shape ``(feature_dim,)``."""
         result = self.extract(frame, [(x, y, w, h)])
         if len(result) == 0:
             return np.zeros(self._FEATURE_DIM, dtype=np.float32)
         return result[0]
 
-    def _build_model(self) -> nn.Module:
-        """Build MobileNetV3-Small and remove the classification head."""
-        backbone = models.mobilenet_v3_small(weights=models.MobileNet_V3_Small_Weights.DEFAULT)
-        # Remove classifier, keep features + avgpool → 576-dim output
-        model = nn.Sequential(
-            backbone.features,
-            backbone.avgpool,
-            nn.Flatten(),
-        )
+    def _build_model(self, backbone: str) -> tuple[nn.Module, int]:
+        """Build the feature extraction backbone.
+
+        Returns (model, feature_dim).
+        """
+        if backbone.startswith("osnet"):
+            from rws_tracking.perception.osnet import build_osnet
+            model = build_osnet(variant=backbone, device=self._device)
+            return model, model.feature_dim
+
+        # Fallback: MobileNetV3-Small (ImageNet, not Re-ID specific)
+        base = models.mobilenet_v3_small(
+            weights=models.MobileNet_V3_Small_Weights.DEFAULT)
+        model = nn.Sequential(base.features, base.avgpool, nn.Flatten())
         model.to(self._device)
         model.eval()
-        return model
+        return model, 576
 
     @staticmethod
     def _build_transform() -> transforms.Compose:
@@ -194,11 +204,11 @@ class ReIDExtractor:
 
         for i in range(0, len(batch), self._batch_size):
             chunk = batch[i : i + self._batch_size].to(self._device)
-            feats = self._model(chunk)  # (B, 576)
+            feats = self._model(chunk)
             feats = feats.cpu().numpy()
             all_feats.append(feats)
 
-        features = np.concatenate(all_feats, axis=0)  # (N, 576)
+        features = np.concatenate(all_feats, axis=0)
         norms = np.linalg.norm(features, axis=1, keepdims=True)
         norms = np.maximum(norms, 1e-6)
         features = features / norms

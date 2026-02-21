@@ -437,16 +437,18 @@ if __name__ == "__main__":
     stats_a.score = _composite_score(stats_a, baseline_unique_ids=len(stats_a.unique_ids))
     del tracker_a
 
+    best_gallery_cfg = GalleryConfig(
+        ema_alpha=0.85,
+        max_lost_age=5.0,
+        min_track_age_frames=3,
+        **best_cfg,
+    )
+
     tracker_b = YoloSegTracker(
         **common_kwargs,
         enable_reid=True,
         reid_config=ReIDConfig(device=""),
-        gallery_config=GalleryConfig(
-            ema_alpha=0.85,
-            max_lost_age=5.0,
-            min_track_age_frames=3,
-            **best_cfg,
-        ),
+        gallery_config=best_gallery_cfg,
     )
     stats_b = run_single_test(
         video_path,
@@ -457,5 +459,29 @@ if __name__ == "__main__":
         write_video=True,
     )
     stats_b.score = _composite_score(stats_b, baseline_unique_ids=len(stats_a.unique_ids))
+    del tracker_b
 
-    print_comparison(stats_a, stats_b, baseline_unique_ids=len(stats_a.unique_ids))
+    # C: Re-ID + CMC (camera motion compensation)
+    tracker_c = YoloSegTracker(
+        **common_kwargs,
+        enable_reid=True,
+        enable_cmc=True,
+        reid_config=ReIDConfig(device=""),
+        gallery_config=GalleryConfig(
+            ema_alpha=0.85,
+            max_lost_age=5.0,
+            min_track_age_frames=3,
+            **best_cfg,
+        ),
+    )
+    stats_c = run_single_test(
+        video_path,
+        output_path=benchmark_dir / "output_C_reid_cmc.mp4",
+        tracker=tracker_c,
+        label="C:ReID+CMC",
+        max_frames=None,
+        write_video=True,
+    )
+    stats_c.score = _composite_score(stats_c, baseline_unique_ids=len(stats_a.unique_ids))
+
+    print_comparison(stats_a, stats_b, stats_c, baseline_unique_ids=len(stats_a.unique_ids))

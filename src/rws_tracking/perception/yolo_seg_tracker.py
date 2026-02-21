@@ -39,6 +39,7 @@ from ..algebra.kalman2d import (
 )
 from ..types import BoundingBox, Track
 from .appearance_gallery import AppearanceGallery, GalleryConfig
+from .cmc import CameraMotionCompensator
 from .reid_extractor import ReIDConfig, ReIDExtractor
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ class YoloSegTracker:
         enable_reid: bool = False,
         reid_config: ReIDConfig | None = None,
         gallery_config: GalleryConfig | None = None,
+        enable_cmc: bool = False,
     ) -> None:
         from ultralytics import YOLO  # type: ignore[import-untyped]
 
@@ -132,12 +134,18 @@ class YoloSegTracker:
         self._feature_cache_age: dict[int, int] = {}
         self._feature_refresh_interval: int = 3
 
-        # Selective ReID (Fast-Deep-OC-SORT, Bayar 2024): track last-frame
-        # bboxes to compute IoU → decide if feature extraction is needed.
+        # Selective ReID (Fast-Deep-OC-SORT, Bayar 2024)
         self._prev_bboxes: dict[int, tuple[float, float, float, float]] = {}
         self._selective_iou_threshold: float = 0.20
         self._selective_extractions: int = 0
         self._selective_skips: int = 0
+
+        # CMC (Deep OC-SORT Sec.3.2): compensate camera ego-motion
+        self._cmc_enabled = enable_cmc
+        self._cmc: CameraMotionCompensator | None = None
+        if enable_cmc:
+            self._cmc = CameraMotionCompensator(downscale=2)
+            logger.info("Camera Motion Compensation ENABLED")
 
         if enable_reid:
             self._reid_extractor = ReIDExtractor(reid_config)
@@ -203,6 +211,26 @@ class YoloSegTracker:
         if not isinstance(frame, np.ndarray):
             logger.warning("YoloSegTracker received non-ndarray frame; returning empty.")
             return []
+
+        # ── CMC (Deep OC-SORT Sec.3.2): correct Kalman states ──
+        if self._cmc is not None:
+            warp = self._cmc.compute(frame)
+            R = warp[:2, :2]
+            T = warp[:2, 2]
+            for kf in self._filters.values():
+                pos = np.array(kf.position, dtype=np.float64)
+                kf._x[0:2] = R @ pos + T
+                vel = np.array(kf.velocity, dtype=np.float64)
+                kf._x[2:4] = R @ vel
+                if hasattr(kf, 'acceleration') and len(kf._x) >= 6:
+                    acc = np.array(kf.acceleration, dtype=np.float64)
+                    kf._x[4:6] = R @ acc
+                # Also rotate covariance (Deep OC-SORT Eq.1)
+                n = len(kf._x)
+                for block_start in range(0, n, 2):
+                    if block_start + 1 < n:
+                        blk = kf._P[block_start:block_start+2, block_start:block_start+2]
+                        kf._P[block_start:block_start+2, block_start:block_start+2] = R @ blk @ R.T
 
         # ── Kalman predict step for ALL existing tracks ──
         dt = max(timestamp - self._last_ts, 1e-3) if self._last_ts > 0.0 else 0.033

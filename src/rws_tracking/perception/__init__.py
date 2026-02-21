@@ -1,4 +1,5 @@
 from .appearance_gallery import AppearanceGallery, GalleryConfig
+from .cmc import CameraMotionCompensator
 from .interfaces import Detector, TargetSelector, Tracker
 from .multi_target import TargetAllocator, TargetAssignment
 from .multi_target_selector import WeightedMultiTargetSelector
@@ -11,6 +12,7 @@ from .yolo_seg_tracker import YoloSegTracker
 
 __all__ = [
     "AppearanceGallery",
+    "CameraMotionCompensator",
     "Detector",
     "GalleryConfig",
     "PassthroughDetector",
