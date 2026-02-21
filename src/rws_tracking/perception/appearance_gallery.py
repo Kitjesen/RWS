@@ -122,6 +122,13 @@ class GalleryConfig:
     # --- OC-SORT: Observation-Centric Momentum (OCM) ---
     ocm_window: int = 5
 
+    # --- Temporal Feature Bank (multi-frame aggregation) ---
+    feature_bank_size: int = 10
+    feature_bank_query_top_k: int = 5
+
+    # --- Hybrid-SORT weak cues ---
+    height_weight: float = 0.10
+
 
 @dataclass
 class _ActiveEntry:
@@ -129,9 +136,11 @@ class _ActiveEntry:
 
     feature_short: np.ndarray  # short-term prototype
     feature_long: np.ndarray  # long-term prototype
+    feature_bank: list = field(default_factory=list)  # temporal bank: [(feat, conf, ts), ...]
     frames_seen: int = 1
     last_ts: float = 0.0
     recent_obs: list = field(default_factory=list)  # OCM: [(x, y, ts), ...]
+    height_history: list = field(default_factory=list)  # Hybrid-SORT: stable height cue
 
 
 @dataclass
@@ -140,10 +149,12 @@ class _LostEntry:
 
     feature_short: np.ndarray
     feature_long: np.ndarray
+    feature_bank: list = field(default_factory=list)  # [(feat, conf, ts), ...]
     lost_ts: float = 0.0
     last_position: tuple[float, float] = (0.0, 0.0)
     last_velocity: tuple[float, float] = (0.0, 0.0)
     last_size: tuple[float, float] = (0.0, 0.0)
+    median_height: float = 0.0  # Hybrid-SORT: stable height cue
 
 
 @dataclass
@@ -216,6 +227,7 @@ class AppearanceGallery:
         confidence: float = 1.0,
         position: tuple[float, float] | None = None,
         feature_decay: bool = False,
+        bbox_height: float = 0.0,
     ) -> None:
         """Update (or create) the appearance feature for an active track.
 
@@ -230,14 +242,18 @@ class AppearanceGallery:
         ``α' ← α' × α`` — the old feature's weight decays exponentially, so
         stale features lose influence even without a new observation.
 
-        Also stores raw observations for **Observation-Centric Momentum** (OCM).
+        **Temporal Feature Bank**: stores last K high-confidence features
+        explicitly.  When the track is lost, the bank provides a robust
+        multi-sample representation for Re-ID matching (inspired by
+        SambaMOTR/MOTIP multi-frame context).
+
+        **Hybrid-SORT height cue**: stores bbox height as a stable property
+        that doesn't change during occlusion.
         """
         if track_id in self._active:
             entry = self._active[track_id]
 
             if feature_decay:
-                # Feature Decay: simulate the passage of one EMA step
-                # without a real new feature.  The old feature "ages out".
                 a_s = self._cfg.short_ema_alpha
                 a_l = self._cfg.long_ema_alpha
                 entry.feature_short *= a_s
@@ -260,12 +276,24 @@ class AppearanceGallery:
                 if n_l > 1e-6:
                     entry.feature_long /= n_l
 
+                # Temporal feature bank: store high-confidence features
+                if confidence > self._cfg.da_confidence_sigma:
+                    bank = entry.feature_bank
+                    bank.append((feature.copy(), confidence, timestamp))
+                    max_k = self._cfg.feature_bank_size
+                    if len(bank) > max_k:
+                        entry.feature_bank = bank[-max_k:]
+
             entry.frames_seen += 1
             entry.last_ts = timestamp
             if position is not None:
                 entry.recent_obs.append((position[0], position[1], timestamp))
                 if len(entry.recent_obs) > self._cfg.ocm_window:
                     entry.recent_obs = entry.recent_obs[-self._cfg.ocm_window:]
+            if bbox_height > 1.0:
+                entry.height_history.append(bbox_height)
+                if len(entry.height_history) > 20:
+                    entry.height_history = entry.height_history[-20:]
         else:
             feat = feature.copy()
             norm = np.linalg.norm(feat)
@@ -274,12 +302,17 @@ class AppearanceGallery:
             obs: list = []
             if position is not None:
                 obs = [(position[0], position[1], timestamp)]
+            heights: list = []
+            if bbox_height > 1.0:
+                heights = [bbox_height]
             self._active[track_id] = _ActiveEntry(
                 feature_short=feat.copy(),
                 feature_long=feat.copy(),
+                feature_bank=[(feature.copy(), confidence, timestamp)],
                 frames_seen=1,
                 last_ts=timestamp,
                 recent_obs=obs,
+                height_history=heights,
             )
 
     @staticmethod
