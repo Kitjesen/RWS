@@ -528,6 +528,11 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     from .health_routes import health_bp
     app.register_blueprint(health_bp)
 
+    # Mission controller routes
+    app.extensions["tracking_api"] = api
+    from .mission_routes import mission_bp
+    app.register_blueprint(mission_bp)
+
     return app
 
 
