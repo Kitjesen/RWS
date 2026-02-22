@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,27 @@ def request_fire():
         "state": chain.state.value,
         "can_fire": chain.can_fire,
     })
+
+
+@fire_bp.route("/report", methods=["GET"])
+def get_report():
+    """Download HTML mission debrief report from audit log.
+
+    Query params:
+      mission (str): mission name shown in report title (default "Mission Debrief")
+    """
+    audit = current_app.extensions.get("audit_logger")
+    if audit is None:
+        return jsonify({"error": "audit_logger not configured"}), 503
+
+    mission_name = request.args.get("mission", "Mission Debrief")
+    from ..telemetry.report import generate_report
+    html_content = generate_report(audit, mission_name=mission_name)
+    return Response(
+        html_content,
+        mimetype="text/html",
+        headers={"Content-Disposition": "inline; filename=mission_report.html"},
+    )
 
 
 @fire_bp.route("/heartbeat", methods=["POST"])
