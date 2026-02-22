@@ -7,11 +7,11 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class PIDConfig:
-    kp: float
-    ki: float
-    kd: float
-    integral_limit: float
-    output_limit: float
+    kp: float = 5.0
+    ki: float = 0.3
+    kd: float = 0.2
+    integral_limit: float = 30.0
+    output_limit: float = 90.0
     derivative_lpf_alpha: float = 0.3
     feedforward_kv: float = 0.0
 
