@@ -89,16 +89,52 @@ Frame → Detector → Tracker → Selector → StateMachine
 | Package | Responsibility |
 |---|---|
 | `perception/` | `YoloDetector`, `YoloSegTracker` (BoT-SORT), `WeightedTargetSelector`, `FusionMOT` |
-| `decision/` | `TrackStateMachine` (SEARCH→TRACK→LOCK→LOST), `ThreatAssessor`, `EngagementQueue` |
+| `decision/` | `TrackStateMachine` (SEARCH→TRACK→LOCK→LOST), `ThreatAssessor`, `EngagementQueue`, `TargetLifecycleManager` (DETECTED→ARCHIVED) |
 | `control/` | `TwoAxisGimbalController` (PID + feedforward), `PhysicsBallisticModel` (RK4), `LeadAngleCalculator`, `GimbalTrajectoryPlanner` |
 | `hardware/` | `SimulatedGimbalDriver`, `SerialGimbalDriver` (PELCO-D), `MockIMU`, `SimulatedRangefinder`, `DistanceFusion` |
-| `safety/` | `NoFireZoneManager` (NFZ), `SafetyInterlock` (7-condition AND), `SafetyManager` |
+| `safety/` | `NoFireZoneManager` (NFZ), `SafetyInterlock` (7-condition AND), `SafetyManager`, `ShootingChain` (SAFE→ARMED→FIRE_AUTHORIZED→FIRED→COOLDOWN), `IFFChecker`, `OperatorWatchdog` |
 | `algebra/` | `PixelToGimbalTransform`, `ConstantVelocityKalman2D`, `ConstantAccelerationKalman2D` |
-| `telemetry/` | `InMemoryTelemetryLogger`, `FileTelemetryLogger` |
-| `config/` | YAML config loading + hot-reload |
-| `api/` | REST (port 5000), gRPC (port 50051), MJPEG video stream |
+| `telemetry/` | `InMemoryTelemetryLogger`, `FileTelemetryLogger`, `AuditLogger` (SHA-256 chained JSONL), `VideoRingBuffer`, `generate_report()` (HTML mission debrief) |
+| `health/` | `HealthMonitor` (per-subsystem heartbeat → ok/degraded/failed) |
+| `config/` | YAML config loading + hot-reload, `ProfileManager` (named mission profiles) |
+| `api/` | REST (port 5000), gRPC (port 50051), MJPEG video stream; Blueprints: `fire_bp`, `health_bp`, `mission_bp`, `metrics_bp`, `selftest_bp` |
 | `types/` | Shared frozen dataclasses and enums — `TrackState`, `BoundingBox`, layer-specific types |
-| `pipeline/` | `VisionGimbalPipeline`, `MultiGimbalPipeline`, `build_pipeline_from_config()` |
+| `pipeline/` | `VisionGimbalPipeline`, `build_pipeline_from_config()` (composition root, wires all v2 components) |
+
+### v2 Fire Control Architecture
+
+```
+Operator heartbeat ──> OperatorWatchdog ──> ShootingChain.safe() on timeout
+                                                    │
+Pipeline.step() per frame:                          │
+  1. filter_active() via TargetLifecycleManager      │
+  2. ThreatAssessor → EngagementQueue (priority)    │
+  3. SafetyManager → fire_authorized                │
+  4. ShootingChain.update_authorization() ──────────┘
+  5. On can_fire → execute_fire() → AuditLogger.log("fired")
+  6. mark_neutralized() → TargetLifecycleManager
+  7. health_monitor.heartbeat("pipeline")
+
+Operator UI (Flutter):
+  /api/fire/arm  → SAFE→ARMED
+  /api/fire/request → FIRE_AUTHORIZED→FIRE_REQUESTED → execute_fire()
+  /api/fire/heartbeat → OperatorWatchdog.heartbeat()
+
+GET /api/threats   → ranked threat queue with scores + distances
+GET /metrics       → Prometheus text format (all subsystem metrics)
+GET /api/selftest  → pre-mission go/no-go check (7 subsystems)
+POST /api/mission/start → load profile, reset lifecycle, begin session
+POST /api/mission/end   → auto-safe, generate HTML mission report
+GET /api/fire/report    → serve HTML debrief from AuditLogger
+```
+
+### Key invatiants
+
+- **TargetLifecycleManager.filter_active()** is called BEFORE ThreatAssessor: neutralized targets are never re-assessed or re-engaged.
+- **ShootingChain** is the ONLY path to actual fire — `execute_fire()` is called only from pipeline step when `can_fire=True`.
+- **AuditLogger** writes a SHA-256-chained JSONL record on every ShootingChain state transition + each fired event.
+- **OperatorWatchdog** runs in a daemon thread; if heartbeat lapses > 10s, forces chain to SAFE regardless of pipeline state.
+- **FileTelemetryLogger** is used in `build_pipeline_from_config()` — all production session data persists to `logs/telemetry.jsonl`.
 
 ### Protocol-Based Extension
 
