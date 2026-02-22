@@ -547,6 +547,10 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     from .mission_routes import mission_bp
     app.register_blueprint(mission_bp)
 
+    # Prometheus metrics endpoint
+    from .metrics_routes import metrics_bp
+    app.register_blueprint(metrics_bp)
+
     return app
 
 
