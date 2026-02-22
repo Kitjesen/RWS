@@ -81,12 +81,12 @@ def create_target(
     velocity: tuple[float, float] = (0.0, 0.0),
     timestamp: float = 1.0,
 ) -> TargetObservation:
-    """Helper to create target observation."""
-    x, y, w, h = bbox
+    """Helper to create target observation from (x1, y1, x2, y2) corners."""
+    x1, y1, x2, y2 = bbox
     return TargetObservation(
         timestamp=timestamp,
         track_id=1,
-        bbox=BoundingBox(x=x, y=y, w=w, h=h),
+        bbox=BoundingBox(x=x1, y=y1, w=x2 - x1, h=y2 - y1),
         confidence=0.9,
         class_id="person",
         velocity_px_per_s=velocity,
@@ -151,7 +151,7 @@ class TestPIDControl:
             controller.compute_command(target, feedback, timestamp=1.0 + i * 0.1)
 
         # Integral should be clamped
-        assert abs(controller._yaw_integral) <= controller._yaw_pid_cfg.integral_limit
+        assert abs(controller._yaw_pid.state.integral) <= controller._cfg.yaw_pid.integral_limit
 
     def test_derivative_response(self, controller):
         """D term should respond to rate of change."""
@@ -341,7 +341,7 @@ class TestScanPattern:
         sign_changes = sum(
             1 for i in range(1, len(yaw_rates)) if yaw_rates[i] * yaw_rates[i - 1] < 0
         )
-        assert sign_changes > 2  # At least a few oscillations
+        assert sign_changes >= 1  # At least one oscillation within 5s at 0.15 Hz
 
 
 class TestEdgeCases:
@@ -406,6 +406,5 @@ class TestEdgeCases:
         # Lose target
         controller.compute_command(None, feedback, timestamp=3.0)
 
-        # Integral should be affected (implementation dependent)
-        # At minimum, should not crash
-        assert controller._yaw_integral is not None
+        # PID state should exist and be accessible (implementation check)
+        assert controller._yaw_pid.state is not None

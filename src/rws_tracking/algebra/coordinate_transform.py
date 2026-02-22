@@ -121,6 +121,14 @@ class CameraModel:
             dtype=np.float64,
         )
 
+    def pixel_to_normalized(self, u: float, v: float) -> tuple[float, float]:
+        """Convert pixel (u, v) to normalized camera coordinates (no distortion)."""
+        return (u - self.cx) / self.fx, (v - self.cy) / self.fy
+
+    def normalized_to_pixel(self, xn: float, yn: float) -> tuple[float, float]:
+        """Convert normalized camera coordinates to pixel (no distortion)."""
+        return xn * self.fx + self.cx, yn * self.fy + self.cy
+
 
 class PixelToGimbalTransform:
     """
@@ -165,6 +173,17 @@ class PixelToGimbalTransform:
         yaw_rad = math.atan2(gimbal_dir[0], gimbal_dir[2])
         pitch_rad = -math.atan2(gimbal_dir[1], gimbal_dir[2])
         return math.degrees(yaw_rad), math.degrees(pitch_rad)
+
+    def pixel_to_gimbal_error(
+        self, u: float, v: float, gimbal_yaw_deg: float = 0.0, gimbal_pitch_deg: float = 0.0
+    ) -> tuple[float, float]:
+        """Convert pixel (u, v) to gimbal angular error, subtracting current gimbal angles.
+
+        Alias for pixel_to_angle_error minus the current gimbal position.
+        Positive = target is in that direction relative to where gimbal currently points.
+        """
+        yaw_err, pitch_err = self.pixel_to_angle_error(u, v)
+        return yaw_err - gimbal_yaw_deg, pitch_err - gimbal_pitch_deg
 
     def bbox_center_to_angle_error(
         self, x: float, y: float, w: float, h: float

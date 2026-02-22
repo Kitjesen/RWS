@@ -318,9 +318,9 @@ def build_pipeline_from_config(
         ballistic_solver = PhysicsBallisticModel(
             projectile=ProjectileParams(
                 muzzle_velocity_mps=cfg.projectile.muzzle_velocity_mps,
-                bc_g7=cfg.projectile.ballistic_coefficient,
-                mass_kg=cfg.projectile.projectile_mass_kg,
-                caliber_m=cfg.projectile.projectile_diameter_m,
+                ballistic_coefficient=cfg.projectile.ballistic_coefficient,
+                projectile_mass_kg=cfg.projectile.projectile_mass_kg,
+                projectile_diameter_m=cfg.projectile.projectile_diameter_m,
             ),
             target_height_m=cfg.controller.ballistic.target_height_m,
         )

@@ -24,6 +24,10 @@ class TrackStateMachine:
         self._lock_start_ts: float | None = None
         self._high_error_start_ts: float | None = None
         self._last_error: TargetError | None = None
+        # Set after a high-error timeout forces TRACK→SEARCH.  Prevents
+        # the immediate SEARCH→TRACK→SEARCH cycling that would otherwise
+        # reset the timeout on every re-acquisition attempt.
+        self._high_error_timeout_recovery: bool = False
 
     @property
     def state(self) -> TrackState:
@@ -37,6 +41,9 @@ class TrackStateMachine:
                 self._state.value,
                 new_state.value,
             )
+            # Clear recovery flag whenever we leave SEARCH
+            if self._state == TrackState.SEARCH and new_state != TrackState.SEARCH:
+                self._high_error_timeout_recovery = False
             self._state = new_state
 
     def update(self, error: TargetError | None, timestamp: float) -> TrackState:
@@ -46,6 +53,7 @@ class TrackStateMachine:
             err_mag = max(abs(error.yaw_error_deg), abs(error.pitch_error_deg))
             if err_mag <= self._cfg.lock_error_threshold_deg:
                 self._high_error_start_ts = None
+                self._high_error_timeout_recovery = False
                 if self._lock_start_ts is None:
                     self._lock_start_ts = timestamp
                 if timestamp - self._lock_start_ts >= self._cfg.lock_hold_time_s:
@@ -59,16 +67,15 @@ class TrackStateMachine:
                     self._cfg.lock_error_threshold_deg * self._cfg.high_error_multiplier
                 )
                 if err_mag > high_err_thresh:
-                    # If already in SEARCH, don't start tracking a target that
-                    # is immediately outside the high-error envelope.  This
-                    # prevents the SEARCH→TRACK→SEARCH cycling where the
-                    # timeout resets on every re-acquisition attempt.
-                    if self._state == TrackState.SEARCH:
+                    # If in SEARCH after a high-error timeout, don't immediately
+                    # re-enter TRACK — that would reset the timeout each cycle.
+                    if self._state == TrackState.SEARCH and self._high_error_timeout_recovery:
                         self._high_error_start_ts = None
                         return self._state
                     if self._high_error_start_ts is None:
                         self._high_error_start_ts = timestamp
                     if timestamp - self._high_error_start_ts >= self._cfg.max_track_error_timeout_s:
+                        self._high_error_timeout_recovery = True
                         self._transition(TrackState.SEARCH)
                         self._high_error_start_ts = None
                     else:
@@ -80,6 +87,7 @@ class TrackStateMachine:
 
         self._lock_start_ts = None
         self._high_error_start_ts = None
+        self._high_error_timeout_recovery = False
         if self._last_seen_ts is None:
             since_seen = float("inf")
         else:
