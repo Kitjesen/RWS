@@ -78,6 +78,14 @@ class SafetyZoneModel {
     this.zoneType = 'no_fire',
   });
 
+  factory SafetyZoneModel.fromJson(Map<String, dynamic> j) => SafetyZoneModel(
+    zoneId: j['zone_id'] as String? ?? '',
+    centerYawDeg: (j['center_yaw_deg'] as num?)?.toDouble() ?? 0.0,
+    centerPitchDeg: (j['center_pitch_deg'] as num?)?.toDouble() ?? 0.0,
+    radiusDeg: (j['radius_deg'] as num?)?.toDouble() ?? 0.0,
+    zoneType: j['zone_type'] as String? ?? 'no_fire',
+  );
+
   Map<String, dynamic> toJson() => {
     'zone_id': zoneId,
     'center_yaw_deg': centerYawDeg,

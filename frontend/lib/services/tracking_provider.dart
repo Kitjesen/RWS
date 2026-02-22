@@ -27,6 +27,9 @@ class TrackingProvider extends ChangeNotifier {
   // 目标指定状态 (C2)
   int? _designatedTrackId;
 
+  // 禁射区列表
+  List<SafetyZoneModel> _nfzZones = [];
+
   // 误差历史 (用于图表)
   final List<double> yawErrorHistory = [];
   final List<double> pitchErrorHistory = [];
@@ -46,6 +49,7 @@ class TrackingProvider extends ChangeNotifier {
   MissionStatus get missionStatus => _missionStatus;
   String? get lastReportPath => _lastReportPath;
   int? get designatedTrackId => _designatedTrackId;
+  List<SafetyZoneModel> get nfzZones => _nfzZones;
 
   void startPolling({Duration interval = const Duration(milliseconds: 200)}) {
     _pollTimer?.cancel();
@@ -206,6 +210,45 @@ class TrackingProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       return null;
+    }
+  }
+
+  // --- 禁射区管理 ---
+
+  Future<void> loadNfzZones() async {
+    try {
+      _nfzZones = await _api.listNfzZones();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<bool> addNfzZone(SafetyZoneModel zone) async {
+    try {
+      final result = await _api.addNfzZone(zone);
+      if (result['ok'] == true) {
+        await loadNfzZones();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteNfzZone(String zoneId) async {
+    try {
+      final ok = await _api.deleteNfzZone(zoneId);
+      if (ok) {
+        _nfzZones = _nfzZones.where((z) => z.zoneId != zoneId).toList();
+        notifyListeners();
+      }
+      return ok;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 

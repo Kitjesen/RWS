@@ -244,6 +244,54 @@ class RwsApiClient {
     }
   }
 
+  // --- 禁射区管理 (NFZ CRUD) ---
+
+  Future<List<SafetyZoneModel>> listNfzZones() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/safety/zones'));
+      if (resp.statusCode == 200) {
+        final list = jsonDecode(resp.body) as List<dynamic>;
+        return list
+            .map((j) => SafetyZoneModel.fromJson(j as Map<String, dynamic>))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>> addNfzZone(SafetyZoneModel zone) async {
+    try {
+      final body = <String, dynamic>{
+        'center_yaw_deg': zone.centerYawDeg,
+        'center_pitch_deg': zone.centerPitchDeg,
+        'radius_deg': zone.radiusDeg,
+      };
+      if (zone.zoneId.isNotEmpty) body['zone_id'] = zone.zoneId;
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/safety/zones'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      if (resp.statusCode == 201) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+      return {'ok': false, 'error': 'HTTP ${resp.statusCode}'};
+    } catch (e) {
+      return {'ok': false, 'error': e.toString()};
+    }
+  }
+
+  Future<bool> deleteNfzZone(String zoneId) async {
+    try {
+      final resp = await _client.delete(
+        Uri.parse('$baseUrl/api/safety/zones/$zoneId'),
+      );
+      return resp.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // --- 目标指定 (C2 designation) ---
 
   Future<bool> designateTarget(int trackId, {String operatorId = 'operator_1'}) async {
