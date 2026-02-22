@@ -71,6 +71,7 @@ class PipelineOutputs:
     selected_target: TargetObservation | None
     command: ControlCommand
     tracks: list[Track] = field(default_factory=list)
+    detections: list = field(default_factory=list)
     threat_assessments: list[ThreatAssessment] = field(default_factory=list)
     ballistic_solution: BallisticSolution | None = None
     lead_angle: LeadAngle | None = None

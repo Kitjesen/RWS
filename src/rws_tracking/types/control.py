@@ -24,9 +24,9 @@ class GimbalFeedback:
 
 @dataclass
 class ControlCommand:
-    timestamp: float
     yaw_rate_cmd_dps: float
     pitch_rate_cmd_dps: float
+    timestamp: float = 0.0
     metadata: dict[str, float] = field(default_factory=dict)
 
 

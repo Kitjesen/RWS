@@ -13,12 +13,26 @@ class PassthroughDetector:
     Used for synthetic scenes and CI tests where YOLO is not needed.
     """
 
+    def inject(self, detections: list) -> None:
+        """Pre-load detections to be returned on the next detect() call."""
+        self._injected = list(detections)
+
     def detect(self, frame: object, timestamp: float) -> list[Detection]:
+        # If pre-injected detections are available, consume them first.
+        if hasattr(self, "_injected") and self._injected:
+            out = self._injected
+            self._injected = []
+            return out
+
         if not isinstance(frame, Iterable):
             return []
 
         detections: list[Detection] = []
         for item in frame:
+            if isinstance(item, Detection):
+                # SyntheticScene returns Detection objects directly.
+                detections.append(item)
+                continue
             if not isinstance(item, dict):
                 continue
             bbox = item.get("bbox", (0.0, 0.0, 0.0, 0.0))

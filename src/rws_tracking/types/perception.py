@@ -12,7 +12,7 @@ class Detection:
     bbox: BoundingBox
     confidence: float
     class_id: str
-    timestamp: float
+    timestamp: float = 0.0
 
 
 @dataclass

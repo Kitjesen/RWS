@@ -69,7 +69,7 @@ def _run_single_target_score(
     scene = SyntheticScene(camera.width, camera.height, seed=7)
     scene.add_target(
         SimTarget(
-            x=100.0, y=130.0, w=80.0, h=120.0, vx=45.0, vy=18.0, confidence=0.9, class_id="person"
+            cx=100.0, cy=130.0, w=80.0, h=120.0, vx=45.0, vy=18.0, confidence=0.9, class_id="person"
         )
     )
 

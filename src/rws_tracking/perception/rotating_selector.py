@@ -30,9 +30,11 @@ class RotatingTargetSelector:
         self,
         frame_width: int,
         frame_height: int,
-        config: SelectorConfig,
+        config: SelectorConfig | None = None,
         rotation_interval_s: float = 3.0,
         max_targets: int = 3,
+        *,
+        dwell_time_s: float | None = None,
     ):
         """初始化轮询选择器.
 
@@ -51,8 +53,9 @@ class RotatingTargetSelector:
         """
         self._w = frame_width
         self._h = frame_height
-        self._cfg = config
-        self._rotation_interval = rotation_interval_s
+        self._cfg = config if config is not None else SelectorConfig()
+        # dwell_time_s is a backwards-compatible alias for rotation_interval_s
+        self._rotation_interval = dwell_time_s if dwell_time_s is not None else rotation_interval_s
         self._max_targets = max_targets
 
         self._target_pool: list[int] = []  # 目标池（track_id列表）
