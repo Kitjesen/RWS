@@ -52,6 +52,29 @@ logger = logging.getLogger(__name__)
 
 _UNMATCHED = 1e6
 
+# COCO-17 keypoint indices used for pose-guided tracking
+_KP_NOSE = 0
+_KP_SHOULDER_L = 5
+_KP_SHOULDER_R = 6
+_KP_ELBOW_L = 7
+_KP_ELBOW_R = 8
+_KP_HIP_L = 11
+_KP_HIP_R = 12
+_KP_KNEE_L = 13
+_KP_KNEE_R = 14
+
+# 8 bone pairs for skeleton proportion descriptor (normalized by torso diagonal)
+_SKELETON_BONES: tuple[tuple[int, int], ...] = (
+    (_KP_SHOULDER_L, _KP_SHOULDER_R),  # shoulder span
+    (_KP_HIP_L, _KP_HIP_R),            # hip span
+    (_KP_SHOULDER_L, _KP_HIP_L),       # left torso
+    (_KP_SHOULDER_R, _KP_HIP_R),       # right torso
+    (_KP_SHOULDER_L, _KP_ELBOW_L),     # left upper arm
+    (_KP_SHOULDER_R, _KP_ELBOW_R),     # right upper arm
+    (_KP_HIP_L, _KP_KNEE_L),           # left thigh
+    (_KP_HIP_R, _KP_KNEE_R),           # right thigh
+)
+
 
 @dataclass
 class FusionMOTConfig:
@@ -96,6 +119,17 @@ class FusionMOTConfig:
     # Kalman filter
     kalman_config: KalmanCAConfig = field(default_factory=KalmanCAConfig)
 
+    # Skeleton / pose-guided tracking
+    # Set w_skeleton > 0 when YOLO-pose keypoints are available.
+    # use_hip_center: use hip midpoint as Kalman anchor (more stable than bbox centroid).
+    # skeleton_gate: max normalized L2 descriptor distance to allow a match.
+    # kp_visibility_thresh: minimum YOLO keypoint visibility score to treat a
+    #     keypoint as valid (YOLO outputs [x, y, vis] with vis in [0, 1]).
+    w_skeleton: float = 0.0
+    use_hip_center: bool = True
+    skeleton_gate: float = 0.8
+    kp_visibility_thresh: float = 0.3
+
 
 class _Tracklet:
     """Internal tracklet state with embedded Kalman CA filter."""
@@ -104,6 +138,7 @@ class _Tracklet:
         "track_id", "kf", "feature_ema", "feature_bank", "bbox",
         "height_ema", "confidence", "state", "frames_since_update",
         "total_frames", "last_ts", "created_ts",
+        "keypoints_ema",   # EMA-smoothed COCO-17 keypoints (17, 2) or None
     )
 
     def __init__(self, track_id: int, cx: float, cy: float,
@@ -120,6 +155,7 @@ class _Tracklet:
         self.total_frames: int = 0
         self.last_ts: float = 0.0
         self.created_ts: float = 0.0
+        self.keypoints_ema: np.ndarray | None = None  # shape (17, 2)
 
     @property
     def position(self) -> np.ndarray:
@@ -185,6 +221,7 @@ class FusionMOT:
         confidences: np.ndarray,
         features: np.ndarray | None,
         timestamp: float,
+        keypoints: np.ndarray | None = None,
     ) -> list[tuple[int, np.ndarray, float]]:
         """Run one frame of tracking.
 
@@ -194,6 +231,12 @@ class FusionMOT:
         confidences : (N,) float array
         features : (N, D) float array or None — appearance features
         timestamp : float
+        keypoints : (N, 17, 2) or (N, 17, 3) float array or None.
+            COCO-17 keypoints from a pose model.  Shape (N, 17, 2) contains
+            [x, y] pixel coords; shape (N, 17, 3) also includes a visibility
+            score in the third channel.  When provided and
+            ``use_hip_center=True``, the hip midpoint replaces the bbox
+            centroid as the Kalman measurement anchor.
 
         Returns
         -------
@@ -231,11 +274,19 @@ class FusionMOT:
         matched_track_set: set[int] = set()
         matched_det_set: set[int] = set()
 
+        # Helper: safely index keypoints array
+        def _kpts(idx: int) -> np.ndarray | None:
+            return keypoints[idx] if keypoints is not None else None
+
+        def _kpts_slice(idx_arr: np.ndarray) -> np.ndarray | None:
+            return keypoints[idx_arr] if keypoints is not None else None
+
         # ═══ Stage 1: High-conf detections vs ALL tracks (full cost) ═══
         if len(high_idx) > 0 and len(track_ids) > 0:
             cost = self._build_cost_matrix(
                 track_ids, bboxes[high_idx],
                 features[high_idx] if features is not None else None,
+                det_keypoints=_kpts_slice(high_idx),
             )
             t_matched, d_matched = self._hungarian_match(cost, threshold=0.70)
 
@@ -246,6 +297,7 @@ class FusionMOT:
                     tid, bboxes[det_i], confidences[det_i],
                     features[det_i] if features is not None else None,
                     timestamp,
+                    kpts=_kpts(det_i),
                 )
                 matched_track_set.add(tid)
                 matched_det_set.add(int(det_i))
@@ -266,6 +318,7 @@ class FusionMOT:
                     tid, bboxes[det_i], confidences[det_i],
                     None,  # no appearance update for low-conf
                     timestamp,
+                    # no keypoint update for low-conf to avoid noisy poses
                 )
                 matched_track_set.add(tid)
                 matched_det_set.add(int(det_i))
@@ -285,8 +338,12 @@ class FusionMOT:
         if unmatched_high and recovery_tracks:
             uh_bboxes = bboxes[unmatched_high]
             uh_feats = features[unmatched_high] if features is not None else None
+            uh_kpts = (keypoints[unmatched_high]
+                       if keypoints is not None else None)
             cost_s3 = self._build_recovery_cost(
-                recovery_tracks, uh_bboxes, uh_feats)
+                recovery_tracks, uh_bboxes, uh_feats,
+                det_keypoints=uh_kpts,
+            )
             t_m3, d_m3 = self._hungarian_match(
                 cost_s3, threshold=self._cfg.lost_match_threshold)
 
@@ -297,6 +354,7 @@ class FusionMOT:
                     tid, bboxes[det_i], confidences[det_i],
                     features[det_i] if features is not None else None,
                     timestamp,
+                    kpts=_kpts(det_i),
                 )
                 matched_track_set.add(tid)
                 matched_det_set.add(det_i)
@@ -308,6 +366,7 @@ class FusionMOT:
                     bboxes[i], confidences[i],
                     features[i] if features is not None else None,
                     timestamp,
+                    kpts=_kpts(i),
                 )
 
         # Mark unmatched tracks (with patience before declaring lost)
@@ -331,6 +390,7 @@ class FusionMOT:
         track_ids: list[int],
         det_bboxes: np.ndarray,
         det_features: np.ndarray | None,
+        det_keypoints: np.ndarray | None = None,
     ) -> np.ndarray:
         """Build fused cost matrix using Kalman-predicted positions.
 
@@ -340,7 +400,9 @@ class FusionMOT:
         recovering) gets a wider gate automatically, while a well-tracked
         target has a tight gate that rejects false matches.
 
-        cost = w_iou·(1-IoU) + w_app·(1-cosine)/2 + w_motion·mahal_norm + w_height·h_diff
+        cost = w_iou·(1-IoU) + w_app·(1-cosine)/2
+             + w_motion·mahal_norm + w_height·h_diff
+             [+ w_skeleton·skel_dist  (when keypoints available)]
         """
         M = len(track_ids)
         N = len(det_bboxes)
@@ -350,11 +412,33 @@ class FusionMOT:
         det_centers = det_bboxes[:, :2] + det_bboxes[:, 2:4] / 2
         det_heights = det_bboxes[:, 3]
 
+        # Precompute skeleton descriptors for all detections (once per frame)
+        compute_skel = (cfg.w_skeleton > 0.0 and det_keypoints is not None)
+        det_skel_descs: list[np.ndarray | None] = []
+        det_vis: list[np.ndarray | None] = []
+        if compute_skel:
+            for j in range(N):
+                kp = det_keypoints[j]           # (17, 2) or (17, 3)
+                v = kp[:, 2] if kp.shape[1] == 3 else None
+                xy = kp[:, :2]
+                det_vis.append(v)
+                det_skel_descs.append(
+                    self._skeleton_descriptor(xy, v, cfg.kp_visibility_thresh))
+        else:
+            det_vis = [None] * N
+            det_skel_descs = [None] * N
+
         for i, tid in enumerate(track_ids):
             t = self._tracklets[tid]
             t_pred_bbox = t.predicted_bbox()
             t_center = t.position
             t_height = t.height_ema if t.height_ema > 1.0 else t.bbox[3]
+
+            # Precompute per-track skeleton descriptor from EMA keypoints
+            t_skel_desc: np.ndarray | None = None
+            if compute_skel and t.keypoints_ema is not None:
+                t_skel_desc = self._skeleton_descriptor(
+                    t.keypoints_ema, None, cfg.kp_visibility_thresh)
 
             # Precompute inverse covariance for Mahalanobis
             if cfg.use_mahalanobis:
@@ -413,10 +497,19 @@ class FusionMOT:
                     h_ratio = min(t_height, det_heights[j]) / max(t_height, det_heights[j])
                     h_cost = 1.0 - h_ratio
 
+                # --- Skeleton proportion distance (pose-guided) ---
+                skel_cost = 0.5
+                if compute_skel and t_skel_desc is not None and det_skel_descs[j] is not None:
+                    dist = float(np.linalg.norm(t_skel_desc - det_skel_descs[j]))
+                    if dist > cfg.skeleton_gate and t.state != "lost":
+                        continue  # biomechanical gate: body proportions too different
+                    skel_cost = min(dist / max(cfg.skeleton_gate, 1e-6), 1.0)
+
                 total = (cfg.w_iou * iou_cost
                          + cfg.w_appearance * app_cost
                          + cfg.w_motion * motion_cost
-                         + cfg.w_height * h_cost)
+                         + cfg.w_height * h_cost
+                         + cfg.w_skeleton * skel_cost)
                 cost[i, j] = total
 
         return cost
@@ -426,13 +519,15 @@ class FusionMOT:
         track_ids: list[int],
         det_bboxes: np.ndarray,
         det_features: np.ndarray | None,
+        det_keypoints: np.ndarray | None = None,
     ) -> np.ndarray:
         """Cost matrix for lost track recovery (Stage 3).
 
         Uses Kalman-predicted position (which keeps drifting forward even
         during occlusion thanks to the CA model), with a much wider
         Mahalanobis gate — lost tracks accumulate covariance, so the gate
-        widens naturally.
+        widens naturally.  Skeleton descriptor is weighted more heavily here
+        since it is the most person-identity-stable signal.
         """
         M = len(track_ids)
         N = len(det_bboxes)
@@ -442,10 +537,26 @@ class FusionMOT:
         det_centers = det_bboxes[:, :2] + det_bboxes[:, 2:4] / 2
         det_heights = det_bboxes[:, 3]
 
+        compute_skel = (cfg.w_skeleton > 0.0 and det_keypoints is not None)
+        det_skel_descs: list[np.ndarray | None] = []
+        if compute_skel:
+            for j in range(N):
+                kp = det_keypoints[j]
+                v = kp[:, 2] if kp.shape[1] == 3 else None
+                det_skel_descs.append(
+                    self._skeleton_descriptor(kp[:, :2], v, cfg.kp_visibility_thresh))
+        else:
+            det_skel_descs = [None] * N
+
         for i, tid in enumerate(track_ids):
             t = self._tracklets[tid]
             t_center = t.position  # Kalman-predicted even when lost
             t_height = t.height_ema if t.height_ema > 1.0 else t.bbox[3]
+
+            t_skel_desc: np.ndarray | None = None
+            if compute_skel and t.keypoints_ema is not None:
+                t_skel_desc = self._skeleton_descriptor(
+                    t.keypoints_ema, None, cfg.kp_visibility_thresh)
 
             for j in range(N):
                 delta = det_centers[j] - t_center
@@ -473,11 +584,20 @@ class FusionMOT:
                     h_ratio = min(t_height, det_heights[j]) / max(t_height, det_heights[j])
                     h_cost = 1.0 - h_ratio
 
+                skel_cost = 0.5
+                if compute_skel and t_skel_desc is not None and det_skel_descs[j] is not None:
+                    dist_s = float(np.linalg.norm(t_skel_desc - det_skel_descs[j]))
+                    skel_cost = min(dist_s / max(cfg.skeleton_gate, 1e-6), 1.0)
+
                 pred_bbox = t.predicted_bbox()
+                # In recovery, skeleton descriptor carries extra weight as a
+                # person-identity anchor (body proportions are stable post-occlusion)
+                skel_w = cfg.w_skeleton * 1.5 if compute_skel else 0.0
                 total = (0.15 * motion_cost
                          + 0.65 * app_cost
                          + 0.10 * h_cost
-                         + 0.10 * (1.0 - self._iou(pred_bbox, det_bboxes[j])))
+                         + 0.10 * (1.0 - self._iou(pred_bbox, det_bboxes[j]))
+                         + skel_w * skel_cost)
                 cost[i, j] = total
 
         return cost
@@ -521,10 +641,19 @@ class FusionMOT:
     # ------------------------------------------------------------------
 
     def _init_tracklet(self, bbox: np.ndarray, conf: float,
-                       feat: np.ndarray | None, ts: float) -> int:
+                       feat: np.ndarray | None, ts: float,
+                       kpts: np.ndarray | None = None) -> int:
         tid = self._next_id
         self._next_id += 1
+
+        # Prefer hip center as Kalman anchor when keypoints are available
         center = bbox[:2] + bbox[2:4] / 2
+        if kpts is not None and self._cfg.use_hip_center:
+            xy = kpts[:, :2]
+            vis = kpts[:, 2] if kpts.shape[1] == 3 else None
+            hip = self._hip_center(xy, vis, self._cfg.kp_visibility_thresh)
+            if hip is not None:
+                center = np.array(hip, dtype=np.float64)
 
         t = _Tracklet(
             track_id=tid,
@@ -548,13 +677,25 @@ class FusionMOT:
             t.feature_ema = f
             t.feature_bank = [(f.copy(), conf, ts)]
 
+        if kpts is not None:
+            t.keypoints_ema = kpts[:, :2].copy().astype(np.float64)
+
         self._tracklets[tid] = t
         return tid
 
     def _update_tracklet(self, tid: int, bbox: np.ndarray, conf: float,
-                         feat: np.ndarray | None, ts: float) -> None:
+                         feat: np.ndarray | None, ts: float,
+                         kpts: np.ndarray | None = None) -> None:
         t = self._tracklets[tid]
+
+        # Prefer hip center as Kalman measurement when keypoints are available
         center = bbox[:2] + bbox[2:4] / 2
+        if kpts is not None and self._cfg.use_hip_center:
+            xy = kpts[:, :2]
+            vis = kpts[:, 2] if kpts.shape[1] == 3 else None
+            hip = self._hip_center(xy, vis, self._cfg.kp_visibility_thresh)
+            if hip is not None:
+                center = np.array(hip, dtype=np.float64)
 
         # Kalman measurement update (fuses position observation into state)
         t.kf.update(float(center[0]), float(center[1]))
@@ -597,6 +738,14 @@ class FusionMOT:
                 f /= n
             t.feature_ema = f
             t.feature_bank = [(f.copy(), conf, ts)]
+
+        # Keypoints EMA update (high-conf frames only, α=0.7 for stability)
+        if kpts is not None:
+            xy = kpts[:, :2].astype(np.float64)
+            if t.keypoints_ema is None:
+                t.keypoints_ema = xy.copy()
+            else:
+                t.keypoints_ema = 0.7 * t.keypoints_ema + 0.3 * xy
 
         # State transition
         if t.state == "tentative" and t.total_frames >= self._cfg.confirm_frames:
@@ -662,6 +811,94 @@ class FusionMOT:
         inter = iw * ih
         union = aw * ah + bw * bh - inter
         return float(inter / union) if union > 1e-6 else 0.0
+
+    @staticmethod
+    def _hip_center(
+        kpts: np.ndarray,
+        vis: np.ndarray | None = None,
+        vis_thresh: float = 0.3,
+    ) -> tuple[float, float] | None:
+        """Extract hip midpoint from COCO-17 keypoints.
+
+        Parameters
+        ----------
+        kpts : (17, 2) array — x, y pixel coordinates.
+        vis  : (17,) array — per-keypoint visibility [0, 1], or None.
+        vis_thresh : minimum visibility score to treat a keypoint as valid.
+
+        Returns
+        -------
+        (cx, cy) hip midpoint, or None if both hips are invisible.
+        """
+        if kpts is None or kpts.shape[0] < 13:
+            return None
+
+        def _valid(idx: int) -> bool:
+            if vis is not None:
+                return float(vis[idx]) >= vis_thresh
+            # Fallback: YOLO outputs (0, 0) for invisible keypoints
+            return float(np.linalg.norm(kpts[idx])) > 1.0
+
+        lh_ok = _valid(_KP_HIP_L)
+        rh_ok = _valid(_KP_HIP_R)
+
+        if lh_ok and rh_ok:
+            cx = (float(kpts[_KP_HIP_L, 0]) + float(kpts[_KP_HIP_R, 0])) / 2.0
+            cy = (float(kpts[_KP_HIP_L, 1]) + float(kpts[_KP_HIP_R, 1])) / 2.0
+            return (cx, cy)
+        if lh_ok:
+            return (float(kpts[_KP_HIP_L, 0]), float(kpts[_KP_HIP_L, 1]))
+        if rh_ok:
+            return (float(kpts[_KP_HIP_R, 0]), float(kpts[_KP_HIP_R, 1]))
+        return None
+
+    @staticmethod
+    def _skeleton_descriptor(
+        kpts: np.ndarray,
+        vis: np.ndarray | None = None,
+        vis_thresh: float = 0.3,
+    ) -> np.ndarray | None:
+        """Compute an 8-D bone-proportion descriptor normalized by torso diagonal.
+
+        The descriptor captures body proportions (shoulder/hip span, limb lengths)
+        relative to the torso — scale-invariant and stable across frames.
+        Invisible bones are encoded as 0 (neutral), so a partially occluded
+        person still produces a partial (but usable) descriptor.
+
+        Returns None only when the torso is too small to serve as normalizer
+        (both shoulders or both hips are invisible / out of frame).
+        """
+        if kpts is None or kpts.shape[0] < 17:
+            return None
+
+        def _vis(idx: int) -> bool:
+            if vis is not None:
+                return float(vis[idx]) >= vis_thresh
+            return float(np.linalg.norm(kpts[idx])) > 1.0
+
+        # Torso diagonal: average of (right_shoulder → left_hip) and
+        # (left_shoulder → right_hip) for robustness against single-side occlusion.
+        diag_candidates: list[float] = []
+        if _vis(_KP_SHOULDER_R) and _vis(_KP_HIP_L):
+            diag_candidates.append(float(np.linalg.norm(
+                kpts[_KP_SHOULDER_R] - kpts[_KP_HIP_L])))
+        if _vis(_KP_SHOULDER_L) and _vis(_KP_HIP_R):
+            diag_candidates.append(float(np.linalg.norm(
+                kpts[_KP_SHOULDER_L] - kpts[_KP_HIP_R])))
+
+        if not diag_candidates:
+            return None
+        normalizer = sum(diag_candidates) / len(diag_candidates)
+        if normalizer < 5.0:
+            return None
+
+        desc = np.zeros(len(_SKELETON_BONES), dtype=np.float64)
+        for k, (a, b) in enumerate(_SKELETON_BONES):
+            if _vis(a) and _vis(b):
+                desc[k] = float(np.linalg.norm(kpts[a] - kpts[b])) / normalizer
+            # invisible bone stays 0 (neutral, not penalised in distance)
+
+        return desc
 
     def reset(self) -> None:
         """Clear all state."""

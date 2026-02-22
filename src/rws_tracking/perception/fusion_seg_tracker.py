@@ -122,7 +122,14 @@ class FusionSegTracker:
 
     def detect_and_track(self, frame: np.ndarray,
                          timestamp: float) -> list[Track]:
-        """Run full pipeline: detect → extract features → FusionMOT(Kalman)."""
+        """Run full pipeline: detect → extract features → FusionMOT(Kalman).
+
+        Automatically extracts COCO-17 keypoints when the loaded model is a
+        pose model (``result.keypoints`` is not None).  Keypoints are passed
+        to FusionMOT so that hip center is used as the Kalman anchor and the
+        skeleton proportion descriptor is included in the cost matrix
+        (requires ``FusionMOTConfig.w_skeleton > 0``).
+        """
         if not isinstance(frame, np.ndarray):
             return []
 
@@ -139,6 +146,8 @@ class FusionSegTracker:
 
         all_bboxes: list[np.ndarray] = []
         all_confs: list[float] = []
+        all_keypoints: list[np.ndarray] = []   # (17, 3) per detection: [x, y, vis]
+        has_pose = False
 
         for result in results:
             boxes = result.boxes
@@ -147,6 +156,13 @@ class FusionSegTracker:
             xyxy = boxes.xyxy.cpu().numpy()
             confs = boxes.conf.cpu().numpy()
 
+            # Pose model outputs result.keypoints; seg/detect models do not
+            kpts_data = None
+            if result.keypoints is not None:
+                has_pose = True
+                # shape: (M, 17, 3) with [x, y, visibility] per keypoint
+                kpts_data = result.keypoints.data.cpu().numpy()
+
             for i in range(len(xyxy)):
                 x1, y1, x2, y2 = xyxy[i]
                 w, h = x2 - x1, y2 - y1
@@ -154,6 +170,8 @@ class FusionSegTracker:
                     continue
                 all_bboxes.append(np.array([x1, y1, w, h], dtype=np.float64))
                 all_confs.append(float(confs[i]))
+                if kpts_data is not None and i < len(kpts_data):
+                    all_keypoints.append(kpts_data[i].astype(np.float64))  # (17, 3)
 
         N = len(all_bboxes)
         if N == 0:
@@ -163,11 +181,19 @@ class FusionSegTracker:
         bboxes_arr = np.stack(all_bboxes)
         confs_arr = np.array(all_confs)
 
+        # Build keypoints array — only when all detections have pose data
+        keypoints_arr: np.ndarray | None = None
+        if has_pose and len(all_keypoints) == N:
+            keypoints_arr = np.stack(all_keypoints)  # (N, 17, 3)
+
         bbox_tuples = [(b[0], b[1], b[2], b[3]) for b in all_bboxes]
         features = self._reid.extract(frame, bbox_tuples)
         self._total_extractions += N
 
-        mot_results = self._mot.update(bboxes_arr, confs_arr, features, timestamp)
+        mot_results = self._mot.update(
+            bboxes_arr, confs_arr, features, timestamp,
+            keypoints=keypoints_arr,
+        )
 
         tracks: list[Track] = []
         for tid, bbox_xywh, conf in mot_results:
