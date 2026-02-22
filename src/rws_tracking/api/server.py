@@ -551,6 +551,10 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     from .metrics_routes import metrics_bp
     app.register_blueprint(metrics_bp)
 
+    # System self-test
+    from .selftest_routes import selftest_bp
+    app.register_blueprint(selftest_bp)
+
     return app
 
 
