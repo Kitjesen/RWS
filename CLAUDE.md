@@ -97,7 +97,7 @@ Frame → Detector → Tracker → Selector → StateMachine
 | `telemetry/` | `InMemoryTelemetryLogger`, `FileTelemetryLogger`, `AuditLogger` (SHA-256 chained JSONL), `VideoRingBuffer`, `generate_report()` (HTML mission debrief) |
 | `health/` | `HealthMonitor` (per-subsystem heartbeat → ok/degraded/failed) |
 | `config/` | YAML config loading + hot-reload, `ProfileManager` (named mission profiles) |
-| `api/` | REST (port 5000), gRPC (port 50051), MJPEG video stream; Blueprints: `fire_bp`, `health_bp`, `mission_bp`, `metrics_bp`, `selftest_bp` |
+| `api/` | REST (port 5000), gRPC (port 50051), MJPEG video stream; Blueprints: `fire_bp`, `health_bp`, `mission_bp`, `metrics_bp`, `selftest_bp`, `events_bp` (SSE), `replay_bp`, `safety_bp` |
 | `types/` | Shared frozen dataclasses and enums — `TrackState`, `BoundingBox`, layer-specific types |
 | `pipeline/` | `VisionGimbalPipeline`, `build_pipeline_from_config()` (composition root, wires all v2 components) |
 
@@ -126,6 +126,32 @@ GET /api/selftest  → pre-mission go/no-go check (7 subsystems)
 POST /api/mission/start → load profile, reset lifecycle, begin session
 POST /api/mission/end   → auto-safe, generate HTML mission report
 GET /api/fire/report    → serve HTML debrief from AuditLogger
+
+Operator C2:
+POST /api/fire/designate   → designate specific track (overrides auto-selector)
+DELETE /api/fire/designate → clear designation (return to auto)
+GET /api/fire/designate    → current designation status
+
+Safety zones CRUD:
+GET    /api/safety/zones        → list active NFZ
+POST   /api/safety/zones        → add NFZ (takes effect next pipeline step)
+DELETE /api/safety/zones/<id>   → remove NFZ
+
+After-action review:
+GET /api/replay/sessions                   → list telemetry JSONL files
+GET /api/replay/sessions/<file>            → events (filterable by type/time)
+GET /api/replay/sessions/<file>/summary   → lightweight session stats
+
+Real-time push (SSE):
+GET /api/events → Server-Sent Events stream
+Events: fire_chain_state, fire_executed, target_designated,
+        operator_timeout, mission_started, mission_ended,
+        config_reloaded, nfz_added, nfz_removed, heartbeat
+
+Flutter screens: Dashboard (polling), Replay (AAR event timeline)
+Flutter widgets: AlertBannerOverlay (SSE-driven), MissionControlWidget
+Config hot-reload: config.yaml mtime-watched; PID/selector changes
+                   applied to live pipeline without restart (2s interval)
 ```
 
 ### Key invatiants
