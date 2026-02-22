@@ -128,7 +128,7 @@ class FusionMOTConfig:
     w_skeleton: float = 0.0
     use_hip_center: bool = True
     skeleton_gate: float = 0.8
-    kp_visibility_thresh: float = 0.3
+    kp_visibility_thresh: float = 0.2
 
 
 class _Tracklet:
@@ -835,9 +835,13 @@ class FusionMOT:
 
         def _valid(idx: int) -> bool:
             if vis is not None:
-                return float(vis[idx]) >= vis_thresh
-            # Fallback: YOLO outputs (0, 0) for invisible keypoints
-            return float(np.linalg.norm(kpts[idx])) > 1.0
+                if float(vis[idx]) < vis_thresh:
+                    return False
+            # Guard: YOLO outputs (0, 0) for invisible keypoints regardless of
+            # visibility score — a pixel coordinate of (0,0) is almost certainly
+            # the top-left image corner and not a real body landmark.
+            px, py = float(kpts[idx, 0]), float(kpts[idx, 1])
+            return px > 1.0 and py > 1.0
 
         lh_ok = _valid(_KP_HIP_L)
         rh_ok = _valid(_KP_HIP_R)
@@ -873,8 +877,10 @@ class FusionMOT:
 
         def _vis(idx: int) -> bool:
             if vis is not None:
-                return float(vis[idx]) >= vis_thresh
-            return float(np.linalg.norm(kpts[idx])) > 1.0
+                if float(vis[idx]) < vis_thresh:
+                    return False
+            px, py = float(kpts[idx, 0]), float(kpts[idx, 1])
+            return px > 1.0 and py > 1.0
 
         # Torso diagonal: average of (right_shoulder → left_hip) and
         # (left_shoulder → right_hip) for robustness against single-side occlusion.

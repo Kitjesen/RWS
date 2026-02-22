@@ -217,7 +217,7 @@ def main():
                     w_skeleton=0.06,      # soft cue, not hard gate
                     use_hip_center=True,
                     skeleton_gate=1.2,    # wider: allows view-angle variation
-                    kp_visibility_thresh=0.3,
+                    kp_visibility_thresh=0.2,  # lower: catches small targets in high-res video
                 ),
             )
             results.append(run_test(t_d, vpath, "Pose+Skel", MAX))
