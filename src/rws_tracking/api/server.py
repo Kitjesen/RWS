@@ -520,6 +520,20 @@ def create_flask_app(api: TrackingAPI) -> Flask:
             app.extensions["audit_logger"] = pipeline._audit_logger
         if hasattr(pipeline, "_health_monitor") and pipeline._health_monitor is not None:
             app.extensions["health_monitor"] = pipeline._health_monitor
+        if hasattr(pipeline, "_safety_manager") and pipeline._safety_manager is not None:
+            app.extensions["safety_manager"] = pipeline._safety_manager
+        if hasattr(pipeline, "_iff_checker") and pipeline._iff_checker is not None:
+            app.extensions["iff_checker"] = pipeline._iff_checker
+
+    # Start operator watchdog if shooting chain is present.
+    if "shooting_chain" in app.extensions:
+        from ..safety.watchdog import OperatorWatchdog
+        watchdog = OperatorWatchdog(
+            app.extensions["shooting_chain"],
+            timeout_s=getattr(api, "_operator_timeout_s", 10.0),
+        )
+        watchdog.start()
+        app.extensions["operator_watchdog"] = watchdog
 
     # Fire control routes
     from .fire_routes import fire_bp

@@ -179,6 +179,10 @@ def operator_heartbeat():
     if sm is not None and hasattr(sm, "interlock"):
         sm.interlock.operator_heartbeat()
 
+    watchdog = current_app.extensions.get("operator_watchdog")
+    if watchdog is not None:
+        watchdog.heartbeat(operator_id)
+
     return jsonify({"ok": True, "operator_id": operator_id})
 
 
