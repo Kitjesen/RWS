@@ -248,4 +248,50 @@ class RwsApiClient {
 
   String get videoFeedUrl => '$baseUrl/api/video/feed';
   String get snapshotUrl => '$baseUrl/api/video/snapshot';
+
+  // --- Replay API ---
+
+  Future<List<Map<String, dynamic>>> getReplaySessions() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/replay/sessions'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        final list = data is List ? data : (data['sessions'] as List<dynamic>? ?? []);
+        return list.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>?> getReplaySession(
+    String filename, {
+    List<String> eventTypes = const [],
+    int limit = 5000,
+  }) async {
+    try {
+      final queryParams = <String, String>{'limit': limit.toString()};
+      for (final t in eventTypes) {
+        queryParams['event_type'] = t;
+      }
+      final uri = Uri.parse('$baseUrl/api/replay/sessions/$filename')
+          .replace(queryParameters: queryParams);
+      final resp = await _client.get(uri);
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> getReplaySessionSummary(String filename) async {
+    try {
+      final resp = await _client.get(
+        Uri.parse('$baseUrl/api/replay/sessions/$filename/summary'),
+      );
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
 }

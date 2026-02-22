@@ -36,6 +36,7 @@ class TrackingProvider extends ChangeNotifier {
   bool get connected => _connected;
   String get error => _error;
   String get snapshotUrl => _api.snapshotUrl;
+  RwsApiClient get api => _api;
   List<ThreatEntry> get threats => _threats;
   Map<String, SubsystemHealth> get health => _health;
   FireChainStatus get fireStatus => _fireStatus;

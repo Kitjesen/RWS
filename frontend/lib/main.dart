@@ -4,6 +4,7 @@ import 'services/api_client.dart';
 import 'services/event_stream.dart';
 import 'services/tracking_provider.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/replay_screen.dart';
 
 void main() {
   const backendUrl = 'http://localhost:5000';
@@ -38,7 +39,51 @@ class RwsApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const DashboardScreen(),
+      home: const RwsHome(),
+    );
+  }
+}
+
+class RwsHome extends StatefulWidget {
+  const RwsHome({super.key});
+
+  @override
+  State<RwsHome> createState() => _RwsHomeState();
+}
+
+class _RwsHomeState extends State<RwsHome> {
+  int _selectedIndex = 0;
+
+  static const List<Widget> _screens = [
+    DashboardScreen(),
+    ReplayScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _screens,
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() => _selectedIndex = index);
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history_outlined),
+            selectedIcon: Icon(Icons.history),
+            label: 'Replay',
+          ),
+        ],
+      ),
     );
   }
 }
