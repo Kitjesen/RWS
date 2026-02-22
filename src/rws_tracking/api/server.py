@@ -71,9 +71,10 @@ class TrackingAPI:
         self._annotator = FrameAnnotator(self._video_cfg)
         self._mjpeg_streamer = MJPEGStreamer(self._frame_buffer, self._video_cfg)
 
-        # Last known tracks for annotation
+        # Last known tracks/threats for annotation and API responses
         self._last_tracks: list = []
         self._selected_target_id: int | None = None
+        self._last_threat_assessments: list = []
 
     def start_tracking(self, camera_source: int | str = 0) -> dict[str, Any]:
         """Start the tracking pipeline."""
@@ -325,6 +326,9 @@ class TrackingAPI:
                 else:
                     self._selected_target_id = None
 
+                # Store threat assessments for /api/threats endpoint
+                self._last_threat_assessments = getattr(outputs, "threat_assessments", [])
+
                 # Push annotated frame to video buffer
                 if self._video_cfg.enabled:
                     state_text = f"FPS:{1.0 / max(ts - self.last_frame_time, 0.001):.0f} F:{self.frame_count}"
@@ -466,6 +470,53 @@ def create_flask_app(api: TrackingAPI) -> Flask:
             "annotate_tracks": cfg.annotate_tracks,
             "annotate_crosshair": cfg.annotate_crosshair,
         })
+
+    @app.route("/api/threats", methods=["GET"])
+    def get_threats():
+        """Return current threat assessment list (from ThreatAssessor).
+
+        Response shape:
+        {
+          "threats": [
+            {"track_id": 1, "threat_score": 0.85, "priority_rank": 1,
+             "distance_score": 0.7, "velocity_score": 0.3,
+             "class_score": 0.4, "heading_score": 0.5, "class_id": "person",
+             "distance_m": 45.2},
+            ...
+          ]
+        }
+        """
+        threats_out = []
+        # Merge threat assessment with track info (class_id comes from Track)
+        track_class: dict[int, str] = {
+            t.track_id: t.class_id for t in api._last_tracks
+        }
+        dist_cache: dict[int, float] = getattr(api, "_distance_cache", {})
+        if not hasattr(api, "_distance_cache"):
+            # Try to get from pipeline if available
+            if api.pipeline and hasattr(api.pipeline, "_distance_cache"):
+                dist_cache = api.pipeline._distance_cache
+
+        for ta in api._last_threat_assessments:
+            threats_out.append({
+                "track_id": ta.track_id,
+                "threat_score": round(ta.threat_score, 4),
+                "priority_rank": ta.priority_rank,
+                "distance_score": round(ta.distance_score, 4),
+                "velocity_score": round(ta.velocity_score, 4),
+                "class_score": round(ta.class_score, 4),
+                "heading_score": round(ta.heading_score, 4),
+                "class_id": track_class.get(ta.track_id, "unknown"),
+                "distance_m": round(dist_cache.get(ta.track_id, 0.0), 1),
+            })
+        return jsonify({"threats": threats_out})
+
+    # Fire control routes
+    from .fire_routes import fire_bp
+    app.register_blueprint(fire_bp)
+
+    from .health_routes import health_bp
+    app.register_blueprint(health_bp)
 
     return app
 

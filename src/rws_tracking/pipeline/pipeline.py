@@ -29,6 +29,7 @@ from ..hardware.interfaces import GimbalDriver
 from ..hardware.rangefinder import RangefinderProvider
 from ..perception.interfaces import Detector, TargetSelector, Tracker
 from ..safety.interfaces import SafetyEvaluatorProtocol
+from ..safety.shooting_chain import ShootingChain
 from ..telemetry.interfaces import TelemetryLogger
 from .protocols import FrameAnnotatorProtocol, FrameBufferProtocol
 from ..types import (
@@ -107,6 +108,7 @@ class VisionGimbalPipeline:
         trajectory_planner: TrajectoryPlannerProtocol | None = None,
         frame_buffer: FrameBufferProtocol | None = None,
         frame_annotator: FrameAnnotatorProtocol | None = None,
+        shooting_chain: ShootingChain | None = None,
         # Minimum time (s) a target must be continuously LOCK+fire_authorized
         # before the engagement queue auto-advances to the next target.
         # Set to 0.0 to disable auto-advance.
@@ -132,6 +134,7 @@ class VisionGimbalPipeline:
         self._trajectory_planner = trajectory_planner
         self._frame_buffer = frame_buffer
         self._frame_annotator = frame_annotator
+        self._shooting_chain = shooting_chain
 
         self._last_target_id: int | None = None
         self._stop_flag = False
@@ -314,6 +317,24 @@ class VisionGimbalPipeline:
             if self._engagement_dwell_id is not None:
                 self._engagement_dwell_id = None
                 self._engagement_dwell_start = None
+
+        # =====================================================================
+        # 7c. ShootingChain update (optional)
+        # =====================================================================
+        if self._shooting_chain is not None:
+            self._shooting_chain.update_authorization(
+                safety_status.fire_authorized if safety_status else False,
+                timestamp,
+            )
+            self._shooting_chain.tick(timestamp)
+            if self._shooting_chain.can_fire:
+                fired = self._shooting_chain.execute_fire(timestamp)
+                if fired:
+                    logger.info(
+                        "FIRE EXECUTED: target=%s ts=%.3f",
+                        selected.track_id if selected else None,
+                        timestamp,
+                    )
 
         # =====================================================================
         # 8. 控制指令计算 (PID + 弹道 + 提前量)

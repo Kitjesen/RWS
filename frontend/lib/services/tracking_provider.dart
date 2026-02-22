@@ -1,0 +1,157 @@
+/// RWS 状态管理 Provider
+library;
+
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import '../models/tracking_models.dart';
+import 'api_client.dart';
+
+class TrackingProvider extends ChangeNotifier {
+  final RwsApiClient _api;
+  Timer? _pollTimer;
+
+  TrackingStatus _status = TrackingStatus();
+  bool _connected = false;
+  String _error = '';
+
+  // 新增: 威胁、健康、火控状态
+  List<ThreatEntry> _threats = [];
+  Map<String, SubsystemHealth> _health = {};
+  FireChainStatus _fireStatus =
+      FireChainStatus(state: 'not_configured', canFire: false);
+
+  // 误差历史 (用于图表)
+  final List<double> yawErrorHistory = [];
+  final List<double> pitchErrorHistory = [];
+  final List<double> timestampHistory = [];
+  static const int maxHistory = 300; // 10s @ 30Hz
+
+  TrackingProvider({required RwsApiClient api}) : _api = api;
+
+  TrackingStatus get status => _status;
+  bool get connected => _connected;
+  String get error => _error;
+  String get snapshotUrl => _api.snapshotUrl;
+  List<ThreatEntry> get threats => _threats;
+  Map<String, SubsystemHealth> get health => _health;
+  FireChainStatus get fireStatus => _fireStatus;
+
+  void startPolling({Duration interval = const Duration(milliseconds: 200)}) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(interval, (_) => _poll());
+  }
+
+  void stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _poll() async {
+    try {
+      _status = await _api.getStatus();
+      _connected = true;
+      _error = '';
+
+      // 记录历史
+      final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+      yawErrorHistory.add(_status.yawErrorDeg);
+      pitchErrorHistory.add(_status.pitchErrorDeg);
+      timestampHistory.add(now);
+      if (yawErrorHistory.length > maxHistory) {
+        yawErrorHistory.removeAt(0);
+        pitchErrorHistory.removeAt(0);
+        timestampHistory.removeAt(0);
+      }
+
+      notifyListeners();
+
+      // 并行拉取威胁、健康、火控 (不阻塞主状态)
+      _pollExtended();
+    } catch (e) {
+      _connected = false;
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> _pollExtended() async {
+    try {
+      final results = await Future.wait([
+        _api.getThreats(),
+        _api.getSubsystemHealth(),
+        _api.getFireStatus(),
+      ]);
+      _threats = results[0] as List<ThreatEntry>;
+      _health = results[1] as Map<String, SubsystemHealth>;
+      _fireStatus = results[2] as FireChainStatus;
+      notifyListeners();
+    } catch (_) {
+      // 扩展轮询失败不影响主连接状态
+    }
+  }
+
+  // --- 火控操作 ---
+
+  Future<void> armSystem() async {
+    try {
+      await _api.armSystem('operator_1');
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> safeSystem() async {
+    try {
+      await _api.safeSystem('operator request');
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> requestFire() async {
+    try {
+      await _api.requestFire('operator_1');
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<bool> startTracking() async {
+    try {
+      return await _api.startTracking();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> stopTracking() async {
+    try {
+      return await _api.stopTracking();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updatePid(String axis, PidParams params) async {
+    try {
+      return await _api.updatePid(axis, params);
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  @override
+  void dispose() {
+    stopPolling();
+    super.dispose();
+  }
+}
