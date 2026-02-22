@@ -27,11 +27,11 @@ class WeightedMultiTargetSelector:
         self,
         frame_width: int,
         frame_height: int,
-        config: SelectorConfig,
+        config: SelectorConfig | None = None,
     ):
         self._w = frame_width
         self._h = frame_height
-        self._cfg = config
+        self._cfg = config if config is not None else SelectorConfig()
         self._last_selected_ids: list[int] = []
 
     def select_multiple(
@@ -92,6 +92,10 @@ class WeightedMultiTargetSelector:
         )
 
         return selected
+
+    # Backwards-compatible alias
+    def select(self, tracks: list[Track], timestamp: float, max_targets: int = 3) -> list[TargetObservation]:
+        return self.select_multiple(tracks, timestamp, max_targets=max_targets)
 
     def _compute_score(self, track: Track, timestamp: float) -> float:
         """Compute weighted score for a track."""

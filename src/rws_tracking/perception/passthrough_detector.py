@@ -17,7 +17,7 @@ class PassthroughDetector:
         """Pre-load detections to be returned on the next detect() call."""
         self._injected = list(detections)
 
-    def detect(self, frame: object, timestamp: float) -> list[Detection]:
+    def detect(self, frame: object, timestamp: float = 0.0) -> list[Detection]:
         # If pre-injected detections are available, consume them first.
         if hasattr(self, "_injected") and self._injected:
             out = self._injected
