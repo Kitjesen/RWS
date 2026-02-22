@@ -292,6 +292,52 @@ class RwsApiClient {
     }
   }
 
+  // --- IFF (识别敌我) 友军白名单 ---
+
+  Future<List<int>> getIffFriendlyIds() async {
+    try {
+      final resp =
+          await _client.get(Uri.parse('$baseUrl/api/fire/iff/status'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        final list =
+            data['friendly_track_ids'] as List<dynamic>? ?? [];
+        return list.map((e) => e as int).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> markFriendly(int trackId) async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/fire/iff/mark_friendly'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'track_id': trackId}),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['ok'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> unmarkFriendly(int trackId) async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/fire/iff/unmark_friendly'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'track_id': trackId}),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['ok'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   // --- 目标指定 (C2 designation) ---
 
   Future<bool> designateTarget(int trackId, {String operatorId = 'operator_1'}) async {

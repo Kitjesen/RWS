@@ -5,6 +5,7 @@ import 'services/event_stream.dart';
 import 'services/tracking_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/replay_screen.dart';
+import 'screens/safety_screen.dart';
 
 void main() {
   const backendUrl = 'http://localhost:5000';
@@ -57,6 +58,7 @@ class _RwsHomeState extends State<RwsHome> {
   static const List<Widget> _screens = [
     DashboardScreen(),
     ReplayScreen(),
+    SafetyScreen(),
   ];
 
   @override
@@ -81,6 +83,11 @@ class _RwsHomeState extends State<RwsHome> {
             icon: Icon(Icons.history_outlined),
             selectedIcon: Icon(Icons.history),
             label: 'Replay',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.security_outlined),
+            selectedIcon: Icon(Icons.security),
+            label: 'Safety',
           ),
         ],
       ),

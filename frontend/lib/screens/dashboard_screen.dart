@@ -13,7 +13,6 @@ import '../widgets/system_health_widget.dart';
 import '../widgets/fire_control_widget.dart';
 import '../widgets/threat_queue_widget.dart';
 import '../widgets/mission_control_widget.dart';
-import '../widgets/safety_zones_widget.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -107,8 +106,6 @@ class DashboardScreen extends StatelessWidget {
               const Expanded(flex: 3, child: FireControlWidget()),
               const SizedBox(height: 12),
               const Expanded(flex: 3, child: ThreatQueueWidget()),
-              const SizedBox(height: 12),
-              const Expanded(flex: 3, child: SafetyZonesWidget()),
             ],
           ),
         ),
@@ -190,8 +187,6 @@ class DashboardScreen extends StatelessWidget {
         SizedBox(height: 280, child: FireControlWidget()),
         SizedBox(height: 12),
         SizedBox(height: 300, child: ThreatQueueWidget()),
-        SizedBox(height: 12),
-        SizedBox(height: 320, child: SafetyZonesWidget()),
       ],
     );
   }
