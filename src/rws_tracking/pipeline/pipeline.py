@@ -37,6 +37,13 @@ from ..telemetry.audit import AuditLogger
 from ..telemetry.interfaces import TelemetryLogger
 from ..telemetry.video_ring_buffer import VideoRingBuffer
 from .protocols import FrameAnnotatorProtocol, FrameBufferProtocol
+
+# Optional SSE event bus — imported lazily to avoid circular imports at module
+# load time.  If the events module is not available, we silently skip emission.
+try:
+    from ..api.events import event_bus as _event_bus
+except Exception:  # pragma: no cover
+    _event_bus = None  # type: ignore[assignment]
 from ..types import (
     BallisticSolution,
     ControlCommand,
@@ -393,6 +400,15 @@ class VisionGimbalPipeline:
                         blocked_reason=(safety_status.blocked_reason
                                         if safety_status and not fire_auth else ""),
                     )
+                # Push SSE event for real-time operator notification.
+                if _event_bus is not None:
+                    _event_bus.emit("fire_chain_state", {
+                        "state": new_state,
+                        "prev_state": self._last_chain_state,
+                        "target_id": selected.track_id if selected else None,
+                        "fire_authorized": fire_auth,
+                        "ts": round(timestamp, 3),
+                    })
                 self._last_chain_state = new_state
 
             if self._shooting_chain.can_fire:
@@ -414,6 +430,16 @@ class VisionGimbalPipeline:
                             distance_m=distance_m,
                             fire_authorized=True,
                         )
+                    # SSE: notify operator of fire execution.
+                    if _event_bus is not None:
+                        _event_bus.emit("fire_executed", {
+                            "target_id": selected.track_id if selected else None,
+                            "threat_score": round(
+                                threat_assessments[0].threat_score
+                                if threat_assessments else 0.0, 4),
+                            "distance_m": round(distance_m, 1),
+                            "ts": round(timestamp, 3),
+                        })
                     if (self._lifecycle_manager is not None
                             and selected is not None):
                         self._lifecycle_manager.mark_neutralized(

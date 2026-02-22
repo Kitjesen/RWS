@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/tracking_provider.dart';
+import '../services/event_stream.dart';
+import '../widgets/alert_banner.dart';
 import '../widgets/status_card.dart';
 import '../widgets/error_chart.dart';
 import '../widgets/gimbal_indicator.dart';
@@ -24,7 +26,17 @@ class DashboardScreen extends StatelessWidget {
           Consumer<TrackingProvider>(
             builder: (_, p, __) => Row(
               children: [
-                Icon(
+                Consumer<EventStreamService>(
+                builder: (_, es, __) => Tooltip(
+                  message: es.connected ? 'Events connected' : 'Events disconnected',
+                  child: Icon(
+                    es.connected ? Icons.bolt : Icons.bolt_outlined,
+                    color: es.connected ? Colors.amber : Colors.grey,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
                   p.connected ? Icons.wifi : Icons.wifi_off,
                   color: p.connected ? Colors.green : Colors.red,
                 ),
@@ -34,7 +46,8 @@ class DashboardScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
+      body: AlertBannerOverlay(
+        child: Padding(
         padding: const EdgeInsets.all(12),
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -47,6 +60,7 @@ class DashboardScreen extends StatelessWidget {
           },
         ),
       ),
+      ),  // AlertBannerOverlay
     );
   }
 

@@ -119,4 +119,14 @@ class OperatorWatchdog:
                     self._chain.safe(f"heartbeat_timeout_{elapsed:.0f}s")
                 except Exception as exc:  # noqa: BLE001
                     logger.error("watchdog: failed to safe chain: %s", exc)
+                # Notify connected SSE subscribers of the operator timeout.
+                try:
+                    from ..api.events import event_bus
+                    event_bus.emit("operator_timeout", {
+                        "elapsed_s": round(elapsed, 1),
+                        "timeout_s": self._timeout_s,
+                        "ts": round(time.time(), 3),
+                    })
+                except Exception:  # noqa: BLE001
+                    pass
             time.sleep(self._check_interval_s)

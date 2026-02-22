@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/api_client.dart';
+import 'services/event_stream.dart';
 import 'services/tracking_provider.dart';
 import 'screens/dashboard_screen.dart';
 
 void main() {
-  final api = RwsApiClient(baseUrl: 'http://localhost:5000');
+  const backendUrl = 'http://localhost:5000';
+  final api = RwsApiClient(baseUrl: backendUrl);
+  final eventStream = EventStreamService(baseUrl: backendUrl)..connect();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => TrackingProvider(api: api)..startPolling(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => TrackingProvider(api: api)..startPolling(),
+        ),
+        ChangeNotifierProvider.value(value: eventStream),
+      ],
       child: const RwsApp(),
     ),
   );

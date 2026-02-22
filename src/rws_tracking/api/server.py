@@ -555,6 +555,11 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     from .selftest_routes import selftest_bp
     app.register_blueprint(selftest_bp)
 
+    # Real-time SSE event stream
+    from .events import events_bp, event_bus
+    app.register_blueprint(events_bp)
+    event_bus.start()
+
     return app
 
 

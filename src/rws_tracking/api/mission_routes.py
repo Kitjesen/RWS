@@ -148,6 +148,17 @@ def mission_start():
     )
 
     logger.info("mission START: session=%s profile=%s", session_id, profile_name)
+
+    try:
+        from .events import event_bus
+        event_bus.emit("mission_started", {
+            "session_id": session_id,
+            "profile": profile_name,
+            "ts": round(time.time(), 3),
+        })
+    except Exception:
+        pass
+
     return jsonify({
         "ok": True,
         "session_id": session_id,
@@ -200,6 +211,17 @@ def mission_end():
     session_id = _mission_state.get("session_id")
 
     _reset_state()
+
+    try:
+        from .events import event_bus
+        event_bus.emit("mission_ended", {
+            "session_id": session_id,
+            "elapsed_s": elapsed,
+            "report_path": report_path,
+            "ts": round(time.time(), 3),
+        })
+    except Exception:
+        pass
 
     return jsonify({
         "ok": True,
