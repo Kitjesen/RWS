@@ -30,7 +30,7 @@ from ..perception import (
     WeightedTargetSelector,
     YoloSegTracker,
 )
-from ..telemetry import InMemoryTelemetryLogger
+from ..telemetry import FileTelemetryLogger, InMemoryTelemetryLogger
 from ..tools.simulation import WorldCoordinateScene, WorldSimTarget
 from ..tools.tuning import grid_search_pid
 from .pipeline import VisionGimbalPipeline
@@ -429,6 +429,7 @@ def build_pipeline_from_config(
     from ..safety.shooting_chain import ShootingChain
     from ..safety.iff import IFFChecker
     from ..telemetry.audit import AuditLogger
+    from ..telemetry.video_ring_buffer import VideoRingBuffer
     from ..health.monitor import HealthMonitor
     from ..decision.lifecycle import TargetLifecycleManager
 
@@ -445,6 +446,14 @@ def build_pipeline_from_config(
     )
     iff_checker = IFFChecker(friendly_classes={"civilian", "friendly"})
 
+    video_ring_buffer = VideoRingBuffer(
+        duration_s=getattr(cfg, "clip_buffer_duration_s", 10.0),
+        pre_event_s=getattr(cfg, "clip_pre_event_s", 3.0),
+        post_event_s=getattr(cfg, "clip_post_event_s", 2.0),
+        output_dir=getattr(cfg, "clip_output_dir", "logs/clips"),
+        fps=getattr(cfg, "clip_fps", 30.0),
+    )
+
     return VisionGimbalPipeline(
         detector=PassthroughDetector(),
         tracker=SimpleIoUTracker(),
@@ -455,7 +464,10 @@ def build_pipeline_from_config(
         ),
         controller=TwoAxisGimbalController(transform=transform, cfg=cfg.controller),
         driver=SimulatedGimbalDriver(DriverLimits.from_config(cfg.driver_limits)),
-        telemetry=InMemoryTelemetryLogger(),
+        telemetry=FileTelemetryLogger(
+            file_path=getattr(cfg, "telemetry_log_path", "logs/telemetry.jsonl"),
+            append=True,
+        ),
         combined_tracker=seg_tracker,
         body_provider=body_provider,
         threat_assessor=threat_assessor,
@@ -473,6 +485,7 @@ def build_pipeline_from_config(
         health_monitor=health_monitor,
         lifecycle_manager=lifecycle_manager,
         iff_checker=iff_checker,
+        video_ring_buffer=video_ring_buffer,
     )
 
 
