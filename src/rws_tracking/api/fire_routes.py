@@ -258,26 +258,4 @@ def download_clip(filename: str):
     )
 
 
-def _parse_timestamp_from_filename(name: str) -> float:
-    """Extract a float timestamp from a clip filename.
-
-    Clip filenames follow the pattern ``<label>_<ts_int>_<ts_frac>.mp4`` where
-    the timestamp seconds were formatted as ``{ts:.3f}`` with the ``.``
-    replaced by ``_``.  For example ``fire_1708123456_789.mp4`` encodes
-    ``1708123456.789``.
-
-    Falls back to 0.0 if no numeric pattern is found.
-    """
-    stem = Path(name).stem  # strip extension
-    # Match the last two numeric groups separated by _ that look like
-    # <integer>_<3-digit-fraction>
-    m = _TS_RE.search(stem)
-    if m:
-        try:
-            return float(f"{m.group(1)}.{m.group(2)}")
-        except ValueError:
-            pass
-    return 0.0
-
-
-_TS_RE = __import__("re").compile(r"_(\d+)_(\d{3})$")
+from ..telemetry.video_ring_buffer import _parse_timestamp_from_filename
