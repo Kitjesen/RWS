@@ -29,11 +29,13 @@ from ..hardware.interfaces import GimbalDriver
 from ..hardware.rangefinder import RangefinderProvider
 from ..perception.interfaces import Detector, TargetSelector, Tracker
 from ..safety.interfaces import SafetyEvaluatorProtocol
+from ..safety.iff import IFFChecker
 from ..decision.lifecycle import TargetLifecycleManager
 from ..health.monitor import HealthMonitor
 from ..safety.shooting_chain import ShootingChain
 from ..telemetry.audit import AuditLogger
 from ..telemetry.interfaces import TelemetryLogger
+from ..telemetry.video_ring_buffer import VideoRingBuffer
 from .protocols import FrameAnnotatorProtocol, FrameBufferProtocol
 from ..types import (
     BallisticSolution,
@@ -88,6 +90,7 @@ class VisionGimbalPipeline:
     - ``trajectory_planner`` : 轨迹规划
     - ``frame_buffer`` : 视频帧缓冲
     - ``frame_annotator`` : 帧标注
+    - ``video_ring_buffer`` : 环形缓冲区（火控事件录像）
     """
 
     def __init__(
@@ -115,6 +118,8 @@ class VisionGimbalPipeline:
         audit_logger: AuditLogger | None = None,
         health_monitor: HealthMonitor | None = None,
         lifecycle_manager: TargetLifecycleManager | None = None,
+        iff_checker: IFFChecker | None = None,
+        video_ring_buffer: VideoRingBuffer | None = None,
         # Minimum time (s) a target must be continuously LOCK+fire_authorized
         # before the engagement queue auto-advances to the next target.
         # Set to 0.0 to disable auto-advance.
@@ -144,6 +149,8 @@ class VisionGimbalPipeline:
         self._audit_logger = audit_logger
         self._health_monitor = health_monitor
         self._lifecycle_manager = lifecycle_manager
+        self._iff_checker = iff_checker
+        self._video_ring_buffer = video_ring_buffer
 
         self._last_target_id: int | None = None
         self._last_chain_state: str = ""
@@ -293,7 +300,31 @@ class VisionGimbalPipeline:
             )
 
         # =====================================================================
-        # 7b. 交战队列自动推进 (可选)
+        # 7b. IFF check (optional): block fire if selected target is friendly
+        # =====================================================================
+        if (
+            self._iff_checker is not None
+            and safety_status is not None
+            and selected is not None
+        ):
+            iff_results = self._iff_checker.check(tracks)
+            iff_result = iff_results.get(selected.track_id)
+            if iff_result is not None and iff_result.is_friend:
+                logger.warning(
+                    "IFF: target %d identified as FRIEND (%s) — fire blocked",
+                    selected.track_id,
+                    iff_result.reason,
+                )
+                safety_status = SafetyStatus(
+                    fire_authorized=False,
+                    blocked_reason=f"IFF:{iff_result.reason}",
+                    active_zone=safety_status.active_zone,
+                    operator_override=safety_status.operator_override,
+                    emergency_stop=safety_status.emergency_stop,
+                )
+
+        # =====================================================================
+        # 7c. 交战队列自动推进 (可选)
         #
         # 触发条件: 当前目标持续 LOCK + fire_authorized >= engagement_dwell_time_s
         # 意义: 系统确认已对该目标充分瞄准，自动切换到下一优先目标。
@@ -387,6 +418,13 @@ class VisionGimbalPipeline:
                             and selected is not None):
                         self._lifecycle_manager.mark_neutralized(
                             selected.track_id, timestamp
+                        )
+                    if self._video_ring_buffer is not None:
+                        track_id_for_clip = (
+                            selected.track_id if selected is not None else None
+                        )
+                        self._video_ring_buffer.save_clip(
+                            timestamp, "fire", track_id_for_clip
                         )
 
         # HealthMonitor: report pipeline heartbeat each frame.
@@ -511,12 +549,12 @@ class VisionGimbalPipeline:
         # =====================================================================
         # 12. 视频帧推送 (可选)
         # =====================================================================
-        if self._frame_buffer is not None and frame is not None:
+        if frame is not None:
             import numpy as np
 
             if isinstance(frame, np.ndarray):
                 annotated = frame
-                if self._frame_annotator is not None:
+                if self._frame_annotator is not None and self._frame_buffer is not None:
                     state_str = str(command.metadata.get("state", ""))
                     status_text = f"D:{distance_m:.0f}m" if distance_m > 0 else ""
                     if safety_status is not None and not safety_status.fire_authorized:
@@ -527,7 +565,10 @@ class VisionGimbalPipeline:
                         selected_id=selected.track_id if selected else None,
                         status_text=status_text,
                     )
-                self._frame_buffer.push(annotated, timestamp)
+                if self._frame_buffer is not None:
+                    self._frame_buffer.push(annotated, timestamp)
+                if self._video_ring_buffer is not None:
+                    self._video_ring_buffer.push(frame, timestamp)
 
         return PipelineOutputs(
             selected_target=selected,

@@ -427,6 +427,7 @@ def build_pipeline_from_config(
     # ---- v2 extension components ----
 
     from ..safety.shooting_chain import ShootingChain
+    from ..safety.iff import IFFChecker
     from ..telemetry.audit import AuditLogger
     from ..health.monitor import HealthMonitor
     from ..decision.lifecycle import TargetLifecycleManager
@@ -442,6 +443,7 @@ def build_pipeline_from_config(
         confirm_age_frames=getattr(cfg, "lifecycle_confirm_frames", 3),
         archive_after_s=getattr(cfg, "lifecycle_archive_s", 10.0),
     )
+    iff_checker = IFFChecker(friendly_classes={"civilian", "friendly"})
 
     return VisionGimbalPipeline(
         detector=PassthroughDetector(),
@@ -470,6 +472,7 @@ def build_pipeline_from_config(
         audit_logger=audit_logger,
         health_monitor=health_monitor,
         lifecycle_manager=lifecycle_manager,
+        iff_checker=iff_checker,
     )
 
 
