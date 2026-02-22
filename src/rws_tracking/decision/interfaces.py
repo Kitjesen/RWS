@@ -10,7 +10,11 @@ from ..types import ThreatAssessment, Track
 class ThreatAssessorProtocol(Protocol):
     """评估跟踪目标的威胁等级。"""
 
-    def assess(self, tracks: list[Track]) -> list[ThreatAssessment]: ...
+    def assess(
+        self,
+        tracks: list[Track],
+        distance_map: dict[int, float] | None = None,
+    ) -> list[ThreatAssessment]: ...
 
 
 class EngagementQueueProtocol(Protocol):

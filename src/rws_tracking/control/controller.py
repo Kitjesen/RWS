@@ -120,6 +120,7 @@ class TwoAxisGimbalController:
         self._prev_state: TrackState = TrackState.SEARCH
         self._last_error: TargetError | None = None
         self._last_target: TargetObservation | None = None
+        self._last_tracked_id: int | None = None
 
         # 状态机：外部注入优先，否则内部创建默认实现
         if state_machine is not None:
@@ -209,6 +210,17 @@ class TwoAxisGimbalController:
         """
         dt = max(timestamp - self._last_ts, 1e-3) if self._last_ts > 0.0 else 0.01
         self._last_ts = timestamp
+
+        # Partial PID reset on target switch: carry only 10% of integral to avoid
+        # a transient kick from the previous target's wind-up.
+        new_id = target.track_id if target is not None else None
+        if new_id is not None and new_id != self._last_tracked_id:
+            self._yaw_pid.state.integral *= 0.1
+            self._yaw_pid.state.d_lpf = 0.0
+            self._pitch_pid.state.integral *= 0.1
+            self._pitch_pid.state.d_lpf = 0.0
+            logger.debug("PID partial reset: track %s -> %s", self._last_tracked_id, new_id)
+        self._last_tracked_id = new_id
 
         error, vel_yaw_dps, vel_pitch_dps = self._estimate_error(target, timestamp)
         ballistic_comp = 0.0

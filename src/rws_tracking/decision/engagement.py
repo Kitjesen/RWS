@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, Optional
 
 from ..types import ThreatAssessment, Track
 
@@ -87,6 +87,9 @@ class EngagementConfig:
     velocity_norm_px_s: float = 200.0
     target_height_m: float = 1.8
     sector_size_deg: float = 30.0
+    # Camera horizontal focal length (px). When > 0, sector_sweep uses the
+    # correct atan2 angular formula instead of a linear pixel mapping.
+    camera_fx: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -117,13 +120,20 @@ class ThreatAssessor:
         self._fy = camera_fy
         self._cfg = config
 
-    def assess(self, tracks: list[Track]) -> list[ThreatAssessment]:
+    def assess(
+        self,
+        tracks: list[Track],
+        distance_map: dict[int, float] | None = None,
+    ) -> list[ThreatAssessment]:
         """对所有目标执行威胁评估并返回排序后的结果。
 
         Parameters
         ----------
         tracks : list[Track]
             当前帧所有活跃 Track。
+        distance_map : dict[track_id -> distance_m], optional
+            来自 DistanceFusion 的已知距离（激光优先）。提供时优先使用，
+            缺失条目回退到 bbox 估距。
 
         Returns
         -------
@@ -136,7 +146,7 @@ class ThreatAssessor:
         assessments: list[ThreatAssessment] = []
 
         for track in tracks:
-            dist_m = self._estimate_distance(track)
+            dist_m = self._estimate_distance(track, distance_map)
 
             # 超出最大交战距离则跳过
             if dist_m > self._cfg.max_engagement_range_m:
@@ -172,7 +182,7 @@ class ThreatAssessor:
             ))
 
         # 排序
-        assessments = self._sort_by_strategy(assessments, tracks)
+        assessments = self._sort_by_strategy(assessments, tracks, distance_map)
 
         # 赋予排名
         ranked: list[ThreatAssessment] = []
@@ -197,8 +207,18 @@ class ThreatAssessor:
 
         return ranked
 
-    def _estimate_distance(self, track: Track) -> float:
-        """从 bbox 估距。"""
+    def _estimate_distance(
+        self,
+        track: Track,
+        distance_map: dict[int, float] | None = None,
+    ) -> float:
+        """返回目标距离 (m)。
+
+        优先使用 distance_map（来自 DistanceFusion 的激光/融合距离）；
+        缺失时回退到 bbox 单目估距。
+        """
+        if distance_map and track.track_id in distance_map:
+            return distance_map[track.track_id]
         if track.bbox.h <= 1.0:
             return self._cfg.max_engagement_range_m
         return (self._cfg.target_height_m * self._fy) / track.bbox.h
@@ -260,13 +280,14 @@ class ThreatAssessor:
         self,
         assessments: list[ThreatAssessment],
         tracks: list[Track],
+        distance_map: dict[int, float] | None = None,
     ) -> list[ThreatAssessment]:
         """按策略排序。"""
         if self._cfg.strategy == "nearest_first":
             track_map = {t.track_id: t for t in tracks}
             return sorted(
                 assessments,
-                key=lambda a: self._estimate_distance(track_map[a.track_id])
+                key=lambda a: self._estimate_distance(track_map[a.track_id], distance_map)
                 if a.track_id in track_map
                 else float("inf"),
             )
@@ -274,13 +295,20 @@ class ThreatAssessor:
         if self._cfg.strategy == "sector_sweep":
             track_map = {t.track_id: t for t in tracks}
             sector = self._cfg.sector_size_deg
+            fx = self._cfg.camera_fx
+
+            def _target_yaw_deg(t: Track) -> float:
+                cx, _ = t.bbox.center
+                if fx > 0.0:
+                    # Correct angular position using camera horizontal FOV
+                    return math.degrees(math.atan2(cx - self._fw * 0.5, fx))
+                # Fallback: linear pixel mapping (inaccurate for wide-angle lenses)
+                return (cx / max(self._fw, 1)) * 360 - 180
 
             def sector_key(a: ThreatAssessment) -> tuple[int, float]:
                 if a.track_id not in track_map:
                     return (999, 0.0)
-                t = track_map[a.track_id]
-                cx, _ = t.bbox.center
-                angle = (cx / max(self._fw, 1)) * 360 - 180
+                angle = _target_yaw_deg(track_map[a.track_id])
                 sector_idx = int(angle / sector)
                 return (sector_idx, -a.threat_score)
 

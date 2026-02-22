@@ -107,6 +107,10 @@ class VisionGimbalPipeline:
         trajectory_planner: TrajectoryPlannerProtocol | None = None,
         frame_buffer: FrameBufferProtocol | None = None,
         frame_annotator: FrameAnnotatorProtocol | None = None,
+        # Minimum time (s) a target must be continuously LOCK+fire_authorized
+        # before the engagement queue auto-advances to the next target.
+        # Set to 0.0 to disable auto-advance.
+        engagement_dwell_time_s: float = 2.0,
     ) -> None:
         self.detector = detector
         self.tracker = tracker
@@ -134,6 +138,17 @@ class VisionGimbalPipeline:
         self._signal_handlers_installed = False
         self._lock_start_ts: float | None = None
         self._last_track_state: str = TrackState.SEARCH.value
+
+        # Distance cache: track_id -> last fused distance_m.
+        # Populated from distance_fusion results and passed to ThreatAssessor
+        # so all downstream modules share the same distance measurement.
+        self._distance_cache: dict[int, float] = {}
+
+        # Engagement dwell tracking: how long the current target has been
+        # continuously LOCK + fire_authorized.
+        self._engagement_dwell_time_s = engagement_dwell_time_s
+        self._engagement_dwell_id: int | None = None
+        self._engagement_dwell_start: float | None = None
 
     def install_signal_handlers(self) -> None:
         """安装 SIGINT/SIGTERM 信号处理器，支持优雅退出"""
@@ -177,9 +192,18 @@ class VisionGimbalPipeline:
         # =====================================================================
         # 2. 威胁评估 (可选)
         # =====================================================================
+        # Evict stale cache entries for tracks that disappeared this frame.
+        live_ids = {t.track_id for t in tracks}
+        self._distance_cache = {k: v for k, v in self._distance_cache.items()
+                                if k in live_ids}
+
         threat_assessments: list[ThreatAssessment] = []
         if self._threat_assessor is not None and tracks:
-            threat_assessments = self._threat_assessor.assess(tracks)
+            # Pass cached fused distances so ThreatAssessor uses laser measurements
+            # instead of its own bbox-only estimate.
+            threat_assessments = self._threat_assessor.assess(
+                tracks, distance_map=self._distance_cache or None
+            )
             if self._engagement_queue is not None:
                 self._engagement_queue.update(threat_assessments)
 
@@ -202,6 +226,9 @@ class VisionGimbalPipeline:
             distance_m = self._distance_fusion.fuse(
                 laser_reading, selected.bbox, timestamp
             )
+            # Update cache so ThreatAssessor can use it next frame.
+            if distance_m > 0:
+                self._distance_cache[selected.track_id] = distance_m
 
         # =====================================================================
         # 5. 弹道解算 (可选): 飞行时间 + 下坠 + 风偏
@@ -240,6 +267,53 @@ class VisionGimbalPipeline:
                 lock_duration_s=lock_duration,
                 target_distance_m=distance_m,
             )
+
+        # =====================================================================
+        # 7b. 交战队列自动推进 (可选)
+        #
+        # 触发条件: 当前目标持续 LOCK + fire_authorized >= engagement_dwell_time_s
+        # 意义: 系统确认已对该目标充分瞄准，自动切换到下一优先目标。
+        # =====================================================================
+        if (
+            self._engagement_queue is not None
+            and self._engagement_dwell_time_s > 0.0
+            and selected is not None
+            and self._last_track_state == TrackState.LOCK.value
+            and safety_status is not None
+            and safety_status.fire_authorized
+        ):
+            cur_id = selected.track_id
+            if cur_id != self._engagement_dwell_id:
+                # New target entered fire-authorized lock — start dwell timer.
+                self._engagement_dwell_id = cur_id
+                self._engagement_dwell_start = timestamp
+            elif (
+                self._engagement_dwell_start is not None
+                and timestamp - self._engagement_dwell_start >= self._engagement_dwell_time_s
+            ):
+                next_id = self._engagement_queue.advance()
+                logger.info(
+                    "engagement auto-advance: target %d dwelled %.1fs -> next %s",
+                    cur_id,
+                    timestamp - self._engagement_dwell_start,
+                    next_id,
+                )
+                self.telemetry.log(
+                    "engagement_advance",
+                    timestamp,
+                    {
+                        "completed_id": float(cur_id),
+                        "next_id": float(next_id) if next_id is not None else -1.0,
+                        "dwell_s": timestamp - self._engagement_dwell_start,
+                    },
+                )
+                self._engagement_dwell_id = None
+                self._engagement_dwell_start = None
+        else:
+            # Reset dwell timer whenever conditions break (target lost, unlock, NFZ block).
+            if self._engagement_dwell_id is not None:
+                self._engagement_dwell_id = None
+                self._engagement_dwell_start = None
 
         # =====================================================================
         # 8. 控制指令计算 (PID + 弹道 + 提前量)

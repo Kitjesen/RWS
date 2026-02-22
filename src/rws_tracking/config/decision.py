@@ -25,3 +25,6 @@ class EngagementConfig:
     velocity_norm_px_s: float = 200.0
     target_height_m: float = 1.8
     sector_size_deg: float = 30.0
+    # Minimum time (s) a target must remain LOCK+fire_authorized before the
+    # engagement queue auto-advances to the next target.  Set to 0 to disable.
+    engagement_dwell_time_s: float = 2.0
