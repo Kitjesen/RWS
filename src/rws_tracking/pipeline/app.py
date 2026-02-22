@@ -424,6 +424,25 @@ def build_pipeline_from_config(
         frame_buffer = FrameBuffer(max_size=cfg.video_stream.buffer_size)
         frame_annotator = FrameAnnotator(config=vs_cfg)
 
+    # ---- v2 extension components ----
+
+    from ..safety.shooting_chain import ShootingChain
+    from ..telemetry.audit import AuditLogger
+    from ..health.monitor import HealthMonitor
+    from ..decision.lifecycle import TargetLifecycleManager
+
+    shooting_chain = ShootingChain(
+        cooldown_s=getattr(cfg, "fire_cooldown_s", 3.0)
+    )
+    audit_logger = AuditLogger(
+        log_path=getattr(cfg, "audit_log_path", "logs/audit.jsonl")
+    )
+    health_monitor = HealthMonitor()
+    lifecycle_manager = TargetLifecycleManager(
+        confirm_age_frames=getattr(cfg, "lifecycle_confirm_frames", 3),
+        archive_after_s=getattr(cfg, "lifecycle_archive_s", 10.0),
+    )
+
     return VisionGimbalPipeline(
         detector=PassthroughDetector(),
         tracker=SimpleIoUTracker(),
@@ -447,6 +466,10 @@ def build_pipeline_from_config(
         trajectory_planner=trajectory_planner,
         frame_buffer=frame_buffer,
         frame_annotator=frame_annotator,
+        shooting_chain=shooting_chain,
+        audit_logger=audit_logger,
+        health_monitor=health_monitor,
+        lifecycle_manager=lifecycle_manager,
     )
 
 

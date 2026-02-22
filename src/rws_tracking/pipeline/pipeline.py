@@ -29,7 +29,10 @@ from ..hardware.interfaces import GimbalDriver
 from ..hardware.rangefinder import RangefinderProvider
 from ..perception.interfaces import Detector, TargetSelector, Tracker
 from ..safety.interfaces import SafetyEvaluatorProtocol
+from ..decision.lifecycle import TargetLifecycleManager
+from ..health.monitor import HealthMonitor
 from ..safety.shooting_chain import ShootingChain
+from ..telemetry.audit import AuditLogger
 from ..telemetry.interfaces import TelemetryLogger
 from .protocols import FrameAnnotatorProtocol, FrameBufferProtocol
 from ..types import (
@@ -109,6 +112,9 @@ class VisionGimbalPipeline:
         frame_buffer: FrameBufferProtocol | None = None,
         frame_annotator: FrameAnnotatorProtocol | None = None,
         shooting_chain: ShootingChain | None = None,
+        audit_logger: AuditLogger | None = None,
+        health_monitor: HealthMonitor | None = None,
+        lifecycle_manager: TargetLifecycleManager | None = None,
         # Minimum time (s) a target must be continuously LOCK+fire_authorized
         # before the engagement queue auto-advances to the next target.
         # Set to 0.0 to disable auto-advance.
@@ -135,8 +141,12 @@ class VisionGimbalPipeline:
         self._frame_buffer = frame_buffer
         self._frame_annotator = frame_annotator
         self._shooting_chain = shooting_chain
+        self._audit_logger = audit_logger
+        self._health_monitor = health_monitor
+        self._lifecycle_manager = lifecycle_manager
 
         self._last_target_id: int | None = None
+        self._last_chain_state: str = ""
         self._stop_flag = False
         self._signal_handlers_installed = False
         self._lock_start_ts: float | None = None
@@ -200,15 +210,26 @@ class VisionGimbalPipeline:
         self._distance_cache = {k: v for k, v in self._distance_cache.items()
                                 if k in live_ids}
 
+        # Filter out already-neutralized/archived targets before assessment.
+        assessable_tracks = (
+            self._lifecycle_manager.filter_active(tracks)
+            if self._lifecycle_manager is not None
+            else tracks
+        )
+
         threat_assessments: list[ThreatAssessment] = []
-        if self._threat_assessor is not None and tracks:
+        if self._threat_assessor is not None and assessable_tracks:
             # Pass cached fused distances so ThreatAssessor uses laser measurements
             # instead of its own bbox-only estimate.
             threat_assessments = self._threat_assessor.assess(
-                tracks, distance_map=self._distance_cache or None
+                assessable_tracks, distance_map=self._distance_cache or None
             )
             if self._engagement_queue is not None:
                 self._engagement_queue.update(threat_assessments)
+
+        # Update lifecycle state for all current tracks.
+        if self._lifecycle_manager is not None:
+            self._lifecycle_manager.update(tracks, threat_assessments, timestamp)
 
         # =====================================================================
         # 3. 目标选择
@@ -322,19 +343,55 @@ class VisionGimbalPipeline:
         # 7c. ShootingChain update (optional)
         # =====================================================================
         if self._shooting_chain is not None:
-            self._shooting_chain.update_authorization(
-                safety_status.fire_authorized if safety_status else False,
-                timestamp,
-            )
+            fire_auth = safety_status.fire_authorized if safety_status else False
+            self._shooting_chain.update_authorization(fire_auth, timestamp)
             self._shooting_chain.tick(timestamp)
+
+            new_state = self._shooting_chain.state.value
+            if new_state != self._last_chain_state:
+                if self._audit_logger is not None:
+                    self._audit_logger.log(
+                        event_type=f"state_{new_state}",
+                        operator_id=self._shooting_chain.operator_id or "system",
+                        chain_state=new_state,
+                        target_id=selected.track_id if selected else None,
+                        threat_score=(threat_assessments[0].threat_score
+                                      if threat_assessments else 0.0),
+                        distance_m=distance_m,
+                        fire_authorized=fire_auth,
+                        blocked_reason=(safety_status.blocked_reason
+                                        if safety_status and not fire_auth else ""),
+                    )
+                self._last_chain_state = new_state
+
             if self._shooting_chain.can_fire:
                 fired = self._shooting_chain.execute_fire(timestamp)
                 if fired:
-                    logger.info(
+                    logger.warning(
                         "FIRE EXECUTED: target=%s ts=%.3f",
                         selected.track_id if selected else None,
                         timestamp,
                     )
+                    if self._audit_logger is not None:
+                        self._audit_logger.log(
+                            event_type="fired",
+                            operator_id=self._shooting_chain.operator_id or "system",
+                            chain_state="fired",
+                            target_id=selected.track_id if selected else None,
+                            threat_score=(threat_assessments[0].threat_score
+                                          if threat_assessments else 0.0),
+                            distance_m=distance_m,
+                            fire_authorized=True,
+                        )
+                    if (self._lifecycle_manager is not None
+                            and selected is not None):
+                        self._lifecycle_manager.mark_neutralized(
+                            selected.track_id, timestamp
+                        )
+
+        # HealthMonitor: report pipeline heartbeat each frame.
+        if self._health_monitor is not None:
+            self._health_monitor.heartbeat("pipeline", timestamp)
 
         # =====================================================================
         # 8. 控制指令计算 (PID + 弹道 + 提前量)

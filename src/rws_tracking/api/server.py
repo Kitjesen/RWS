@@ -511,6 +511,16 @@ def create_flask_app(api: TrackingAPI) -> Flask:
             })
         return jsonify({"threats": threats_out})
 
+    # Wire pipeline components into Flask extensions so Blueprint routes can access them.
+    pipeline = api.pipeline if hasattr(api, "pipeline") else None
+    if pipeline is not None:
+        if hasattr(pipeline, "_shooting_chain") and pipeline._shooting_chain is not None:
+            app.extensions["shooting_chain"] = pipeline._shooting_chain
+        if hasattr(pipeline, "_audit_logger") and pipeline._audit_logger is not None:
+            app.extensions["audit_logger"] = pipeline._audit_logger
+        if hasattr(pipeline, "_health_monitor") and pipeline._health_monitor is not None:
+            app.extensions["health_monitor"] = pipeline._health_monitor
+
     # Fire control routes
     from .fire_routes import fire_bp
     app.register_blueprint(fire_bp)
