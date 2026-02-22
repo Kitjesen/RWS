@@ -560,6 +560,10 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     app.register_blueprint(events_bp)
     event_bus.start()
 
+    # Session replay / after-action review
+    from .replay_routes import replay_bp
+    app.register_blueprint(replay_bp)
+
     return app
 
 
