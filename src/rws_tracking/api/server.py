@@ -564,6 +564,51 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     from .replay_routes import replay_bp
     app.register_blueprint(replay_bp)
 
+    # Config file watcher — hot-reload config.yaml into live PID/selector params.
+    try:
+        from ..tools.config_reload import ConfigReloader
+        from .events import event_bus as _eb
+
+        def _on_config_reload(new_cfg) -> None:
+            """Translate a fresh SystemConfig into update_config() dict."""
+            ctrl = new_cfg.controller
+            if ctrl is None:
+                return
+            update_dict: dict = {
+                "pid": {
+                    "yaw": {
+                        "kp": ctrl.yaw_pid.kp,
+                        "ki": ctrl.yaw_pid.ki,
+                        "kd": ctrl.yaw_pid.kd,
+                    },
+                    "pitch": {
+                        "kp": ctrl.pitch_pid.kp,
+                        "ki": ctrl.pitch_pid.ki,
+                        "kd": ctrl.pitch_pid.kd,
+                    },
+                }
+            }
+            result = api.update_config(update_dict)
+            try:
+                _eb.emit("config_reloaded", {
+                    "hot_applied": result.get("hot_applied", []),
+                    "message": result.get("message", ""),
+                })
+            except Exception:
+                pass
+            logger.info("config_reload: %s", result.get("message", ""))
+
+        _config_reloader = ConfigReloader(
+            config_path=api.config_path,
+            callback=_on_config_reload,
+            check_interval=2.0,
+        )
+        _config_reloader.start()
+        app.extensions["config_reloader"] = _config_reloader
+        logger.info("Config file watcher started: %s", api.config_path)
+    except Exception as exc:
+        logger.warning("Could not start config file watcher: %s", exc)
+
     return app
 
 
