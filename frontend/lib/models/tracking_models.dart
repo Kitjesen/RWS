@@ -143,6 +143,43 @@ class SubsystemHealth {
       );
 }
 
+// --- 任务状态 ---
+
+class MissionStatus {
+  final bool active;
+  final String? profile;
+  final String? sessionId;
+  final double elapsedS;
+  final String? fireChainState;
+  final int? targetsEngaged;
+
+  MissionStatus({
+    this.active = false,
+    this.profile,
+    this.sessionId,
+    this.elapsedS = 0.0,
+    this.fireChainState,
+    this.targetsEngaged,
+  });
+
+  factory MissionStatus.fromJson(Map<String, dynamic> j) => MissionStatus(
+    active: j['active'] ?? false,
+    profile: j['profile'],
+    sessionId: j['session_id'],
+    elapsedS: (j['elapsed_s'] ?? 0.0).toDouble(),
+    fireChainState: j['fire_chain_state'],
+    targetsEngaged: j['targets_engaged'],
+  );
+
+  /// Convenience: format elapsed seconds as mm:ss string
+  String get elapsedFormatted {
+    final total = elapsedS.toInt();
+    final mm = (total ~/ 60).toString().padLeft(2, '0');
+    final ss = (total % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+}
+
 // --- 火控链状态 ---
 
 class FireChainStatus {

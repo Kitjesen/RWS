@@ -190,6 +190,60 @@ class RwsApiClient {
     }
   }
 
+  // --- 任务控制 ---
+
+  Future<MissionStatus> getMissionStatus() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/mission/status'));
+      if (resp.statusCode == 200) {
+        return MissionStatus.fromJson(jsonDecode(resp.body));
+      }
+    } catch (_) {}
+    return MissionStatus();
+  }
+
+  Future<Map<String, dynamic>> startMission({
+    String? profile,
+    int cameraSource = 0,
+    String? missionName,
+  }) async {
+    final body = <String, dynamic>{
+      'camera_source': cameraSource,
+    };
+    if (profile != null) body['profile'] = profile;
+    if (missionName != null) body['mission_name'] = missionName;
+
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/mission/start'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body);
+      }
+      return {'success': false, 'error': 'HTTP ${resp.statusCode}'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> endMission() async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/mission/end'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({}),
+      );
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body);
+      }
+      return {'success': false, 'error': 'HTTP ${resp.statusCode}'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
   // --- 视频流 URL ---
 
   String get videoFeedUrl => '$baseUrl/api/video/feed';

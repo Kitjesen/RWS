@@ -20,6 +20,10 @@ class TrackingProvider extends ChangeNotifier {
   FireChainStatus _fireStatus =
       FireChainStatus(state: 'not_configured', canFire: false);
 
+  // 任务状态
+  MissionStatus _missionStatus = MissionStatus();
+  String? _lastReportPath;
+
   // 误差历史 (用于图表)
   final List<double> yawErrorHistory = [];
   final List<double> pitchErrorHistory = [];
@@ -35,6 +39,8 @@ class TrackingProvider extends ChangeNotifier {
   List<ThreatEntry> get threats => _threats;
   Map<String, SubsystemHealth> get health => _health;
   FireChainStatus get fireStatus => _fireStatus;
+  MissionStatus get missionStatus => _missionStatus;
+  String? get lastReportPath => _lastReportPath;
 
   void startPolling({Duration interval = const Duration(milliseconds: 200)}) {
     _pollTimer?.cancel();
@@ -87,6 +93,15 @@ class TrackingProvider extends ChangeNotifier {
       notifyListeners();
     } catch (_) {
       // 扩展轮询失败不影响主连接状态
+    }
+
+    // 任务状态: 每次扩展轮询时同步拉取 (约每 200ms 一次, 满足 <=2s 要求)
+    try {
+      final ms = await _api.getMissionStatus();
+      _missionStatus = ms;
+      notifyListeners();
+    } catch (_) {
+      // 任务状态拉取失败不影响其他状态
     }
   }
 
@@ -146,6 +161,46 @@ class TrackingProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       return false;
+    }
+  }
+
+  // --- 任务操作 ---
+
+  Future<bool> startMission(String profile, {int cameraSource = 0}) async {
+    try {
+      final result = await _api.startMission(
+        profile: profile,
+        cameraSource: cameraSource,
+      );
+      final ok = result['success'] == true;
+      if (ok) {
+        // 立即拉取最新任务状态
+        _missionStatus = await _api.getMissionStatus();
+        notifyListeners();
+      }
+      return ok;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<String?> endMission() async {
+    try {
+      final result = await _api.endMission();
+      // 服务端可能返回 report_path 或 report_url 字段
+      final reportPath =
+          result['report_path'] as String? ?? result['report_url'] as String?;
+      _lastReportPath = reportPath;
+      // 刷新任务状态 (应已变为非活跃)
+      _missionStatus = await _api.getMissionStatus();
+      notifyListeners();
+      return reportPath;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return null;
     }
   }
 
