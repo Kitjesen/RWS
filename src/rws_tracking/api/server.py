@@ -564,6 +564,10 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     from .replay_routes import replay_bp
     app.register_blueprint(replay_bp)
 
+    # No-fire zone CRUD
+    from .safety_routes import safety_bp
+    app.register_blueprint(safety_bp)
+
     # Config file watcher — hot-reload config.yaml into live PID/selector params.
     try:
         from ..tools.config_reload import ConfigReloader
