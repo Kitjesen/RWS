@@ -59,6 +59,13 @@ class TrackStateMachine:
                     self._cfg.lock_error_threshold_deg * self._cfg.high_error_multiplier
                 )
                 if err_mag > high_err_thresh:
+                    # If already in SEARCH, don't start tracking a target that
+                    # is immediately outside the high-error envelope.  This
+                    # prevents the SEARCH→TRACK→SEARCH cycling where the
+                    # timeout resets on every re-acquisition attempt.
+                    if self._state == TrackState.SEARCH:
+                        self._high_error_start_ts = None
+                        return self._state
                     if self._high_error_start_ts is None:
                         self._high_error_start_ts = timestamp
                     if timestamp - self._high_error_start_ts >= self._cfg.max_track_error_timeout_s:
