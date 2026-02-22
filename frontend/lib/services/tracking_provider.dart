@@ -24,6 +24,9 @@ class TrackingProvider extends ChangeNotifier {
   MissionStatus _missionStatus = MissionStatus();
   String? _lastReportPath;
 
+  // 目标指定状态 (C2)
+  int? _designatedTrackId;
+
   // 误差历史 (用于图表)
   final List<double> yawErrorHistory = [];
   final List<double> pitchErrorHistory = [];
@@ -42,6 +45,7 @@ class TrackingProvider extends ChangeNotifier {
   FireChainStatus get fireStatus => _fireStatus;
   MissionStatus get missionStatus => _missionStatus;
   String? get lastReportPath => _lastReportPath;
+  int? get designatedTrackId => _designatedTrackId;
 
   void startPolling({Duration interval = const Duration(milliseconds: 200)}) {
     _pollTimer?.cancel();
@@ -202,6 +206,38 @@ class TrackingProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       return null;
+    }
+  }
+
+  // --- 目标指定 ---
+
+  Future<bool> designateTarget(int trackId) async {
+    try {
+      final ok = await _api.designateTarget(trackId);
+      if (ok) {
+        _designatedTrackId = trackId;
+        notifyListeners();
+      }
+      return ok;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> clearDesignation() async {
+    try {
+      final ok = await _api.clearDesignation();
+      if (ok) {
+        _designatedTrackId = null;
+        notifyListeners();
+      }
+      return ok;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 

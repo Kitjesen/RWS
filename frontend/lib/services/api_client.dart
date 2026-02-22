@@ -244,6 +244,41 @@ class RwsApiClient {
     }
   }
 
+  // --- 目标指定 (C2 designation) ---
+
+  Future<bool> designateTarget(int trackId, {String operatorId = 'operator_1'}) async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/fire/designate'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'track_id': trackId, 'operator_id': operatorId}),
+      );
+      return resp.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> clearDesignation() async {
+    try {
+      final resp = await _client.delete(Uri.parse('$baseUrl/api/fire/designate'));
+      return resp.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<int?> getDesignatedTrackId() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/fire/designate'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['designated'] == true ? data['track_id'] as int? : null;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   // --- 视频流 URL ---
 
   String get videoFeedUrl => '$baseUrl/api/video/feed';

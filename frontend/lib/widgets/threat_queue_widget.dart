@@ -13,6 +13,7 @@ class ThreatQueueWidget extends StatelessWidget {
     return Consumer<TrackingProvider>(
       builder: (_, p, __) {
         final threats = p.threats;
+        final designatedId = p.designatedTrackId;
 
         return Card(
           child: Padding(
@@ -45,6 +46,21 @@ class ThreatQueueWidget extends StatelessWidget {
                               fontSize: 12),
                         ),
                       ),
+                    const Spacer(),
+                    // Clear designation button (shown only when active)
+                    if (designatedId != null)
+                      TextButton.icon(
+                        icon: const Icon(Icons.cancel, size: 14),
+                        label: Text('取消指定 #$designatedId',
+                            style: const TextStyle(fontSize: 11)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.orange,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => p.clearDesignation(),
+                      ),
                   ],
                 ),
                 const Divider(),
@@ -62,8 +78,13 @@ class ThreatQueueWidget extends StatelessWidget {
                       itemCount: threats.length,
                       separatorBuilder: (_, __) =>
                           const SizedBox(height: 6),
-                      itemBuilder: (_, i) =>
-                          _ThreatTile(threat: threats[i]),
+                      itemBuilder: (_, i) => _ThreatTile(
+                        threat: threats[i],
+                        isDesignated: threats[i].trackId == designatedId,
+                        onDesignate: () =>
+                            p.designateTarget(threats[i].trackId),
+                        onClear: () => p.clearDesignation(),
+                      ),
                     ),
                   ),
               ],
@@ -77,8 +98,16 @@ class ThreatQueueWidget extends StatelessWidget {
 
 class _ThreatTile extends StatelessWidget {
   final ThreatEntry threat;
+  final bool isDesignated;
+  final VoidCallback onDesignate;
+  final VoidCallback onClear;
 
-  const _ThreatTile({required this.threat});
+  const _ThreatTile({
+    required this.threat,
+    required this.isDesignated,
+    required this.onDesignate,
+    required this.onClear,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -98,12 +127,21 @@ class _ThreatTile extends StatelessWidget {
 
     final pct = (threat.threatScore * 100).toStringAsFixed(0);
 
+    // Designated tiles get a bright cyan border
+    final borderColor = isDesignated
+        ? Colors.cyanAccent.withValues(alpha: 0.9)
+        : rankColor.withValues(alpha: 0.2);
+    final bgColor = isDesignated
+        ? Colors.cyan.withValues(alpha: 0.08)
+        : rankColor.withValues(alpha: 0.06);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: rankColor.withValues(alpha: 0.06),
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: rankColor.withValues(alpha: 0.2)),
+        border: Border.all(
+            color: borderColor, width: isDesignated ? 1.5 : 1.0),
       ),
       child: Row(
         children: [
@@ -142,13 +180,14 @@ class _ThreatTile extends StatelessWidget {
                     value: threat.threatScore.clamp(0.0, 1.0),
                     minHeight: 6,
                     backgroundColor: Colors.grey.shade800,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(_threatBarColor(threat.threatScore)),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                        _threatBarColor(threat.threatScore)),
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text('$pct%',
-                    style: const TextStyle(fontSize: 10, color: Colors.white54)),
+                    style:
+                        const TextStyle(fontSize: 10, color: Colors.white54)),
               ],
             ),
           ),
@@ -156,11 +195,21 @@ class _ThreatTile extends StatelessWidget {
 
           // 距离
           if (threat.distanceM > 0)
-            Text('${threat.distanceM.toStringAsFixed(0)}m',
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                    color: Colors.white70)),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text('${threat.distanceM.toStringAsFixed(0)}m',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: Colors.white70)),
+            ),
+
+          // 指定按钮
+          _DesignateButton(
+            isDesignated: isDesignated,
+            onDesignate: onDesignate,
+            onClear: onClear,
+          ),
         ],
       ),
     );
@@ -170,5 +219,76 @@ class _ThreatTile extends StatelessWidget {
     if (score >= 0.7) return Colors.red;
     if (score >= 0.4) return Colors.orange;
     return Colors.amber;
+  }
+}
+
+class _DesignateButton extends StatelessWidget {
+  final bool isDesignated;
+  final VoidCallback onDesignate;
+  final VoidCallback onClear;
+
+  const _DesignateButton({
+    required this.isDesignated,
+    required this.onDesignate,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isDesignated) {
+      return Tooltip(
+        message: '取消指定',
+        child: InkWell(
+          onTap: onClear,
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.cyan.withValues(alpha: 0.2),
+              border: Border.all(color: Colors.cyanAccent),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.my_location, size: 12, color: Colors.cyanAccent),
+                SizedBox(width: 3),
+                Text('LOCK',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.cyanAccent,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Tooltip(
+      message: '指定此目标',
+      child: InkWell(
+        onTap: onDesignate,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white24),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.gps_fixed, size: 12, color: Colors.white54),
+              SizedBox(width: 3),
+              Text('指定',
+                  style: TextStyle(fontSize: 10, color: Colors.white54)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
