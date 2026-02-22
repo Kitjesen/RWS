@@ -259,3 +259,99 @@ def download_clip(filename: str):
 
 
 from ..telemetry.video_ring_buffer import _parse_timestamp_from_filename
+
+
+# ---------------------------------------------------------------------------
+# Target designation (operator C2 override)
+# ---------------------------------------------------------------------------
+
+
+def _get_pipeline():
+    """Get the active pipeline from the tracking_api extension, or None."""
+    api = current_app.extensions.get("tracking_api")
+    if api is not None:
+        return getattr(api, "pipeline", None)
+    return None
+
+
+@fire_bp.route("/designate", methods=["POST"])
+def designate_target():
+    """Operator-designate a specific track for engagement.
+
+    Overrides the auto-selected target.  The designation is cleared
+    automatically when the track disappears from the scene.
+
+    Body (JSON):
+    {
+        "track_id": 3,
+        "operator_id": "op1"  // optional
+    }
+
+    Response:
+    {"ok": true, "track_id": 3}
+    """
+    data = request.get_json(silent=True) or {}
+    track_id = data.get("track_id")
+    if track_id is None:
+        return jsonify({"error": "track_id is required"}), 400
+    try:
+        track_id = int(track_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "track_id must be an integer"}), 400
+
+    operator_id = str(data.get("operator_id", ""))
+    pipeline = _get_pipeline()
+    if pipeline is None:
+        return jsonify({"error": "pipeline not running"}), 503
+
+    pipeline.designate_target(track_id, operator_id)
+
+    try:
+        from .events import event_bus
+        event_bus.emit("target_designated", {
+            "track_id": track_id,
+            "operator_id": operator_id,
+        })
+    except Exception:
+        pass
+
+    logger.info("designation: track=%d by operator='%s'", track_id, operator_id)
+    return jsonify({"ok": True, "track_id": track_id})
+
+
+@fire_bp.route("/designate", methods=["DELETE"])
+def clear_designation():
+    """Clear the operator designation, returning to auto-selection.
+
+    Response:
+    {"ok": true, "cleared_track_id": 3}  // or null if none was set
+    """
+    pipeline = _get_pipeline()
+    if pipeline is None:
+        return jsonify({"error": "pipeline not running"}), 503
+
+    old_id = pipeline.designated_track_id
+    pipeline.clear_designation()
+
+    try:
+        from .events import event_bus
+        event_bus.emit("target_designated", {"track_id": None, "operator_id": ""})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "cleared_track_id": old_id})
+
+
+@fire_bp.route("/designate", methods=["GET"])
+def get_designation():
+    """Return current operator designation.
+
+    Response:
+    {"track_id": 3, "designated": true}  // or track_id=null if none
+    """
+    pipeline = _get_pipeline()
+    if pipeline is None:
+        return jsonify({"track_id": None, "designated": False})
+
+    tid = pipeline.designated_track_id
+    return jsonify({"track_id": tid, "designated": tid is not None})

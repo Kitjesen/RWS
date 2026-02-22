@@ -162,6 +162,9 @@ class VisionGimbalPipeline:
         self._last_target_id: int | None = None
         self._last_chain_state: str = ""
         self._stop_flag = False
+        # Operator-designated target — overrides auto-selection when set.
+        self._designated_track_id: int | None = None
+        self._designated_by: str = ""  # operator_id who made the designation
         self._signal_handlers_installed = False
         self._lock_start_ts: float | None = None
         self._last_track_state: str = TrackState.SEARCH.value
@@ -176,6 +179,31 @@ class VisionGimbalPipeline:
         self._engagement_dwell_time_s = engagement_dwell_time_s
         self._engagement_dwell_id: int | None = None
         self._engagement_dwell_start: float | None = None
+
+    # ------------------------------------------------------------------
+    # Target designation (operator C2 override)
+    # ------------------------------------------------------------------
+
+    def designate_target(self, track_id: int, operator_id: str = "") -> None:
+        """Operator-designate a specific track as the engagement target.
+
+        Overrides auto-selection until the track disappears or is cleared.
+        """
+        self._designated_track_id = track_id
+        self._designated_by = operator_id
+        logger.info("designation: track %d designated by '%s'", track_id, operator_id)
+
+    def clear_designation(self) -> None:
+        """Remove operator designation, returning to auto-selection."""
+        old = self._designated_track_id
+        self._designated_track_id = None
+        self._designated_by = ""
+        if old is not None:
+            logger.info("designation: cleared (was track %d)", old)
+
+    @property
+    def designated_track_id(self) -> int | None:
+        return self._designated_track_id
 
     def install_signal_handlers(self) -> None:
         """安装 SIGINT/SIGTERM 信号处理器，支持优雅退出"""
@@ -249,6 +277,31 @@ class VisionGimbalPipeline:
         # 3. 目标选择
         # =====================================================================
         selected = self.selector.select(tracks, timestamp)
+
+        # 3b. Operator designation override — if an operator has manually
+        #     designated a specific track, use it instead of auto-selection,
+        #     provided that track is currently visible and not neutralised.
+        if self._designated_track_id is not None:
+            designated = next(
+                (t for t in assessable_tracks if t.track_id == self._designated_track_id),
+                None,
+            )
+            if designated is not None:
+                selected = TargetObservation(
+                    track_id=designated.track_id,
+                    bbox=designated.bbox,
+                    class_id=designated.class_id,
+                    confidence=designated.confidence,
+                    timestamp=timestamp,
+                )
+            else:
+                # Designated track no longer visible — clear designation.
+                logger.info(
+                    "designation: track %d no longer visible, clearing designation",
+                    self._designated_track_id,
+                )
+                self._designated_track_id = None
+                self._designated_by = ""
 
         # =====================================================================
         # 4. 距离融合 (可选): 激光优先, bbox 兜底
