@@ -166,6 +166,83 @@ class TestAddZone:
             })
             assert resp.status_code == 503
 
+    def test_zero_radius_returns_400(self):
+        sm = _make_safety_manager()
+        app = _make_app(sm)
+        with app.test_client() as c:
+            resp = c.post("/api/safety/zones", json={
+                "center_yaw_deg": 0.0,
+                "center_pitch_deg": 0.0,
+                "radius_deg": 0.0,
+            })
+            assert resp.status_code == 400
+
+    def test_radius_too_large_returns_400(self):
+        sm = _make_safety_manager()
+        app = _make_app(sm)
+        with app.test_client() as c:
+            resp = c.post("/api/safety/zones", json={
+                "center_yaw_deg": 0.0,
+                "center_pitch_deg": 0.0,
+                "radius_deg": 181.0,
+            })
+            assert resp.status_code == 400
+
+    def test_yaw_out_of_range_returns_400(self):
+        sm = _make_safety_manager()
+        app = _make_app(sm)
+        with app.test_client() as c:
+            resp = c.post("/api/safety/zones", json={
+                "center_yaw_deg": 270.0,
+                "center_pitch_deg": 0.0,
+                "radius_deg": 10.0,
+            })
+            assert resp.status_code == 400
+
+    def test_pitch_out_of_range_returns_400(self):
+        sm = _make_safety_manager()
+        app = _make_app(sm)
+        with app.test_client() as c:
+            resp = c.post("/api/safety/zones", json={
+                "center_yaw_deg": 0.0,
+                "center_pitch_deg": -95.0,
+                "radius_deg": 10.0,
+            })
+            assert resp.status_code == 400
+
+    def test_boundary_yaw_180_accepted(self):
+        sm = _make_safety_manager()
+        app = _make_app(sm)
+        with app.test_client() as c:
+            resp = c.post("/api/safety/zones", json={
+                "center_yaw_deg": 180.0,
+                "center_pitch_deg": 0.0,
+                "radius_deg": 5.0,
+            })
+            assert resp.status_code == 201
+
+    def test_boundary_pitch_90_accepted(self):
+        sm = _make_safety_manager()
+        app = _make_app(sm)
+        with app.test_client() as c:
+            resp = c.post("/api/safety/zones", json={
+                "center_yaw_deg": 0.0,
+                "center_pitch_deg": -90.0,
+                "radius_deg": 5.0,
+            })
+            assert resp.status_code == 201
+
+    def test_radius_exactly_180_accepted(self):
+        sm = _make_safety_manager()
+        app = _make_app(sm)
+        with app.test_client() as c:
+            resp = c.post("/api/safety/zones", json={
+                "center_yaw_deg": 0.0,
+                "center_pitch_deg": 0.0,
+                "radius_deg": 180.0,
+            })
+            assert resp.status_code == 201
+
 
 # ---------------------------------------------------------------------------
 # DELETE /api/safety/zones/<id>

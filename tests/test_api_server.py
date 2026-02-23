@@ -1,6 +1,7 @@
 """API Server 单元测试 — mock Flask。"""
 
 from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 
 import pytest
 
@@ -71,6 +72,103 @@ class TestTrackingAPI:
         api.config.some_key = "old"
         result = api.update_config({"some_key": "new"})
         assert result["success"]
+
+
+class TestGetConfig:
+    """Test GET /api/config endpoint via a minimal Flask app."""
+
+    def _make_pid_cfg(self, kp, ki, kd):
+        return SimpleNamespace(kp=kp, ki=ki, kd=kd)
+
+    def _make_app_with_config(self, config_path="config.yaml", ctrl_cfg=None):
+        from flask import Flask, jsonify
+        from src.rws_tracking.api.server import TrackingAPI
+
+        api = TrackingAPI.__new__(TrackingAPI)
+        api.config_path = config_path
+        api.config = MagicMock()
+        api.pipeline = None
+
+        app = Flask(__name__)
+        app.config["TESTING"] = True
+
+        @app.route("/api/config", methods=["GET"])
+        def get_config():
+            from src.rws_tracking.config.loader import load_config
+            try:
+                cfg = load_config(api.config_path)
+                ctrl = cfg.controller
+                if ctrl is None:
+                    return jsonify({"error": "No controller config"}), 503
+                return jsonify({
+                    "pid": {
+                        "yaw":   {"kp": ctrl.yaw_pid.kp,   "ki": ctrl.yaw_pid.ki,   "kd": ctrl.yaw_pid.kd},
+                        "pitch": {"kp": ctrl.pitch_pid.kp, "ki": ctrl.pitch_pid.ki, "kd": ctrl.pitch_pid.kd},
+                    }
+                })
+            except Exception as exc:
+                return jsonify({"error": str(exc)}), 503
+
+        return app, api
+
+    def test_get_config_returns_pid(self):
+        """GET /api/config returns yaw + pitch PID values from config."""
+        mock_ctrl = SimpleNamespace(
+            yaw_pid=self._make_pid_cfg(5.0, 0.1, 0.3),
+            pitch_pid=self._make_pid_cfg(4.0, 0.05, 0.25),
+        )
+        mock_cfg = SimpleNamespace(controller=mock_ctrl)
+
+        app, _ = self._make_app_with_config()
+        with patch("src.rws_tracking.config.loader.load_config", return_value=mock_cfg):
+            with app.test_client() as c:
+                resp = c.get("/api/config")
+                assert resp.status_code == 200
+                data = resp.get_json()
+                assert "pid" in data
+                assert data["pid"]["yaw"]["kp"] == pytest.approx(5.0)
+                assert data["pid"]["pitch"]["kd"] == pytest.approx(0.25)
+
+    def test_get_config_no_controller_returns_503(self):
+        """GET /api/config returns 503 when controller config is absent."""
+        mock_cfg = SimpleNamespace(controller=None)
+
+        app, _ = self._make_app_with_config()
+        with patch("src.rws_tracking.config.loader.load_config", return_value=mock_cfg):
+            with app.test_client() as c:
+                resp = c.get("/api/config")
+                assert resp.status_code == 503
+                data = resp.get_json()
+                assert "error" in data
+
+    def test_get_config_load_failure_returns_503(self):
+        """GET /api/config returns 503 when load_config raises."""
+        app, _ = self._make_app_with_config()
+        with patch(
+            "src.rws_tracking.config.loader.load_config",
+            side_effect=FileNotFoundError("not found"),
+        ):
+            with app.test_client() as c:
+                resp = c.get("/api/config")
+                assert resp.status_code == 503
+
+    def test_get_config_structure(self):
+        """GET /api/config response has expected nested structure."""
+        mock_ctrl = SimpleNamespace(
+            yaw_pid=self._make_pid_cfg(1.0, 2.0, 3.0),
+            pitch_pid=self._make_pid_cfg(4.0, 5.0, 6.0),
+        )
+        mock_cfg = SimpleNamespace(controller=mock_ctrl)
+
+        app, _ = self._make_app_with_config()
+        with patch("src.rws_tracking.config.loader.load_config", return_value=mock_cfg):
+            with app.test_client() as c:
+                resp = c.get("/api/config")
+                data = resp.get_json()
+                for axis in ("yaw", "pitch"):
+                    assert axis in data["pid"]
+                    for param in ("kp", "ki", "kd"):
+                        assert param in data["pid"][axis]
 
 
 class TestFlaskApp:

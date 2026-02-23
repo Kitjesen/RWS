@@ -128,6 +128,12 @@ def add_zone():
 
     if radius <= 0:
         return jsonify({"error": "radius_deg must be positive"}), 400
+    if radius > 180:
+        return jsonify({"error": "radius_deg must not exceed 180"}), 400
+    if not (-180.0 <= center_yaw <= 180.0):
+        return jsonify({"error": "center_yaw_deg must be in [-180, 180]"}), 400
+    if not (-90.0 <= center_pitch <= 90.0):
+        return jsonify({"error": "center_pitch_deg must be in [-90, 90]"}), 400
 
     zone_id = str(data.get("zone_id") or f"nfz_{uuid.uuid4().hex[:8]}")
     zone_type = str(data.get("zone_type", "no_fire"))
