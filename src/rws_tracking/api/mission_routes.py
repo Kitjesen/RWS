@@ -18,7 +18,7 @@ import logging
 import time
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request, send_file
 
 logger = logging.getLogger(__name__)
 
@@ -223,9 +223,39 @@ def mission_end():
     except Exception:
         pass
 
+    # Build a URL the frontend can open directly.
+    report_url = (
+        f"/api/mission/report/{Path(report_path).name}"
+        if report_path
+        else None
+    )
+
     return jsonify({
         "ok": True,
         "session_id": session_id,
         "elapsed_s": elapsed,
         "report_path": report_path,
+        "report_url": report_url,
     })
+
+
+# ---------------------------------------------------------------------------
+# Report file download
+# ---------------------------------------------------------------------------
+
+@mission_bp.route("/report/<path:filename>", methods=["GET"])
+def download_report(filename: str):
+    """Serve a mission HTML report from logs/reports/.
+
+    Example: GET /api/mission/report/my_session_report.html
+    """
+    report_dir = Path("logs/reports")
+    report_file = report_dir / filename
+    if not report_file.exists() or not report_file.is_file():
+        return jsonify({"error": "report not found"}), 404
+    # Prevent path traversal
+    try:
+        report_file.resolve().relative_to(report_dir.resolve())
+    except ValueError:
+        return jsonify({"error": "invalid path"}), 400
+    return send_file(str(report_file), mimetype="text/html")
