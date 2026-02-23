@@ -422,6 +422,10 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             return tracking_pb2.GetThreatAssessmentResponse()
 
 
+# Backward-compat alias
+TrackingGrpcServer = TrackingServicer
+
+
 def serve(
     host: str = "0.0.0.0",
     port: int = 50051,

@@ -112,7 +112,7 @@ class NoFireZoneManager:
                 closest_dist = dist_to_boundary
                 closest_zone = zone
 
-            if angular_dist <= zone.radius_deg:
+            if angular_dist < zone.radius_deg:
                 active_zone_id = zone.zone_id
                 if zone.zone_type == "no_fire":
                     in_no_fire = True

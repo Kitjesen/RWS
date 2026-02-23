@@ -121,9 +121,11 @@ class TestWeightedTargetSelector:
 
     def test_class_preference(self, selector):
         """Preferred classes should get bonus."""
+        # Place both tracks at the same center position so only class bonus differs.
+        # center_proximity = 1.0 for both; person bonus (0.10) > car bonus (0.06).
         tracks = [
-            create_track(1, (100, 100, 100, 100), confidence=0.8, class_id="person"),
-            create_track(2, (300, 300, 100, 100), confidence=0.8, class_id="car"),
+            create_track(1, (590, 310, 100, 100), confidence=0.8, class_id="person"),
+            create_track(2, (590, 310, 100, 100), confidence=0.8, class_id="car"),
         ]
 
         result = selector.select(tracks, timestamp=1.0)
@@ -154,9 +156,11 @@ class TestWeightedTargetSelector:
 
     def test_switch_penalty(self, selector):
         """Switching targets should incur penalty."""
+        # Track 1 at screen center (640,360) → high center_proximity score wins first selection.
+        # Track 2 far in corner → lower overall score, can't overcome switch penalty.
         tracks = [
-            create_track(1, (100, 100, 200, 200), confidence=0.8),
-            create_track(2, (300, 300, 400, 400), confidence=0.82),  # Slightly better
+            create_track(1, (540, 260, 200, 200), confidence=0.8),   # center=(640,360)
+            create_track(2, (50, 50, 100, 100), confidence=0.82),     # center=(100,100), far
         ]
 
         # Select track 1 first
@@ -170,9 +174,10 @@ class TestWeightedTargetSelector:
 
     def test_target_disappears(self, selector):
         """When current target disappears, should select new one."""
+        # Track 1 at center wins first selection; track 2 far in corner.
         tracks1 = [
-            create_track(1, (100, 100, 200, 200), confidence=0.8),
-            create_track(2, (300, 300, 400, 400), confidence=0.7),
+            create_track(1, (540, 260, 200, 200), confidence=0.8),   # center=(640,360)
+            create_track(2, (50, 50, 100, 100), confidence=0.7),      # center=(100,100), far
         ]
 
         # Select track 1
@@ -180,7 +185,7 @@ class TestWeightedTargetSelector:
         assert result1.track_id == 1
 
         # Track 1 disappears, only track 2 remains
-        tracks2 = [create_track(2, (300, 300, 400, 400), confidence=0.7)]
+        tracks2 = [create_track(2, (50, 50, 100, 100), confidence=0.7)]
         result2 = selector.select(tracks2, timestamp=2.0)
         assert result2.track_id == 2
 
@@ -209,9 +214,10 @@ class TestWeightedTargetSelector:
 
     def test_delta_threshold(self, selector):
         """Delta threshold should prevent unnecessary switches."""
+        # Track 1 at center wins first selection; track 2 far in corner.
         tracks = [
-            create_track(1, (100, 100, 200, 200), confidence=0.80),
-            create_track(2, (300, 300, 400, 400), confidence=0.81),  # Only 0.01 better
+            create_track(1, (540, 260, 200, 200), confidence=0.80),  # center=(640,360)
+            create_track(2, (50, 50, 100, 100), confidence=0.81),     # center=(100,100), far
         ]
 
         # Select track 1

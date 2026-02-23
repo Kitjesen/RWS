@@ -34,6 +34,8 @@ class GimbalController(Protocol):
         body_state: BodyState | None = None,
     ) -> ControlCommand: ...
 
+    def reset(self) -> None: ...
+
 
 class BallisticSolverProtocol(Protocol):
     """弹道解算：给定距离，计算飞行时间、下坠补偿、风偏等。"""

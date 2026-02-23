@@ -38,6 +38,7 @@ class MujocoEnvTests(unittest.TestCase):
         env.close()
 
 
+@unittest.skipIf(not MUJOCO_AVAILABLE, "mujoco not installed")
 class GroundTruthDetectorTests(unittest.TestCase):
     def test_ground_truth_produces_detection(self) -> None:
         env = MujocoEnv()
@@ -57,6 +58,7 @@ class GroundTruthDetectorTests(unittest.TestCase):
         env.close()
 
 
+@unittest.skipIf(not MUJOCO_AVAILABLE, "mujoco not installed")
 class SILClosedLoopTests(unittest.TestCase):
     def test_static_target_achieves_lock(self) -> None:
         motion = TargetMotion(pattern="static", start_pos=(5.0, 0.0, 1.5))
@@ -89,6 +91,7 @@ class SILClosedLoopTests(unittest.TestCase):
         env.close()
 
 
+@unittest.skipIf(not MUJOCO_AVAILABLE, "mujoco not installed")
 class BodyMotionSILTests(unittest.TestCase):
     def test_body_motion_does_not_crash(self) -> None:
         motion = TargetMotion(pattern="static", start_pos=(5.0, 0.0, 1.5))

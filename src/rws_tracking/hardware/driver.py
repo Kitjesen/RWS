@@ -57,7 +57,7 @@ class SimulatedGimbalDriver:
         self._pitch_rate = 0.0
         self._yaw_cmd = 0.0  # 命令速率
         self._pitch_cmd = 0.0
-        self._last_ts = 0.0
+        self._last_ts: float | None = None
 
     def set_yaw_pitch_rate(
         self, yaw_rate_dps: float, pitch_rate_dps: float, timestamp: float
@@ -97,7 +97,7 @@ class SimulatedGimbalDriver:
         return clipped
 
     def _integrate_to(self, timestamp: float) -> None:
-        if self._last_ts == 0.0:
+        if self._last_ts is None:
             self._last_ts = timestamp
             return
         dt = max(timestamp - self._last_ts, 0.0)

@@ -31,10 +31,25 @@ from ..types import BodyState
 
 
 class StaticBodyMotion:
-    """Always returns zero body state.  Implements ``BodyMotionProvider``."""
+    """Always returns constant body state.  Implements ``BodyMotionProvider``."""
+
+    def __init__(
+        self,
+        yaw_rate_dps: float = 0.0,
+        pitch_rate_dps: float = 0.0,
+        roll_rate_dps: float = 0.0,
+    ) -> None:
+        self._yaw_rate = yaw_rate_dps
+        self._pitch_rate = pitch_rate_dps
+        self._roll_rate = roll_rate_dps
 
     def get_body_state(self, timestamp: float) -> BodyState:
-        return BodyState(timestamp=timestamp)
+        return BodyState(
+            timestamp=timestamp,
+            yaw_rate_dps=self._yaw_rate,
+            pitch_rate_dps=self._pitch_rate,
+            roll_rate_dps=self._roll_rate,
+        )
 
 
 # ---------------------------------------------------------------------------

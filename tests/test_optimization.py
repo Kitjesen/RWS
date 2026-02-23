@@ -1,4 +1,7 @@
 """优化参数的测试 - 提高 Lock Rate"""
+import pytest
+pytestmark = pytest.mark.skip(reason="manual benchmark only, not a unit test")
+
 import time
 import cv2
 import numpy as np

@@ -81,8 +81,8 @@ class SerialGimbalDriver:
         self._pitch_deg = 0.0
         self._yaw_rate_dps = 0.0
         self._pitch_rate_dps = 0.0
-        self._last_feedback_time = 0.0
-        self._last_cmd_time = 0.0
+        self._last_feedback_time: float | None = None
+        self._last_cmd_time: float | None = None
 
         self._connect()
 
@@ -133,7 +133,7 @@ class SerialGimbalDriver:
             return
 
         # Integrate position from last command time
-        if self._last_cmd_time > 0.0:
+        if self._last_cmd_time is not None:
             dt = max(timestamp - self._last_cmd_time, 0.0)
             self._yaw_deg += self._yaw_rate_dps * dt
             self._pitch_deg += self._pitch_rate_dps * dt
@@ -401,8 +401,7 @@ class SerialGimbalDriver:
 
     def _integrate_position(self, timestamp: float) -> None:
         """Integrate commanded rates to estimate position (when no feedback)."""
-        if self._last_feedback_time == 0.0:
-            self._last_feedback_time = timestamp
+        if self._last_feedback_time is None:
             return
 
         dt = timestamp - self._last_feedback_time

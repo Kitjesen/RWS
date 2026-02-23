@@ -111,6 +111,26 @@ class FrameBuffer:
             self._event.clear()
             return frame.copy(), ts
 
+    def put(self, frame: np.ndarray) -> None:
+        """Alias for push() with timestamp=0.0."""
+        self.push(frame, 0.0)
+
+    def get(self) -> np.ndarray | None:
+        """Dequeue oldest frame. Returns None if empty."""
+        with self._lock:
+            if not self._buffer:
+                return None
+            frame, _ = self._buffer.pop(0)
+            return frame
+
+    def latest(self) -> np.ndarray | None:
+        """Return copy of latest frame without blocking. Returns None if empty."""
+        with self._lock:
+            if not self._buffer:
+                return None
+            frame, _ = self._buffer[-1]
+            return frame.copy()
+
     def clear(self) -> None:
         with self._lock:
             self._buffer.clear()

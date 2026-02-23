@@ -1,4 +1,7 @@
 """激进参数测试 - 力求达到 Lock"""
+import pytest
+pytestmark = pytest.mark.skip(reason="manual benchmark only, not a unit test")
+
 import time
 import cv2
 import numpy as np
