@@ -35,7 +35,7 @@ Units
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -101,6 +101,9 @@ class CameraModel:
     fx, fy : focal lengths in pixels.
     cx, cy : principal point in pixels.
     distortion : 5-param distortion coefficients (None = no distortion).
+
+    Convenience constructor kwargs ``k1, k2, p1, p2, k3`` may be supplied
+    instead of a ``DistortionCoeffs`` object; they are auto-wrapped.
     """
 
     width: int
@@ -110,6 +113,16 @@ class CameraModel:
     cx: float
     cy: float
     distortion: DistortionCoeffs | None = None
+    # Convenience: supply distortion params directly in the constructor.
+    k1: InitVar[float] = 0.0
+    k2: InitVar[float] = 0.0
+    p1: InitVar[float] = 0.0
+    p2: InitVar[float] = 0.0
+    k3: InitVar[float] = 0.0
+
+    def __post_init__(self, k1: float, k2: float, p1: float, p2: float, k3: float) -> None:
+        if self.distortion is None and any(abs(v) > 1e-12 for v in (k1, k2, p1, p2, k3)):
+            self.distortion = DistortionCoeffs(k1=k1, k2=k2, p1=p1, p2=p2, k3=k3)
 
     def camera_matrix(self) -> np.ndarray:
         return np.array(
@@ -128,6 +141,25 @@ class CameraModel:
     def normalized_to_pixel(self, xn: float, yn: float) -> tuple[float, float]:
         """Convert normalized camera coordinates to pixel (no distortion)."""
         return xn * self.fx + self.cx, yn * self.fy + self.cy
+
+    def undistort(self, xn: float, yn: float) -> tuple[float, float]:
+        """Undistort normalized coordinates using iterative Brown-Conrady model.
+
+        Applies 3 Newton iterations; accurate to < 0.01 px for typical lens
+        distortions.  Returns undistorted normalized (xn, yn).
+        """
+        if self.distortion is None or self.distortion.is_zero:
+            return xn, yn
+        k1, k2, p1, p2, k3 = self.distortion.as_array()
+        xu, yu = xn, yn
+        for _ in range(3):
+            r2 = xu * xu + yu * yu
+            icdist = 1.0 / (1.0 + ((k3 * r2 + k2) * r2 + k1) * r2)
+            dx = 2.0 * p1 * xu * yu + p2 * (r2 + 2.0 * xu * xu)
+            dy = p1 * (r2 + 2.0 * yu * yu) + 2.0 * p2 * xu * yu
+            xu = (xn - dx) * icdist
+            yu = (yn - dy) * icdist
+        return xu, yu
 
 
 class PixelToGimbalTransform:

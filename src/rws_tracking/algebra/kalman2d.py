@@ -415,3 +415,52 @@ class CentroidKalmanCA:
                 Q[idx_y[i], idx_y[j]] = q_block[i, j]
 
         return Q
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible aliases / adapters
+# ---------------------------------------------------------------------------
+
+
+class ConstantVelocityKalman2D:
+    """Adapter that mirrors the benchmark/test API for CentroidKalman2D.
+
+    Constructor accepts ``process_noise`` and ``measurement_noise`` scalars
+    instead of a ``KalmanConfig`` object, and starts at the origin.
+    ``update()`` accepts an optional ``timestamp`` keyword arg (ignored).
+    """
+
+    def __init__(
+        self,
+        cx0: float = 0.0,
+        cy0: float = 0.0,
+        *,
+        process_noise: float = 3.0,
+        measurement_noise: float = 8.0,
+    ) -> None:
+        config = KalmanConfig(
+            process_noise_pos=process_noise,
+            process_noise_vel=process_noise * 5.0,
+            measurement_noise=measurement_noise,
+        )
+        self._inner = CentroidKalman2D(cx0, cy0, config=config)
+
+    def predict(self, dt: float) -> None:
+        self._inner.predict(dt)
+
+    def update(self, cx: float, cy: float, *, timestamp: float | None = None) -> None:
+        self._inner.update(cx, cy)
+
+    @property
+    def position(self) -> tuple[float, float]:
+        return self._inner.position
+
+    @property
+    def velocity(self) -> tuple[float, float]:
+        return self._inner.velocity
+
+    def predict_position(self, dt_ahead: float) -> tuple[float, float]:
+        return self._inner.predict_position(dt_ahead)
+
+
+ConstantAccelerationKalman2D = CentroidKalmanCA
