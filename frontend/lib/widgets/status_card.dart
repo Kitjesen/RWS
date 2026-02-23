@@ -13,6 +13,7 @@ class StatusCard extends StatelessWidget {
       builder: (_, p, __) {
         final s = p.status;
         final stateColor = _stateColor(s.state);
+        final connected = p.connected;
 
         return Card(
           child: Padding(
@@ -22,16 +23,40 @@ class StatusCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.monitor_heart, color: theme.colorScheme.primary),
+                    Icon(Icons.monitor_heart,
+                        color: connected
+                            ? theme.colorScheme.primary
+                            : Colors.red.shade300),
                     const SizedBox(width: 8),
                     Text('系统状态', style: theme.textTheme.titleMedium),
                     const Spacer(),
-                    _StatusChip(
-                      label: s.running ? '运行中' : '已停止',
-                      color: s.running ? Colors.green : Colors.grey,
-                    ),
+                    if (!connected)
+                      _StatusChip(label: 'OFFLINE', color: Colors.red)
+                    else
+                      _StatusChip(
+                        label: s.running ? '运行中' : '已停止',
+                        color: s.running ? Colors.green : Colors.grey,
+                      ),
                   ],
                 ),
+                if (!connected)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, bottom: 2),
+                    child: Row(
+                      children: [
+                        Icon(Icons.wifi_off, size: 14, color: Colors.red.shade300),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Backend unreachable — showing last known state',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.red.shade300,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const Divider(),
                 Expanded(
                   child: Wrap(

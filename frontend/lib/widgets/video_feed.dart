@@ -97,6 +97,22 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                   ),
                 ),
               ),
+              // Manual refresh button — forces a cache-bust
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () => setState(() => _refreshKey += 1000),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(Icons.refresh, size: 16, color: Colors.white70),
+                  ),
+                ),
+              ),
             ],
           ),
         );
