@@ -150,12 +150,28 @@ class TrackingAPI:
 
         if self.pipeline:
             feedback = self.pipeline.driver.get_feedback(time.monotonic())
-            status["gimbal"] = {
+            metrics = self.pipeline.telemetry.snapshot_metrics()
+            status.update({
+                # Decision state (SEARCH / TRACK / LOCK / LOST)
+                "state": self.pipeline._last_track_state,
+                # Gimbal position at root level (Flutter chart reads these)
                 "yaw_deg": feedback.yaw_deg,
                 "pitch_deg": feedback.pitch_deg,
-                "yaw_rate_dps": feedback.yaw_rate_dps,
-                "pitch_rate_dps": feedback.pitch_rate_dps,
-            }
+                # Per-frame tracking errors for the real-time error chart
+                "yaw_error_deg": self.pipeline._last_yaw_error_deg,
+                "pitch_error_deg": self.pipeline._last_pitch_error_deg,
+                # Rolling telemetry metrics
+                "lock_rate": metrics.get("lock_rate", 0.0),
+                "avg_abs_error_deg": metrics.get("avg_abs_error_deg", 0.0),
+                "switches_per_min": metrics.get("switches_per_min", 0.0),
+                # Full gimbal feedback also available nested
+                "gimbal": {
+                    "yaw_deg": feedback.yaw_deg,
+                    "pitch_deg": feedback.pitch_deg,
+                    "yaw_rate_dps": feedback.yaw_rate_dps,
+                    "pitch_rate_dps": feedback.pitch_rate_dps,
+                },
+            })
 
         return status
 

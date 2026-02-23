@@ -169,6 +169,9 @@ class VisionGimbalPipeline:
         self._signal_handlers_installed = False
         self._lock_start_ts: float | None = None
         self._last_track_state: str = TrackState.SEARCH.value
+        # Most-recent gimbal error (updated each step; read by API status endpoint)
+        self._last_yaw_error_deg: float = 0.0
+        self._last_pitch_error_deg: float = 0.0
 
         # Distance cache: track_id -> last fused distance_m.
         # Populated from distance_fusion results and passed to ThreatAssessor
@@ -586,14 +589,16 @@ class VisionGimbalPipeline:
         # =====================================================================
         # 11. 遥测记录
         # =====================================================================
+        self._last_yaw_error_deg = command.metadata.get("yaw_error_deg", 0.0)
+        self._last_pitch_error_deg = command.metadata.get("pitch_error_deg", 0.0)
         self.telemetry.log(
             "control",
             timestamp,
             {
                 "yaw_cmd_dps": command.yaw_rate_cmd_dps,
                 "pitch_cmd_dps": command.pitch_rate_cmd_dps,
-                "yaw_error_deg": command.metadata.get("yaw_error_deg", 0.0),
-                "pitch_error_deg": command.metadata.get("pitch_error_deg", 0.0),
+                "yaw_error_deg": self._last_yaw_error_deg,
+                "pitch_error_deg": self._last_pitch_error_deg,
                 "state": command.metadata.get("state", 0.0),
                 "ff_yaw_dps": command.metadata.get("ff_yaw_dps", 0.0),
                 "ff_pitch_dps": command.metadata.get("ff_pitch_dps", 0.0),
