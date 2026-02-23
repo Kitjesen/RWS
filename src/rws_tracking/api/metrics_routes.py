@@ -126,7 +126,9 @@ def metrics():
     lines.append("# TYPE rws_health_subsystem gauge")
     if hm is not None:
         for name, status in hm.get_status().items():
-            code = _HEALTH_CODES.get(status.compute_status(), 0)
+            # get_status() returns plain dicts with a 'status' key
+            status_str = status.get("status", "unknown") if isinstance(status, dict) else status.compute_status()
+            code = _HEALTH_CODES.get(status_str, 0)
             lines.append(f'rws_health_subsystem{{name="{_escape(name)}"}} {code}')
 
     # ---- operator watchdog ----

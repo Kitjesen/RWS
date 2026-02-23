@@ -162,40 +162,39 @@ class TestShotsFiredMetric:
 
 
 class TestHealthSubsystemMetric:
+    """HealthMonitor.get_status() returns {name: {"status": str, ...}} dicts."""
+
+    def _make_hm(self, subsystems: dict):
+        """Build a mock HealthMonitor whose get_status() returns real dicts."""
+        mock_hm = MagicMock()
+        mock_hm.get_status.return_value = {
+            name: {"status": s, "last_heartbeat_age_s": None, "error": None}
+            for name, s in subsystems.items()
+        }
+        return mock_hm
+
     def test_no_health_monitor_emits_header_only(self):
         _, body = _get_metrics()
         assert "# HELP rws_health_subsystem" in body
 
     def test_ok_subsystem_reports_one(self):
-        mock_status = MagicMock()
-        mock_status.compute_status.return_value = "ok"
-        mock_hm = MagicMock()
-        mock_hm.get_status.return_value = {"pipeline": mock_status}
-        _, body = _get_metrics({"health_monitor": mock_hm})
+        _, body = _get_metrics({"health_monitor": self._make_hm({"pipeline": "ok"})})
         assert 'rws_health_subsystem{name="pipeline"} 1' in body
 
     def test_degraded_subsystem_reports_two(self):
-        mock_status = MagicMock()
-        mock_status.compute_status.return_value = "degraded"
-        mock_hm = MagicMock()
-        mock_hm.get_status.return_value = {"camera": mock_status}
-        _, body = _get_metrics({"health_monitor": mock_hm})
+        _, body = _get_metrics({"health_monitor": self._make_hm({"camera": "degraded"})})
         assert 'rws_health_subsystem{name="camera"} 2' in body
 
     def test_failed_subsystem_reports_three(self):
-        mock_status = MagicMock()
-        mock_status.compute_status.return_value = "failed"
-        mock_hm = MagicMock()
-        mock_hm.get_status.return_value = {"imu": mock_status}
-        _, body = _get_metrics({"health_monitor": mock_hm})
+        _, body = _get_metrics({"health_monitor": self._make_hm({"imu": "failed"})})
         assert 'rws_health_subsystem{name="imu"} 3' in body
 
+    def test_unknown_subsystem_reports_zero(self):
+        _, body = _get_metrics({"health_monitor": self._make_hm({"sensor": "unknown"})})
+        assert 'rws_health_subsystem{name="sensor"} 0' in body
+
     def test_label_escaping_for_special_chars(self):
-        mock_status = MagicMock()
-        mock_status.compute_status.return_value = "ok"
-        mock_hm = MagicMock()
-        mock_hm.get_status.return_value = {'sub"sys': mock_status}
-        _, body = _get_metrics({"health_monitor": mock_hm})
+        _, body = _get_metrics({"health_monitor": self._make_hm({'sub"sys': "ok"})})
         assert '\\"' in body or '"' in body  # escaped or quoted
 
 

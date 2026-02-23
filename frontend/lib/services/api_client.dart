@@ -212,9 +212,9 @@ class RwsApiClient {
       if (resp.statusCode == 200) {
         return jsonDecode(resp.body) as Map<String, dynamic>;
       }
-      return {'ok': false, 'error': 'HTTP ${resp.statusCode}'};
+      return {'go': false, 'error': 'HTTP ${resp.statusCode}'};
     } catch (e) {
-      return {'ok': false, 'error': e.toString()};
+      return {'go': false, 'error': e.toString()};
     }
   }
 
