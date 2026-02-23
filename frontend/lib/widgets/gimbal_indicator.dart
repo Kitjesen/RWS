@@ -3,8 +3,28 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/tracking_provider.dart';
 
-class GimbalIndicator extends StatelessWidget {
+const int _kTrailLength = 60; // positions to remember (~12 s at 200 ms polling)
+
+class GimbalIndicator extends StatefulWidget {
   const GimbalIndicator({super.key});
+
+  @override
+  State<GimbalIndicator> createState() => _GimbalIndicatorState();
+}
+
+class _GimbalIndicatorState extends State<GimbalIndicator> {
+  // Ring buffer of (yawDeg, pitchDeg) pairs — oldest first.
+  final List<(double, double)> _trail = [];
+
+  void _addToTrail(double yaw, double pitch) {
+    if (_trail.isNotEmpty) {
+      final (lastY, lastP) = _trail.last;
+      // Skip if position hasn't meaningfully changed (reduces clutter).
+      if ((yaw - lastY).abs() < 0.05 && (pitch - lastP).abs() < 0.05) return;
+    }
+    _trail.add((yaw, pitch));
+    if (_trail.length > _kTrailLength) _trail.removeAt(0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -13,6 +33,7 @@ class GimbalIndicator extends StatelessWidget {
     return Consumer<TrackingProvider>(
       builder: (_, p, __) {
         final s = p.status;
+        _addToTrail(s.yawDeg, s.pitchDeg);
 
         return Card(
           child: Padding(
@@ -42,6 +63,7 @@ class GimbalIndicator extends StatelessWidget {
                               pitchDeg: s.pitchDeg,
                               yawErrorDeg: s.yawErrorDeg,
                               pitchErrorDeg: s.pitchErrorDeg,
+                              trail: List.unmodifiable(_trail),
                               primaryColor: theme.colorScheme.primary,
                             ),
                           ),
@@ -98,6 +120,7 @@ class _GimbalPainter extends CustomPainter {
   final double pitchDeg;
   final double yawErrorDeg;
   final double pitchErrorDeg;
+  final List<(double, double)> trail;
   final Color primaryColor;
 
   _GimbalPainter({
@@ -105,6 +128,7 @@ class _GimbalPainter extends CustomPainter {
     required this.pitchDeg,
     required this.yawErrorDeg,
     required this.pitchErrorDeg,
+    required this.trail,
     required this.primaryColor,
   });
 
@@ -115,7 +139,7 @@ class _GimbalPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2 - 8;
 
-    // background circles
+    // Background circles
     final bgPaint = Paint()
       ..color = primaryColor.withValues(alpha: 0.08)
       ..style = PaintingStyle.fill;
@@ -129,7 +153,7 @@ class _GimbalPainter extends CustomPainter {
       canvas.drawCircle(center, radius * f, ringPaint);
     }
 
-    // crosshair
+    // Crosshair
     final crossPaint = Paint()
       ..color = primaryColor.withValues(alpha: 0.15)
       ..strokeWidth = 0.5;
@@ -138,7 +162,24 @@ class _GimbalPainter extends CustomPainter {
     canvas.drawLine(Offset(center.dx, center.dy - radius),
         Offset(center.dx, center.dy + radius), crossPaint);
 
-    // current position dot
+    // Trail — faded dots, oldest most transparent
+    final trailLen = trail.length;
+    for (int i = 0; i < trailLen; i++) {
+      final (ty, tp) = trail[i];
+      final age = (trailLen - i) / trailLen; // 1.0 = oldest, 0.0 = newest
+      final alpha = (1.0 - age) * 0.55; // newest ~0.55, oldest ~0.0
+      final dotRadius = 2.0 + (1.0 - age) * 1.5;
+      final tx = (ty / maxDeg).clamp(-1.0, 1.0);
+      final tpy = (-tp / maxDeg).clamp(-1.0, 1.0);
+      final tPos = Offset(center.dx + tx * radius, center.dy + tpy * radius);
+      canvas.drawCircle(
+        tPos,
+        dotRadius,
+        Paint()..color = Colors.cyanAccent.withValues(alpha: alpha),
+      );
+    }
+
+    // Current position dot
     final nx = (yawDeg / maxDeg).clamp(-1.0, 1.0);
     final ny = (-pitchDeg / maxDeg).clamp(-1.0, 1.0);
     final pos = Offset(center.dx + nx * radius, center.dy + ny * radius);
@@ -146,7 +187,7 @@ class _GimbalPainter extends CustomPainter {
     final dotPaint = Paint()..color = Colors.cyanAccent;
     canvas.drawCircle(pos, 5, dotPaint);
 
-    // error ring around dot
+    // Error ring around dot
     final errMag = math.sqrt(yawErrorDeg * yawErrorDeg + pitchErrorDeg * pitchErrorDeg);
     final errRadius = (errMag / maxDeg * radius).clamp(2.0, radius * 0.5);
     final errColor = errMag < 1.0 ? Colors.green : errMag < 3.0 ? Colors.orange : Colors.red;
@@ -158,9 +199,5 @@ class _GimbalPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _GimbalPainter old) =>
-      old.yawDeg != yawDeg ||
-      old.pitchDeg != pitchDeg ||
-      old.yawErrorDeg != yawErrorDeg ||
-      old.pitchErrorDeg != pitchErrorDeg;
+  bool shouldRepaint(covariant _GimbalPainter old) => true; // trail changes every poll
 }
