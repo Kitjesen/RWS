@@ -118,11 +118,13 @@ class TrackingProvider extends ChangeNotifier {
         _api.getThreats(),
         _api.getSubsystemHealth(),
         _api.getFireStatus(),
+        _api.getDesignatedTrackId(),
       ]);
       _threats = results[0] as List<ThreatEntry>;
       _health = results[1] as Map<String, SubsystemHealth>;
       final newFireStatus = results[2] as FireChainStatus;
       _fireStatus = newFireStatus;
+      _designatedTrackId = results[3] as int?;
       _updateHeartbeatTimer();
       notifyListeners();
     } catch (_) {
