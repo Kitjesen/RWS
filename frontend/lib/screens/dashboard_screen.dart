@@ -13,6 +13,7 @@ import '../widgets/system_health_widget.dart';
 import '../widgets/fire_control_widget.dart';
 import '../widgets/threat_queue_widget.dart';
 import '../widgets/mission_control_widget.dart';
+import '../widgets/preflight_widget.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -101,6 +102,8 @@ class DashboardScreen extends StatelessWidget {
             children: [
               const Expanded(flex: 2, child: SystemHealthWidget()),
               const SizedBox(height: 12),
+              const Expanded(flex: 2, child: PreflightWidget()),
+              const SizedBox(height: 12),
               const Expanded(flex: 3, child: MissionControlWidget()),
               const SizedBox(height: 12),
               const Expanded(flex: 3, child: FireControlWidget()),
@@ -181,6 +184,8 @@ class DashboardScreen extends StatelessWidget {
         SizedBox(height: 400, child: ControlPanel()),
         SizedBox(height: 12),
         SizedBox(height: 200, child: SystemHealthWidget()),
+        SizedBox(height: 12),
+        SizedBox(height: 200, child: PreflightWidget()),
         SizedBox(height: 12),
         SizedBox(height: 320, child: MissionControlWidget()),
         SizedBox(height: 12),

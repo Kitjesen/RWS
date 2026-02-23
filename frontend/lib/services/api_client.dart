@@ -190,6 +190,34 @@ class RwsApiClient {
     }
   }
 
+  /// Send operator liveness heartbeat to prevent auto-safe on timeout.
+  /// Call every ≤5 s while armed.
+  Future<bool> sendHeartbeat({String operatorId = 'operator_1'}) async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/fire/heartbeat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'operator_id': operatorId}),
+      );
+      return resp.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// GET /api/selftest — run pre-mission go/no-go checks (7 subsystems).
+  Future<Map<String, dynamic>> runSelfTest() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/selftest'));
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+      return {'ok': false, 'error': 'HTTP ${resp.statusCode}'};
+    } catch (e) {
+      return {'ok': false, 'error': e.toString()};
+    }
+  }
+
   // --- 任务控制 ---
 
   Future<MissionStatus> getMissionStatus() async {

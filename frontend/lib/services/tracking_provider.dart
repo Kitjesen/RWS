@@ -30,6 +30,9 @@ class TrackingProvider extends ChangeNotifier {
   // 禁射区列表
   List<SafetyZoneModel> _nfzZones = [];
 
+  // 操作员心跳定时器 (armed 时每 5s 发送一次, 防止 watchdog 自动安全)
+  Timer? _heartbeatTimer;
+
   // 误差历史 (用于图表)
   final List<double> yawErrorHistory = [];
   final List<double> pitchErrorHistory = [];
@@ -59,6 +62,26 @@ class TrackingProvider extends ChangeNotifier {
   void stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _stopHeartbeat();
+  }
+
+  // --- 操作员心跳管理 ---
+
+  /// 当系统处于 armed 状态时, 每 5s 自动发送心跳, 防止 OperatorWatchdog 超时.
+  void _updateHeartbeatTimer() {
+    if (_fireStatus.isArmed) {
+      _heartbeatTimer ??= Timer.periodic(
+        const Duration(seconds: 5),
+        (_) => _api.sendHeartbeat(),
+      );
+    } else {
+      _stopHeartbeat();
+    }
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   Future<void> _poll() async {
@@ -98,7 +121,9 @@ class TrackingProvider extends ChangeNotifier {
       ]);
       _threats = results[0] as List<ThreatEntry>;
       _health = results[1] as Map<String, SubsystemHealth>;
-      _fireStatus = results[2] as FireChainStatus;
+      final newFireStatus = results[2] as FireChainStatus;
+      _fireStatus = newFireStatus;
+      _updateHeartbeatTimer();
       notifyListeners();
     } catch (_) {
       // 扩展轮询失败不影响主连接状态
@@ -287,6 +312,7 @@ class TrackingProvider extends ChangeNotifier {
   @override
   void dispose() {
     stopPolling();
+    _stopHeartbeat();
     super.dispose();
   }
 }
