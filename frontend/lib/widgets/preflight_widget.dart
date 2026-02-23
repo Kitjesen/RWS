@@ -28,7 +28,7 @@ class _PreflightWidgetState extends State<PreflightWidget> {
       final r = await _api.runSelfTest();
       if (mounted) setState(() => _result = r);
     } catch (e) {
-      if (mounted) setState(() => _result = {'ok': false, 'error': e.toString()});
+      if (mounted) setState(() => _result = {'go': false, 'error': e.toString()});
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -37,8 +37,9 @@ class _PreflightWidgetState extends State<PreflightWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final checks = _result?['checks'] as Map<String, dynamic>?;
-    final allOk = _result?['ok'] == true;
+    final checks = _result?['checks'] as List<dynamic>?;
+    final allOk = _result?['go'] == true;
+    final errorMsg = _result?['error'] as String?;
 
     return Card(
       child: Padding(
@@ -87,20 +88,7 @@ class _PreflightWidgetState extends State<PreflightWidget> {
             const Divider(),
 
             // --- 自检结果列表 ---
-            if (_result == null && !_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  '点击运行以检查各子系统状态',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-              )
-            else if (checks != null)
-              ...checks.entries.map((e) => _CheckRow(
-                    name: e.key,
-                    entry: e.value as Map<String, dynamic>,
-                  ))
-            else if (_loading)
+            if (_loading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
                 child: Row(
@@ -114,7 +102,27 @@ class _PreflightWidgetState extends State<PreflightWidget> {
                     Text('自检中...', style: TextStyle(fontSize: 13)),
                   ],
                 ),
-              ),
+              )
+            else if (_result == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '点击运行以检查各子系统状态',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+              )
+            else if (errorMsg != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '自检失败: $errorMsg',
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              )
+            else if (checks != null)
+              ...checks.map((e) => _CheckRow(
+                    entry: e as Map<String, dynamic>,
+                  )),
 
             const SizedBox(height: 8),
             SizedBox(
@@ -138,15 +146,16 @@ class _PreflightWidgetState extends State<PreflightWidget> {
 }
 
 class _CheckRow extends StatelessWidget {
-  final String name;
   final Map<String, dynamic> entry;
 
-  const _CheckRow({required this.name, required this.entry});
+  const _CheckRow({required this.entry});
 
   @override
   Widget build(BuildContext context) {
-    final ok = entry['ok'] == true;
+    final ok = entry['status'] == 'pass';
+    final name = entry['name'] as String? ?? '?';
     final message = entry['message'] as String? ?? '';
+    final elapsedMs = entry['elapsed_ms'];
     final icon = ok ? Icons.check_circle_outline : Icons.error_outline;
     final color = ok ? Colors.green : Colors.red;
 
@@ -157,7 +166,7 @@ class _CheckRow extends StatelessWidget {
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 8),
           SizedBox(
-            width: 140,
+            width: 130,
             child: Text(
               name,
               style: TextStyle(
@@ -174,6 +183,11 @@ class _CheckRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (elapsedMs != null)
+            Text(
+              '${elapsedMs}ms',
+              style: const TextStyle(fontSize: 10, color: Colors.white38),
+            ),
         ],
       ),
     );
