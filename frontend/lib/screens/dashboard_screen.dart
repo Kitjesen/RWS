@@ -122,18 +122,28 @@ class DashboardScreen extends StatelessWidget {
   Widget _mediumLayout() {
     return Column(
       children: [
+        // Row 1: video + gimbal indicator | status + metrics
         Expanded(
           flex: 2,
           child: Row(
             children: [
-              const Expanded(flex: 2, child: VideoFeedWidget()),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  children: const [
+                    Expanded(flex: 3, child: VideoFeedWidget()),
+                    SizedBox(height: 12),
+                    Expanded(flex: 2, child: GimbalIndicator()),
+                  ],
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
-                  children: [
-                    const Expanded(child: StatusCard()),
-                    const SizedBox(height: 12),
-                    const Expanded(child: MetricsCard()),
+                  children: const [
+                    Expanded(child: StatusCard()),
+                    SizedBox(height: 12),
+                    Expanded(child: MetricsCard()),
                   ],
                 ),
               ),
@@ -141,28 +151,32 @@ class DashboardScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        // Row 2: error chart + control panel
         Expanded(
           flex: 2,
           child: Row(
-            children: [
-              const Expanded(child: ErrorChartWidget()),
-              const SizedBox(width: 12),
-              const Expanded(child: ControlPanel()),
+            children: const [
+              Expanded(child: ErrorChartWidget()),
+              SizedBox(width: 12),
+              Expanded(child: ControlPanel()),
             ],
           ),
         ),
         const SizedBox(height: 12),
+        // Row 3: preflight + health | mission + fire + threats
         Expanded(
           flex: 2,
           child: Row(
-            children: [
-              const Expanded(child: SystemHealthWidget()),
-              const SizedBox(width: 12),
-              const Expanded(child: MissionControlWidget()),
-              const SizedBox(width: 12),
-              const Expanded(child: FireControlWidget()),
-              const SizedBox(width: 12),
-              const Expanded(child: ThreatQueueWidget()),
+            children: const [
+              Expanded(child: PreflightWidget()),
+              SizedBox(width: 12),
+              Expanded(child: SystemHealthWidget()),
+              SizedBox(width: 12),
+              Expanded(child: MissionControlWidget()),
+              SizedBox(width: 12),
+              Expanded(child: FireControlWidget()),
+              SizedBox(width: 12),
+              Expanded(child: ThreatQueueWidget()),
             ],
           ),
         ),
@@ -174,6 +188,8 @@ class DashboardScreen extends StatelessWidget {
     return ListView(
       children: const [
         SizedBox(height: 250, child: VideoFeedWidget()),
+        SizedBox(height: 12),
+        SizedBox(height: 220, child: GimbalIndicator()),
         SizedBox(height: 12),
         SizedBox(height: 120, child: StatusCard()),
         SizedBox(height: 12),
