@@ -338,7 +338,7 @@ class _ProfileDropdown extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: DropdownButtonFormField<String>(
-            value: profiles.contains(selected) ? selected : profiles.first,
+            initialValue: profiles.contains(selected) ? selected : profiles.first,
             isExpanded: true,
             decoration: InputDecoration(
               contentPadding:
