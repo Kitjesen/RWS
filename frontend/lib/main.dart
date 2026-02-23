@@ -4,6 +4,7 @@ import 'services/api_client.dart';
 import 'services/event_stream.dart';
 import 'services/tracking_provider.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/events_screen.dart';
 import 'screens/replay_screen.dart';
 import 'screens/safety_screen.dart';
 
@@ -57,6 +58,7 @@ class _RwsHomeState extends State<RwsHome> {
 
   static const List<Widget> _screens = [
     DashboardScreen(),
+    EventsScreen(),
     ReplayScreen(),
     SafetyScreen(),
   ];
@@ -78,6 +80,11 @@ class _RwsHomeState extends State<RwsHome> {
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard),
             label: 'Dashboard',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.stream_outlined),
+            selectedIcon: Icon(Icons.stream),
+            label: 'Events',
           ),
           NavigationDestination(
             icon: Icon(Icons.history_outlined),

@@ -66,6 +66,16 @@ const Map<String, _AlertSpec> _specs = {
     icon: Icons.stop_circle,
     message: _missionEndMsg,
   ),
+  'target_designated': _AlertSpec(
+    color: Color(0xFF00838F), // teal
+    icon: Icons.gps_fixed,
+    message: _designatedMsg,
+  ),
+  'config_reloaded': _AlertSpec(
+    color: Color(0xFF4E342E), // brown
+    icon: Icons.settings_backup_restore,
+    message: _configReloadedMsg,
+  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -104,6 +114,16 @@ String _missionStartMsg(Map<String, dynamic> d) {
 String _missionEndMsg(Map<String, dynamic> d) {
   final elapsed = d['elapsed_s'] ?? 0;
   return 'Mission ENDED  (${elapsed}s elapsed)';
+}
+
+String _designatedMsg(Map<String, dynamic> d) {
+  final id = d['track_id'] ?? '?';
+  return 'Target DESIGNATED  track=$id';
+}
+
+String _configReloadedMsg(Map<String, dynamic> d) {
+  final profile = d['profile'];
+  return profile != null ? 'Config reloaded — profile: $profile' : 'Config reloaded';
 }
 
 // ---------------------------------------------------------------------------

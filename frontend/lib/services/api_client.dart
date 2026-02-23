@@ -451,4 +451,19 @@ class RwsApiClient {
     } catch (_) {}
     return null;
   }
+
+  /// Returns the list of available mission profile names from the server.
+  /// Falls back to an empty list on any error.
+  Future<List<String>> fetchProfiles() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/config/profiles'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        // Response may be {"profiles": [...]} or a bare list.
+        final List<dynamic> raw = data is Map ? (data['profiles'] ?? []) : data;
+        return raw.map((e) => e.toString()).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
 }

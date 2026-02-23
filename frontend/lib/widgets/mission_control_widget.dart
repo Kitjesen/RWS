@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/tracking_provider.dart';
 import '../models/tracking_models.dart';
+import '../utils/launch_url.dart';
 
-/// Mission profile options presented in the dropdown.
-const _kProfiles = ['urban_cqb', 'open_field', 'surveillance', 'drill'];
+/// Fallback profile list used when the server is unreachable.
+const _kFallbackProfiles = ['urban_cqb', 'open_field', 'surveillance', 'drill'];
 
 class MissionControlWidget extends StatefulWidget {
   const MissionControlWidget({super.key});
@@ -14,8 +15,29 @@ class MissionControlWidget extends StatefulWidget {
 }
 
 class _MissionControlWidgetState extends State<MissionControlWidget> {
-  String _selectedProfile = _kProfiles.first;
+  List<String> _profiles = _kFallbackProfiles;
+  String _selectedProfile = _kFallbackProfiles.first;
   bool _busy = false; // guards start/end button during async call
+
+  @override
+  void initState() {
+    super.initState();
+    // Load profiles after the first frame so the provider is available.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProfiles());
+  }
+
+  Future<void> _loadProfiles() async {
+    final api = context.read<TrackingProvider>().api;
+    final fetched = await api.fetchProfiles();
+    if (!mounted || fetched.isEmpty) return;
+    setState(() {
+      _profiles = fetched;
+      // Keep current selection if still valid; else reset to first.
+      if (!_profiles.contains(_selectedProfile)) {
+        _selectedProfile = _profiles.first;
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +78,7 @@ class _MissionControlWidgetState extends State<MissionControlWidget> {
                 // ── Profile selector (only when idle) ────────────────────
                 if (!mission.active) ...[
                   _ProfileDropdown(
+                    profiles: _profiles,
                     selected: _selectedProfile,
                     onChanged: (val) {
                       if (val != null) setState(() => _selectedProfile = val);
@@ -294,10 +317,15 @@ class _FireChainChip extends StatelessWidget {
 }
 
 class _ProfileDropdown extends StatelessWidget {
+  final List<String> profiles;
   final String selected;
   final ValueChanged<String?> onChanged;
 
-  const _ProfileDropdown({required this.selected, required this.onChanged});
+  const _ProfileDropdown({
+    required this.profiles,
+    required this.selected,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -310,7 +338,7 @@ class _ProfileDropdown extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: DropdownButtonFormField<String>(
-            value: selected,
+            value: profiles.contains(selected) ? selected : profiles.first,
             isExpanded: true,
             decoration: InputDecoration(
               contentPadding:
@@ -320,7 +348,7 @@ class _ProfileDropdown extends StatelessWidget {
               ),
               isDense: true,
             ),
-            items: _kProfiles
+            items: profiles
                 .map(
                   (p) => DropdownMenuItem(
                     value: p,
@@ -471,12 +499,5 @@ class _ReportLink extends StatelessWidget {
     return parts.lastWhere((s) => s.isNotEmpty, orElse: () => path);
   }
 
-  /// Flutter web: open URL in a new tab; non-web: copy to clipboard / log.
-  void _launchUrl(String url) {
-    // We intentionally avoid the url_launcher package (not in pubspec).
-    // On web, we can use dart:html; on other targets a toast would normally
-    // be shown. For now this is a no-op placeholder that can be swapped in
-    // once url_launcher is added as a dependency.
-    debugPrint('Open report: $url');
-  }
+  void _launchUrl(String url) => launchExternalUrl(url);
 }
