@@ -407,6 +407,24 @@ def create_flask_app(api: TrackingAPI) -> Flask:
         result = api.get_telemetry()
         return jsonify(result)
 
+    @app.route("/api/config", methods=["GET"])
+    def get_config():
+        """Return the current effective configuration (PID, selector, etc.)."""
+        from ..config.loader import load_config
+        try:
+            cfg = load_config(api.config_path)
+            ctrl = cfg.controller
+            if ctrl is None:
+                return jsonify({"error": "No controller config"}), 503
+            return jsonify({
+                "pid": {
+                    "yaw":   {"kp": ctrl.yaw_pid.kp,   "ki": ctrl.yaw_pid.ki,   "kd": ctrl.yaw_pid.kd},
+                    "pitch": {"kp": ctrl.pitch_pid.kp, "ki": ctrl.pitch_pid.ki, "kd": ctrl.pitch_pid.kd},
+                }
+            })
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 503
+
     @app.route("/api/config", methods=["POST"])
     def update_config():
         """Update configuration."""

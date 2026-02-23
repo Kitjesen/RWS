@@ -16,6 +16,33 @@ class _ControlPanelState extends State<ControlPanel> {
   bool _sending = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPidFromConfig());
+  }
+
+  Future<void> _loadPidFromConfig() async {
+    final cfg = await context.read<TrackingProvider>().api.getConfig();
+    if (!mounted || cfg == null) return;
+    final pid = cfg['pid'] as Map<String, dynamic>?;
+    if (pid == null) return;
+    setState(() {
+      final yaw = pid['yaw'] as Map<String, dynamic>?;
+      if (yaw != null) {
+        _yawPid.kp = (yaw['kp'] as num).toDouble();
+        _yawPid.ki = (yaw['ki'] as num).toDouble();
+        _yawPid.kd = (yaw['kd'] as num).toDouble();
+      }
+      final pitch = pid['pitch'] as Map<String, dynamic>?;
+      if (pitch != null) {
+        _pitchPid.kp = (pitch['kp'] as num).toDouble();
+        _pitchPid.ki = (pitch['ki'] as num).toDouble();
+        _pitchPid.kd = (pitch['kd'] as num).toDouble();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 

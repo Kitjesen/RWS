@@ -452,6 +452,18 @@ class RwsApiClient {
     return null;
   }
 
+  /// Fetches the current effective configuration from GET /api/config.
+  /// Returns null on any error.
+  Future<Map<String, dynamic>?> getConfig() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/config'));
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   /// Returns the list of available mission profile names from the server.
   /// Falls back to an empty list on any error.
   Future<List<String>> fetchProfiles() async {
