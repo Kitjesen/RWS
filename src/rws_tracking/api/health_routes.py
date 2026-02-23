@@ -50,7 +50,7 @@ def switch_profile(name: str):
         from ..config.profiles import ProfileManager
         pm = ProfileManager(profiles_dir)
     try:
-        cfg = pm.load_profile(name)
+        pm.load_profile(name)
         return jsonify({"status": "ok", "profile": name})
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 404
