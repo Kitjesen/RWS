@@ -52,11 +52,11 @@ def run_selftest():
 
     # 1. pipeline_imports
     def check_imports():
-        from src.rws_tracking.safety.shooting_chain import ShootingChain  # noqa: F401
-        from src.rws_tracking.telemetry.audit import AuditLogger  # noqa: F401
-        from src.rws_tracking.health.monitor import HealthMonitor  # noqa: F401
-        from src.rws_tracking.decision.lifecycle import TargetLifecycleManager  # noqa: F401
-        from src.rws_tracking.decision.engagement import ThreatAssessor  # noqa: F401
+        from ..safety.shooting_chain import ShootingChain  # noqa: F401
+        from ..telemetry.audit import AuditLogger  # noqa: F401
+        from ..health.monitor import HealthMonitor  # noqa: F401
+        from ..decision.lifecycle import TargetLifecycleManager  # noqa: F401
+        from ..decision.engagement import ThreatAssessor  # noqa: F401
         return "all critical imports OK"
 
     checks.append(_check("pipeline_imports", check_imports))
@@ -78,7 +78,7 @@ def run_selftest():
     def check_audit():
         import tempfile
         from pathlib import Path
-        from src.rws_tracking.telemetry.audit import AuditLogger
+        from ..telemetry.audit import AuditLogger
         with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as f:
             path = f.name
         try:
@@ -132,7 +132,7 @@ def run_selftest():
 
     # 7. config_valid
     def check_config():
-        from src.rws_tracking.config import load_config  # noqa: F401
+        from ..config import load_config  # noqa: F401
         return "config module importable"
 
     checks.append(_check("config_valid", check_config))
