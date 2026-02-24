@@ -78,7 +78,15 @@ def get_status():
 
 @fire_bp.route("/arm", methods=["POST"])
 def arm():
-    """ARM the system.  Body: {"operator_id": "op1"}"""
+    """ARM the system.  Body: {"operator_id": "op1"}
+
+    When the two-man rule is enabled on the shooting chain this endpoint uses
+    ``chain.initiate_arm()`` so that the first call returns a
+    ``pending_confirmation`` status and the second (different) operator's call
+    completes the arm.  Use ``GET /api/fire/arm/pending`` to poll the pending
+    status and ``POST /api/fire/arm/confirm`` as a semantic alias for the
+    second-operator confirmation.
+    """
     rate_err = _check_fire_rate_limit()
     if rate_err is not None:
         return rate_err
@@ -89,12 +97,104 @@ def arm():
     operator_id = data.get("operator_id", "")
     if not operator_id:
         return jsonify({"error": "operator_id required"}), 400
+
+    # Two-man rule: delegate to initiate_arm() when enabled.
+    if getattr(chain, "_two_man_rule_enabled", False):
+        result = chain.initiate_arm(operator_id)
+        status = result.get("status")
+        if status == "error":
+            return jsonify(result), 409
+        if status == "expired":
+            return jsonify(result), 410
+        # pending_confirmation (202) or armed (200)
+        http_code = 200 if status == "armed" else 202
+        result["chain_state"] = chain.state.value
+        try:
+            from .events import event_bus
+            event_bus.emit("fire_chain_state", {
+                "state": chain.state.value,
+                "two_man_status": status,
+                "operator_id": operator_id,
+            })
+        except Exception:
+            pass
+        return jsonify(result), http_code
+
+    # Normal single-operator arm.
     ok = chain.arm(operator_id)
     if not ok:
         return jsonify({
             "error": f"cannot arm from state {chain.state.value}",
         }), 409
     return jsonify({"state": chain.state.value, "operator_id": operator_id})
+
+
+@fire_bp.route("/arm/pending", methods=["GET"])
+def arm_pending():
+    """Return the pending two-man arm request status (for the second operator).
+
+    Response when a request is pending::
+
+        {"pending": true, "initiated_by": "op1", "expires_in_s": 23.4}
+
+    Response when no request is pending::
+
+        {"pending": false}
+
+    Returns 503 if the shooting chain is not configured.
+    """
+    chain = _get_chain()
+    if chain is None:
+        return jsonify({"error": "shooting_chain not configured"}), 503
+    if not getattr(chain, "_two_man_rule_enabled", False):
+        return jsonify({"pending": False, "two_man_rule_enabled": False})
+    status = chain.get_arm_pending_status()
+    if status is None:
+        return jsonify({"pending": False, "two_man_rule_enabled": True})
+    return jsonify({"pending": True, **status})
+
+
+@fire_bp.route("/arm/confirm", methods=["POST"])
+def arm_confirm():
+    """Second-operator confirmation endpoint for the two-man arming rule.
+
+    Semantically identical to ``POST /api/fire/arm`` but makes the operator's
+    intent explicit.  Body: {"operator_id": "op2"}
+    """
+    rate_err = _check_fire_rate_limit()
+    if rate_err is not None:
+        return rate_err
+    chain = _get_chain()
+    if chain is None:
+        return jsonify({"error": "shooting_chain not configured"}), 503
+    data = request.get_json(silent=True) or {}
+    operator_id = data.get("operator_id", "")
+    if not operator_id:
+        return jsonify({"error": "operator_id required"}), 400
+    if not getattr(chain, "_two_man_rule_enabled", False):
+        return jsonify({"error": "two_man_rule is not enabled"}), 409
+    result = chain.initiate_arm(operator_id)
+    status = result.get("status")
+    if status == "error":
+        return jsonify(result), 409
+    if status == "expired":
+        return jsonify(result), 410
+    if status == "pending_confirmation":
+        # Caller used /confirm but there was no pending request — treat as
+        # a first-initiation.
+        result["chain_state"] = chain.state.value
+        return jsonify(result), 202
+    result["chain_state"] = chain.state.value
+    try:
+        from .events import event_bus
+        event_bus.emit("fire_chain_state", {
+            "state": chain.state.value,
+            "two_man_status": "armed",
+            "operator_id": operator_id,
+        })
+    except Exception:
+        pass
+    return jsonify(result)
 
 
 @fire_bp.route("/safe", methods=["POST"])
@@ -435,3 +535,93 @@ def get_designation():
 
     tid = pipeline.designated_track_id
     return jsonify({"track_id": tid, "designated": tid is not None})
+
+
+# ---------------------------------------------------------------------------
+# Rules of Engagement (ROE) endpoints
+# ---------------------------------------------------------------------------
+
+
+def _get_roe():
+    """Return the RoeManager from app extensions, or None."""
+    return current_app.extensions.get("roe_manager")
+
+
+@fire_bp.route("/roe", methods=["GET"])
+def list_roe_profiles():
+    """List all registered ROE profiles and indicate the active one.
+
+    Response::
+
+        {
+          "active_profile": "training",
+          "profiles": [
+            {
+              "name": "training",
+              "display_name": "训练模式 (Training)",
+              "active": true,
+              "fire_enabled": false,
+              "min_lock_time_s": 0.0,
+              "max_engagement_range_m": 9999.0,
+              "nfz_buffer_multiplier": 1.0,
+              "require_two_man": false,
+              "description": "..."
+            },
+            ...
+          ]
+        }
+    """
+    roe = _get_roe()
+    if roe is None:
+        return jsonify({"error": "roe_manager not configured"}), 503
+    return jsonify({
+        "active_profile": roe.active.name,
+        "profiles": roe.list_profiles(),
+    })
+
+
+@fire_bp.route("/roe/<name>", methods=["POST"])
+def switch_roe_profile(name: str):
+    """Switch the active ROE profile.
+
+    Body (optional)::
+
+        {"operator_id": "op1"}
+
+    Response::
+
+        {
+          "ok": true,
+          "active_profile": "exercise",
+          "fire_enabled": true
+        }
+
+    Returns 404 if the named profile does not exist.
+    """
+    roe = _get_roe()
+    if roe is None:
+        return jsonify({"error": "roe_manager not configured"}), 503
+    data = request.get_json(silent=True) or {}
+    operator_id = str(data.get("operator_id", ""))
+    try:
+        profile = roe.switch_profile(name)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+    logger.info("ROE profile switched to %r by operator='%s'", name, operator_id)
+    try:
+        from .events import event_bus
+        event_bus.emit("roe_profile_changed", {
+            "profile": profile.name,
+            "fire_enabled": profile.fire_enabled,
+            "operator_id": operator_id,
+        })
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "active_profile": profile.name,
+        "fire_enabled": profile.fire_enabled,
+        "require_two_man": profile.require_two_man,
+    })

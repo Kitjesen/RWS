@@ -167,20 +167,34 @@ class SubsystemHealth {
 class MissionStatus {
   final bool active;
   final String? profile;
+  /// ROE profile name — may differ from the mission profile when a named ROE
+  /// preset (training/exercise/live) is loaded separately.
+  final String? roeProfile;
   final String? sessionId;
+  /// ISO-8601 start timestamp, e.g. "2026-02-24T10:00:00+00:00"
+  final String? startedAt;
+  /// Elapsed seconds reported by the server (used for initial sync).
   final double elapsedS;
+  /// Alias kept for backward compat — same as [elapsedS].
+  double get durationS => elapsedS;
   final String? fireChainState;
   final int? targetsEngaged;
+  final int? targetsDetected;
+  final int? shotsFired;
   // Lifecycle breakdown: DETECTED / TRACKED / ARCHIVED / NEUTRALIZED counts
   final Map<String, int> lifecycleByState;
 
   MissionStatus({
     this.active = false,
     this.profile,
+    this.roeProfile,
     this.sessionId,
+    this.startedAt,
     this.elapsedS = 0.0,
     this.fireChainState,
     this.targetsEngaged,
+    this.targetsDetected,
+    this.shotsFired,
     this.lifecycleByState = const {},
   });
 
@@ -190,15 +204,20 @@ class MissionStatus {
     return MissionStatus(
       active: j['active'] ?? false,
       profile: j['profile'],
+      roeProfile: j['roe_profile'] as String?,
       sessionId: j['session_id'],
-      elapsedS: (j['elapsed_s'] ?? 0.0).toDouble(),
+      startedAt: j['started_at'] as String?,
+      // Prefer duration_s (new field), fall back to elapsed_s for compat.
+      elapsedS: ((j['duration_s'] ?? j['elapsed_s']) ?? 0.0).toDouble(),
       fireChainState: j['fire_chain_state'],
-      targetsEngaged: j['targets_engaged'],
+      targetsEngaged: j['targets_engaged'] as int?,
+      targetsDetected: j['targets_detected'] as int?,
+      shotsFired: j['shots_fired'] as int?,
       lifecycleByState: byState.map((k, v) => MapEntry(k, (v as num).toInt())),
     );
   }
 
-  /// Convenience: format elapsed seconds as mm:ss string
+  /// Convenience: format elapsed seconds as mm:ss string.
   String get elapsedFormatted {
     final total = elapsedS.toInt();
     final mm = (total ~/ 60).toString().padLeft(2, '0');

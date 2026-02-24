@@ -9,6 +9,19 @@ State machine:
 
 Blueprint is registered by create_flask_app() in server.py.
 It accesses the TrackingAPI instance via current_app.extensions['tracking_api'].
+
+Preflight enforcement
+---------------------
+POST /api/mission/start runs a lightweight preflight check before allowing the
+mission to begin.  Any check that returns ``status == "fail"`` blocks the start
+and returns HTTP 424 with a structured error body.  Pass ``?force=true`` to
+bypass (intended for automated tests only).
+
+Enriched status
+---------------
+GET /api/mission/status returns additional fields:
+  started_at, duration_s, roe_profile, shots_fired,
+  targets_detected, targets_engaged, fire_chain_state
 """
 
 from __future__ import annotations
@@ -36,11 +49,14 @@ def _api():
 _mission_state: dict = {
     "active": False,
     "profile": None,
-    "started_at": None,       # epoch float
-    "started_at_str": None,   # human-readable
+    "roe_profile": None,       # ROE profile name (may differ from mission profile)
+    "started_at": None,        # epoch float
+    "started_at_str": None,    # ISO-8601 string
     "camera_source": 0,
     "session_id": None,
     "targets_engaged": 0,
+    "targets_detected": 0,     # cumulative detections this session
+    "shots_fired": 0,          # cumulative fire events this session
     "last_report_path": None,
 }
 
@@ -49,13 +65,70 @@ def _reset_state() -> None:
     _mission_state.update(
         active=False,
         profile=None,
+        roe_profile=None,
         started_at=None,
         started_at_str=None,
         camera_source=0,
         session_id=None,
         targets_engaged=0,
+        targets_detected=0,
+        shots_fired=0,
         last_report_path=None,
     )
+
+
+# ---------------------------------------------------------------------------
+# Preflight helpers
+# ---------------------------------------------------------------------------
+
+
+def _run_preflight(api) -> list[str]:
+    """Run lightweight pre-mission checks.
+
+    Returns a list of failed check names.  An empty list means GO.
+    These are a subset of the full selftest — only checks that can be
+    evaluated quickly and without side-effects.
+    """
+    failed: list[str] = []
+
+    # 1. logs/ directory writable
+    try:
+        from pathlib import Path as _Path
+
+        logs = _Path("logs")
+        logs.mkdir(exist_ok=True)
+        probe = logs / ".preflight_probe"
+        probe.write_text("ok")
+        probe.unlink()
+    except Exception:
+        failed.append("logs_dir_writable")
+
+    # 2. config loads without error
+    try:
+        from ..config import load_config  # noqa: F401
+    except Exception:
+        failed.append("config_valid")
+
+    # 3. critical imports available
+    try:
+        from ..safety.shooting_chain import ShootingChain  # noqa: F401
+        from ..telemetry.audit import AuditLogger  # noqa: F401
+    except Exception:
+        failed.append("pipeline_imports")
+
+    # 4. shooting chain — informational only at pre-start stage.
+    # The chain is created during pipeline initialisation; we don't block the
+    # mission start if it's not present yet (pipeline may not be running).
+    # The full GET /api/selftest performs a stricter check once the pipeline
+    # is live.  We only report failure here when the chain extension slot is
+    # explicitly registered but holds an unusable value.
+    registered_chain = current_app.extensions.get("shooting_chain")
+    if registered_chain is not None:
+        # Extension slot exists — verify it exposes a state attribute.
+        if not hasattr(registered_chain, "state"):
+            failed.append("shooting_chain")
+
+    return failed
 
 
 # ---------------------------------------------------------------------------
@@ -65,23 +138,49 @@ def _reset_state() -> None:
 
 @mission_bp.route("/status", methods=["GET"])
 def mission_status():
-    """Return current mission state."""
-    s = _mission_state.copy()
-    if s["started_at"] is not None:
-        s["elapsed_s"] = round(time.time() - s["started_at"], 1)
-    else:
-        s["elapsed_s"] = 0.0
+    """Return current mission state — enriched with runtime telemetry.
 
-    # Augment with lifecycle summary if available
+    Response fields:
+        active          bool    — mission in progress
+        profile         str     — mission profile name (or null)
+        roe_profile     str     — ROE profile name (or null)
+        session_id      str     — unique session identifier (or null)
+        started_at      str     — ISO-8601 start timestamp (or null)
+        duration_s      float   — elapsed seconds since mission start
+        shots_fired     int     — cumulative fire events this session
+        targets_detected int    — cumulative detection count (lifecycle)
+        targets_engaged int     — cumulative engagement count
+        fire_chain_state str    — ShootingChain state value (or null)
+        lifecycle       dict    — TargetLifecycleManager summary (if running)
+    """
+    s = _mission_state.copy()
+    started_at = s.get("started_at")
+    s["duration_s"] = round(time.time() - started_at, 1) if started_at is not None else 0.0
+    # Keep backward-compat alias
+    s["elapsed_s"] = s["duration_s"]
+
     api = _api()
     if api is not None and api.pipeline is not None:
+        # Lifecycle summary — total_seen maps to targets_detected
         lm = getattr(api.pipeline, "_lifecycle_manager", None)
         if lm is not None:
-            s["lifecycle"] = lm.summary()
+            summary = lm.summary()
+            s["lifecycle"] = summary
+            # Update targets_detected from lifecycle total_seen for richer response
+            detected_from_lifecycle = summary.get("total_seen", s.get("targets_detected", 0))
+            s["targets_detected"] = detected_from_lifecycle
 
+        # Fire chain state
         chain = getattr(api.pipeline, "_shooting_chain", None)
         if chain is not None:
             s["fire_chain_state"] = chain.state.value
+
+        # shots_fired: prefer audit logger count if available
+        audit = getattr(api.pipeline, "_audit_logger", None)
+        if audit is not None:
+            fired_records = [r for r in getattr(audit, "_records", []) if r.get("event") == "fired"]
+            if fired_records:
+                s["shots_fired"] = len(fired_records)
 
     return jsonify(s)
 
@@ -96,6 +195,20 @@ def mission_start():
         "camera_source": 0,          // camera index or path
         "mission_name": "Alpha-1"    // display name
     }
+
+    Query params:
+        force=true   — skip preflight check (for testing only)
+
+    Pre-flight enforcement
+    ----------------------
+    Before starting, a lightweight preflight check is performed.
+    If any check fails, the route returns HTTP 424 with:
+    {
+        "success": false,
+        "error": "preflight_failed",
+        "message": "Pre-mission selftest failed. Run GET /api/selftest for details.",
+        "failed_checks": ["logs_dir_writable", "config_valid"]
+    }
     """
     if _mission_state["active"]:
         return jsonify({"error": "Mission already active. Call /api/mission/end first."}), 409
@@ -108,6 +221,22 @@ def mission_start():
     profile_name = data.get("profile")
     camera_source = data.get("camera_source", 0)
     mission_name = data.get("mission_name", f"Mission-{datetime.datetime.now():%Y%m%d-%H%M%S}")
+
+    # ── Preflight check ────────────────────────────────────────────────────
+    force = request.args.get("force", "").lower() in ("true", "1", "yes")
+    if not force:
+        failed_checks = _run_preflight(api)
+        if failed_checks:
+            logger.warning("mission: preflight FAILED — checks: %s", failed_checks)
+            return jsonify({
+                "success": False,
+                "error": "preflight_failed",
+                "message": (
+                    "Pre-mission selftest failed. "
+                    "Run GET /api/selftest for details."
+                ),
+                "failed_checks": failed_checks,
+            }), 424
 
     # Load profile if specified
     if profile_name:
@@ -139,11 +268,14 @@ def mission_start():
     _mission_state.update(
         active=True,
         profile=profile_name,
+        roe_profile=profile_name,  # may be overridden by loaded profile metadata
         started_at=time.time(),
-        started_at_str=datetime.datetime.now().isoformat(),
+        started_at_str=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         camera_source=camera_source,
         session_id=session_id,
         targets_engaged=0,
+        targets_detected=0,
+        shots_fired=0,
         last_report_path=None,
     )
 

@@ -1,0 +1,42 @@
+# ============================================================
+# RWS — Flutter Web Dashboard
+# ============================================================
+# Multi-stage build:
+#   stage 1 (build): compile Flutter web with the official Flutter image
+#   stage 2 (serve): serve the compiled SPA with nginx
+#
+# Usage:
+#   docker build -f Dockerfile.frontend -t rws-frontend .
+#   docker run -p 8080:80 rws-frontend
+# ============================================================
+
+FROM ghcr.io/cirruslabs/flutter:stable AS build
+
+WORKDIR /app
+
+# Copy Flutter project files
+COPY frontend/pubspec.yaml frontend/pubspec.lock* ./
+
+# Download pub packages (cached layer — only re-runs if pubspec changes)
+RUN flutter pub get
+
+# Copy the rest of the Flutter source
+COPY frontend/ .
+
+# Build Flutter web in release mode
+# --no-tree-shake-icons avoids issues with Google Fonts icon shaking on CI
+RUN flutter build web --release --no-tree-shake-icons
+
+# -----------------------------------------------------------------------
+
+FROM nginx:alpine AS serve
+
+# Copy compiled Flutter web output
+COPY --from=build /app/build/web /usr/share/nginx/html
+
+# Copy nginx config with API proxy rules
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+# nginx runs as its own user by default; no extra setup needed

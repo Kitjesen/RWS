@@ -183,6 +183,17 @@ engagement:
 safety:
   enabled: true
   nfz_slow_down_margin_deg: 5.0   # 禁射区缓冲带宽度 (°)
+  # --- Two-man arming rule ---
+  # When true, two different operators must independently call POST /api/fire/arm
+  # within arm_confirmation_timeout_s seconds to transition SAFE -> ARMED.
+  # Set to true for live operations.
+  two_man_rule: false
+  arm_confirmation_timeout_s: 30
+  # --- Rules of Engagement profile ---
+  # training  : dry-fire only (default, safest for testing)
+  # exercise  : engagement enabled, relaxed constraints
+  # live      : maximum safety checks, two-man rule recommended
+  roe_profile: training
   interlock:
     require_operator_auth: true
     min_lock_time_s: 1.0

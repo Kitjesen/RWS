@@ -24,6 +24,57 @@ Supports **moving-base operation** (robot dog) with IMU feedforward compensation
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type checked: mypy](https://img.shields.io/badge/type%20checked-mypy-blue.svg)](http://mypy-lang.org/)
 
+## Quick Start
+
+### Option A: Docker (recommended — no local Python or Flutter install required)
+
+```bash
+git clone https://github.com/Kitjesen/RWS.git
+cd RWS
+
+# (Optional) Copy and edit environment overrides
+cp .env.example .env
+
+docker compose up
+```
+
+| Service | URL |
+|---|---|
+| Flutter dashboard | http://localhost:8080 |
+| REST API | http://localhost:5000/api/health |
+| gRPC | localhost:50051 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 (admin / admin) |
+
+> First run downloads ~2 GB of images and compiles Flutter web. Subsequent starts take under 10 seconds.
+
+**With a USB camera** — uncomment the `devices` block in `docker-compose.yml`:
+```yaml
+devices:
+  - /dev/video0:/dev/video0
+```
+
+### Option B: Local development (backend only in Docker + Flutter locally)
+
+```bash
+# Backend in Docker, source-mounted for hot-reload
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up backend
+
+# Flutter dashboard in browser (separate terminal)
+cd frontend && flutter run -d chrome
+```
+
+### Option C: Fully local (no Docker)
+
+```bash
+pip install -r requirements.txt
+pip install -e .
+python scripts/api/run_rest_server.py
+
+# Flutter dashboard (separate terminal)
+cd frontend && flutter run -d chrome
+```
+
 ## 📚 文档
 
 - **[快速开始](docs/getting-started/quick-start.md)** - 5 分钟上手

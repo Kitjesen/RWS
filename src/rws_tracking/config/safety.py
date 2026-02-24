@@ -30,3 +30,11 @@ class SafetyConfig:
     interlock: SafetyInterlockCfg = SafetyInterlockCfg()
     nfz_slow_down_margin_deg: float = 5.0
     zones: tuple[SafetyZoneConfig, ...] = ()
+    # --- Two-man arming rule ---
+    # When True, POST /api/fire/arm requires confirmation from two different
+    # operators within arm_confirmation_timeout_s seconds.
+    two_man_rule: bool = False
+    arm_confirmation_timeout_s: float = 30.0
+    # --- Rules of Engagement profile ---
+    # "training" (default) | "exercise" | "live"
+    roe_profile: str = "training"

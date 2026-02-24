@@ -439,6 +439,7 @@ def _wire_pipeline_extensions(app: Flask, api: "TrackingAPI") -> None:
         ("_health_monitor", "health_monitor"),
         ("_safety_manager", "safety_manager"),
         ("_iff_checker", "iff_checker"),
+        ("_roe_manager", "roe_manager"),
     ]:
         obj = getattr(pipeline, attr, None)
         if obj is not None:

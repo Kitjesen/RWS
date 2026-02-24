@@ -13,16 +13,21 @@ Usage:
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add src to path so the package is importable when running without `pip install -e .`
+# Script is at scripts/api/run_rest_server.py  →  repo root is three levels up
+_repo_root = Path(__file__).resolve().parent.parent.parent
+_src_path = str(_repo_root / "src")
+if _src_path not in sys.path:
+    sys.path.insert(0, _src_path)
 
 from rws_tracking.api import TrackingAPI, run_api_server
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=os.environ.get("RWS_LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
@@ -32,20 +37,23 @@ def main():
     parser.add_argument(
         "--host",
         type=str,
-        default="0.0.0.0",
-        help="Host to bind to (default: 0.0.0.0)",
+        # RWS_HOST env var → arg default → 0.0.0.0
+        default=os.environ.get("RWS_HOST", "0.0.0.0"),
+        help="Host to bind to (default: RWS_HOST env var or 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=5000,
-        help="Port to bind to (default: 5000)",
+        # RWS_PORT env var → arg default → 5000
+        default=int(os.environ.get("RWS_PORT", "5000")),
+        help="Port to bind to (default: RWS_PORT env var or 5000)",
     )
     parser.add_argument(
         "--config",
         type=str,
-        default="config.yaml",
-        help="Path to config file (default: config.yaml)",
+        # RWS_CONFIG_PATH env var → arg default → config.yaml
+        default=os.environ.get("RWS_CONFIG_PATH", "config.yaml"),
+        help="Path to config file (default: RWS_CONFIG_PATH env var or config.yaml)",
     )
     parser.add_argument(
         "--debug",

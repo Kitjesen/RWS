@@ -160,6 +160,9 @@ class VisionGimbalPipeline:
         self._lifecycle_manager = lifecycle_manager
         self._iff_checker = iff_checker
         self._video_ring_buffer = video_ring_buffer
+        # ROE manager — injected by build_pipeline_from_config(); may also be
+        # set directly on the pipeline instance after construction.
+        self._roe_manager = None  # type: ignore[assignment]
 
         self._last_target_id: int | None = None
         self._last_chain_state: str = ""
@@ -528,7 +531,20 @@ class VisionGimbalPipeline:
                     })
                 self._last_chain_state = new_state
 
-            if self._shooting_chain.can_fire:
+            # ROE gate: if the active profile has fire_enabled=False (e.g.
+            # training mode), suppress the actual fire command even when the
+            # shooting chain reports can_fire=True.
+            _roe_permits_fire = (
+                self._roe_manager is None
+                or self._roe_manager.is_fire_enabled()
+            )
+            if not _roe_permits_fire and self._shooting_chain.can_fire:
+                logger.info(
+                    "fire suppressed: ROE profile=%s (fire_enabled=False)",
+                    self._roe_manager.active.name if self._roe_manager else "unknown",
+                )
+
+            if self._shooting_chain.can_fire and _roe_permits_fire:
                 fired = self._shooting_chain.execute_fire(timestamp)
                 if fired:
                     logger.warning(

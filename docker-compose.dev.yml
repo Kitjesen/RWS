@@ -1,0 +1,54 @@
+version: "3.9"
+
+# ============================================================
+# RWS — Development override for docker-compose.yml
+#
+# Starts only the backend with the source tree mounted for
+# hot-reload. Run alongside a local Flutter dev server.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up backend
+#
+# Then in a separate terminal:
+#   cd frontend && flutter run -d chrome
+# ============================================================
+
+services:
+
+  backend:
+    # Mount entire source tree for live code changes without rebuild
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+      # venv stays inside the container — don't overwrite it with the host mount
+      - /opt/venv
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1
+      - RWS_LOG_LEVEL=DEBUG
+    # Override CMD to enable Flask debug/reload mode
+    command: >
+      python scripts/api/run_rest_server.py
+      --host 0.0.0.0
+      --port 5000
+      --config /app/config.yaml
+      --debug
+    # In dev mode we don't need the healthcheck delay
+    healthcheck:
+      start_period: 10s
+      interval: 10s
+
+  # Don't start frontend, prometheus, or grafana in dev mode —
+  # the developer runs Flutter locally
+  frontend:
+    profiles:
+      - donotstart
+
+  prometheus:
+    profiles:
+      - donotstart
+
+  grafana:
+    profiles:
+      - donotstart

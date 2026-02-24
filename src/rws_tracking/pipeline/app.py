@@ -428,6 +428,7 @@ def build_pipeline_from_config(
 
     from ..safety.shooting_chain import ShootingChain
     from ..safety.iff import IFFChecker
+    from ..safety.roe_profiles import RoeManager
     from ..telemetry.audit import AuditLogger
     from ..telemetry.video_ring_buffer import VideoRingBuffer
     from ..health.monitor import HealthMonitor
@@ -436,6 +437,23 @@ def build_pipeline_from_config(
     shooting_chain = ShootingChain(
         cooldown_s=getattr(cfg, "fire_cooldown_s", 3.0)
     )
+
+    # ---- ROE profile manager ----
+    # Initial profile comes from config.yaml safety.roe_profile (defaults to
+    # "training" — safest, dry-fire only).
+    _initial_roe = "training"
+    if cfg.safety is not None:
+        _initial_roe = getattr(cfg.safety, "roe_profile", "training") or "training"
+    roe_manager = RoeManager(initial_profile=_initial_roe)
+
+    # ---- Two-man rule configuration ----
+    # Enabled via config.yaml safety.two_man_rule (bool, default False).
+    if cfg.safety is not None:
+        _two_man = getattr(cfg.safety, "two_man_rule", False)
+        _arm_timeout = getattr(cfg.safety, "arm_confirmation_timeout_s", 30.0)
+        if _two_man:
+            shooting_chain.enable_two_man_rule(True)
+            shooting_chain._arm_confirmation_timeout_s = float(_arm_timeout)
     audit_logger = AuditLogger(
         log_path=getattr(cfg, "audit_log_path", "logs/audit.jsonl")
     )
@@ -454,7 +472,7 @@ def build_pipeline_from_config(
         fps=getattr(cfg, "clip_fps", 30.0),
     )
 
-    return VisionGimbalPipeline(
+    pipeline = VisionGimbalPipeline(
         detector=PassthroughDetector(),
         tracker=SimpleIoUTracker(),
         selector=WeightedTargetSelector(
@@ -487,6 +505,10 @@ def build_pipeline_from_config(
         iff_checker=iff_checker,
         video_ring_buffer=video_ring_buffer,
     )
+    # Attach ROE manager as a named attribute so server.py can wire it into
+    # app.extensions and fire_routes can access it via _get_roe().
+    pipeline._roe_manager = roe_manager  # type: ignore[attr-defined]
+    return pipeline
 
 
 # ---------------------------------------------------------------------------

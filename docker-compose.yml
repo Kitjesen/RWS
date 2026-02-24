@@ -4,62 +4,89 @@ version: "3.9"
 # RWS — Docker Compose deployment stack
 #
 # Services:
-#   rws-backend  — Flask API + pipeline (port 5000)
-#   rws-frontend — Flutter web dashboard served by nginx (port 8080)
-#   prometheus   — Metrics scraping (port 9090)
-#   grafana      — Dashboard visualization (port 3000)
+#   backend     — Flask REST API + gRPC + pipeline (ports 5000, 50051)
+#   frontend    — Flutter web dashboard via nginx (port 8080)
+#   prometheus  — Metrics scraping (port 9090)
+#   grafana     — Dashboard visualization (port 3000)
 #
 # Quick start:
 #   docker compose up -d
-#   open http://localhost:8080  (Flutter dashboard)
-#   open http://localhost:3000  (Grafana — admin/admin)
+#   open http://localhost:8080   (Flutter dashboard)
+#   open http://localhost:3000   (Grafana — admin/admin)
+#   curl http://localhost:5000/api/health
 #
-# For live camera access add: --device /dev/video0 to rws-backend
+# With a live USB camera:
+#   Uncomment the "devices" block under the backend service.
+#
+# Environment overrides:
+#   Copy .env.example to .env and edit before running.
 # ============================================================
 
 services:
 
-  rws-backend:
+  # ----------------------------------------------------------
+  # Python backend: Flask REST API + gRPC + tracking pipeline
+  # ----------------------------------------------------------
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
     image: rws-backend:latest
     container_name: rws-backend
     ports:
-      - "5000:5000"
+      - "5000:5000"    # REST API
+      - "50051:50051"  # gRPC API
     volumes:
-      - ./logs:/app/logs           # persist audit logs, clips, telemetry
-      - ./profiles:/app/profiles   # mission profiles (hot-editable)
-      - ./config.yaml:/app/config.yaml:ro  # system config (read-only)
+      # Config is bind-mounted read-only so hot-reload sees edits on the host
+      - ./config.yaml:/app/config.yaml:ro
+      # Mission profiles (hot-editable on the host)
+      - ./profiles:/app/profiles:ro
+      # Persist audit logs, clips, telemetry across restarts
+      - ./logs:/app/logs
+      # Optional: mount YOLO model weights directory to avoid re-download
+      - ./models:/app/models:ro
     environment:
       - FLASK_ENV=production
-      - RWS_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+      # Operator watchdog timeout (seconds). Increase for manual-fire workflows.
+      - RWS_OPERATOR_TIMEOUT=${RWS_OPERATOR_TIMEOUT:-10}
+      # Optional API key for fire-control endpoints (leave empty to disable)
+      - RWS_API_KEY=${RWS_API_KEY:-}
+      # Log level: DEBUG | INFO | WARNING | ERROR
+      - RWS_LOG_LEVEL=${RWS_LOG_LEVEL:-INFO}
+      # Telemetry / audit log paths (inside container)
       - RWS_AUDIT_LOG=logs/audit.jsonl
       - RWS_TELEMETRY_LOG=logs/telemetry.jsonl
-    # Uncomment to pass through a USB camera:
+    # Uncomment to pass through a USB camera from the host:
     # devices:
     #   - /dev/video0:/dev/video0
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
-      interval: 30s
+      test: ["CMD", "curl", "-sf", "http://localhost:5000/api/health"]
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 15s
+      retries: 5
+      start_period: 30s
 
-  rws-frontend:
-    image: nginx:alpine
+  # ----------------------------------------------------------
+  # Flutter web dashboard — built inside Docker, served by nginx
+  # ----------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    image: rws-frontend:latest
     container_name: rws-frontend
     ports:
       - "8080:80"
-    volumes:
-      - ./frontend/build/web:/usr/share/nginx/html:ro
-      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - rws-backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
+  # ----------------------------------------------------------
+  # Prometheus — scrapes /metrics from the backend
+  # ----------------------------------------------------------
   prometheus:
     image: prom/prometheus:latest
     container_name: rws-prometheus
@@ -73,6 +100,9 @@ services:
       - "--storage.tsdb.retention.time=30d"
     restart: unless-stopped
 
+  # ----------------------------------------------------------
+  # Grafana — visualizes Prometheus metrics
+  # ----------------------------------------------------------
   grafana:
     image: grafana/grafana:latest
     container_name: rws-grafana
@@ -81,9 +111,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - prometheus
