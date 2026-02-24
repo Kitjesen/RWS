@@ -9,6 +9,7 @@
 ///   • operator_timeout    — deadman switch triggered
 ///   • mission_started     — new mission began
 ///   • mission_ended       — mission concluded
+///   • safety_triggered    — safety interlock engaged (NFZ, IFF, etc.)
 ///
 /// The banner auto-dismisses after [_autoDismissSeconds] seconds.
 /// Non-critical events (heartbeat, connected) are silently ignored.
@@ -76,6 +77,11 @@ const Map<String, _AlertSpec> _specs = {
     icon: Icons.settings_backup_restore,
     message: _configReloadedMsg,
   ),
+  'safety_triggered': _AlertSpec(
+    color: Color(0xFFB71C1C), // dark red — safety critical
+    icon: Icons.shield_outlined,
+    message: _safetyTriggeredMsg,
+  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -124,6 +130,11 @@ String _designatedMsg(Map<String, dynamic> d) {
 String _configReloadedMsg(Map<String, dynamic> d) {
   final profile = d['profile'];
   return profile != null ? 'Config reloaded — profile: $profile' : 'Config reloaded';
+}
+
+String _safetyTriggeredMsg(Map<String, dynamic> d) {
+  final reason = d['reason'] as String? ?? 'safety condition triggered';
+  return 'SAFETY TRIGGERED — $reason';
 }
 
 // ---------------------------------------------------------------------------

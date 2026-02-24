@@ -297,3 +297,35 @@ class FireChainStatus {
       ['armed', 'fire_authorized', 'fire_requested', 'fired', 'cooldown']
           .contains(state);
 }
+
+// --- 双人规则武装挂起状态 ---
+
+class ArmPendingStatus {
+  /// true when a first-operator arm request is waiting for confirmation.
+  final bool pending;
+
+  /// Whether the two-man rule is configured on this system.
+  final bool twoManRuleEnabled;
+
+  /// Operator ID that initiated the arm request.
+  final String? initiatedBy;
+
+  /// Seconds remaining before the pending request expires.
+  final double? expiresInS;
+
+  const ArmPendingStatus({
+    this.pending = false,
+    this.twoManRuleEnabled = false,
+    this.initiatedBy,
+    this.expiresInS,
+  });
+
+  factory ArmPendingStatus.fromJson(Map<String, dynamic> j) => ArmPendingStatus(
+    pending: j['pending'] as bool? ?? false,
+    twoManRuleEnabled: j['two_man_rule_enabled'] as bool? ?? false,
+    initiatedBy: j['initiated_by'] as String?,
+    expiresInS: (j['expires_in_s'] as num?)?.toDouble(),
+  );
+
+  static const ArmPendingStatus none = ArmPendingStatus();
+}

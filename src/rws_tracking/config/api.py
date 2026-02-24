@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class VideoStreamCfg:
+class VideoStreamConfig:
     enabled: bool = False
     jpeg_quality: int = 70
     max_fps: float = 30.0
@@ -16,3 +16,7 @@ class VideoStreamCfg:
     annotate_tracks: bool = True
     annotate_crosshair: bool = True
     annotate_safety_zones: bool = False
+
+
+# Backward-compat alias — remove after next major version
+VideoStreamCfg = VideoStreamConfig

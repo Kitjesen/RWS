@@ -140,6 +140,15 @@ class FusionMOTConfig:
     occlusion_onset_frames: int = 2
     occlusion_app_boost: float = 0.15
 
+    # OC-SORT Observation-Centric Re-Update (ORU / OCM).
+    # After an occlusion gap, the Kalman velocity state is corrected by mixing
+    # the observed displacement velocity (pos_delta / dt_gap) with the
+    # Kalman-predicted velocity.  This undoes the CA drift during occlusion.
+    # oru_alpha : weight given to observed velocity (0 = pure Kalman, 1 = pure obs).
+    # oru_min_gap_frames : minimum missed-frame count before ORU is applied.
+    oru_alpha: float = 0.6
+    oru_min_gap_frames: int = 2
+
 
 class _Tracklet:
     """Internal tracklet state with embedded Kalman CA filter."""
@@ -149,6 +158,7 @@ class _Tracklet:
         "height_ema", "confidence", "state", "frames_since_update",
         "total_frames", "last_ts", "created_ts",
         "keypoints_ema",   # EMA-smoothed COCO-17 keypoints (17, 2) or None
+        "last_obs_cx", "last_obs_cy", "last_obs_ts",  # OC-SORT ORU anchor
     )
 
     def __init__(self, track_id: int, cx: float, cy: float,
@@ -166,6 +176,9 @@ class _Tracklet:
         self.last_ts: float = 0.0
         self.created_ts: float = 0.0
         self.keypoints_ema: np.ndarray | None = None  # shape (17, 2)
+        self.last_obs_cx: float = cx
+        self.last_obs_cy: float = cy
+        self.last_obs_ts: float = 0.0
 
     @property
     def position(self) -> np.ndarray:
@@ -182,8 +195,7 @@ class _Tracklet:
     @property
     def pos_covariance(self) -> np.ndarray:
         """2x2 position covariance from Kalman state."""
-        P = self.kf._P
-        return P[:2, :2].copy()
+        return self.kf.covariance_2x2
 
     def predicted_bbox(self) -> np.ndarray:
         """Bbox with Kalman-predicted center, preserving last w/h."""
@@ -232,6 +244,10 @@ class FusionMOT:
         features: np.ndarray | None,
         timestamp: float,
         keypoints: np.ndarray | None = None,
+        gimbal_delta_yaw_deg: float = 0.0,
+        gimbal_delta_pitch_deg: float = 0.0,
+        camera_fx: float = 0.0,
+        camera_fy: float = 0.0,
     ) -> list[tuple[int, np.ndarray, float]]:
         """Run one frame of tracking.
 
@@ -247,6 +263,15 @@ class FusionMOT:
             score in the third channel.  When provided and
             ``use_hip_center=True``, the hip midpoint replaces the bbox
             centroid as the Kalman measurement anchor.
+        gimbal_delta_yaw_deg : float, optional
+            Camera yaw change since last frame (deg). When non-zero and
+            camera_fx > 0, enables EMAP ego-motion compensation in the
+            Kalman predict step so gimbal rotation is not confused with
+            target motion.
+        gimbal_delta_pitch_deg : float, optional
+            Camera pitch change since last frame (deg).
+        camera_fx, camera_fy : float, optional
+            Focal lengths (pixels) required for EMAP pixel displacement math.
 
         Returns
         -------
@@ -256,9 +281,21 @@ class FusionMOT:
         dt = max(timestamp - self._last_global_ts, 1e-3) if self._last_global_ts > 0 else 0.033
         self._last_global_ts = timestamp
 
-        # Kalman predict: advance ALL tracklets using CA model (parabolic)
+        # Kalman predict: advance ALL tracklets using CA model (parabolic).
+        # When gimbal ego-motion is provided, use EMAP to decouple platform
+        # rotation from target motion in the Kalman prediction step.
+        use_emap = (
+            (abs(gimbal_delta_yaw_deg) > 1e-4 or abs(gimbal_delta_pitch_deg) > 1e-4)
+            and camera_fx > 0.0
+        )
         for t in self._tracklets.values():
-            t.kf.predict(dt)
+            if use_emap:
+                t.kf.predict_with_ego_motion(
+                    dt, gimbal_delta_yaw_deg, gimbal_delta_pitch_deg,
+                    camera_fx, camera_fy,
+                )
+            else:
+                t.kf.predict(dt)
             # Sync bbox position from Kalman state
             pos = t.position
             t.bbox[0] = pos[0] - t.bbox[2] / 2
@@ -723,6 +760,27 @@ class FusionMOT:
             if hip is not None:
                 center = np.array(hip, dtype=np.float64)
 
+        # OC-SORT ORU (Observation-Centric Re-Update).
+        # After an occlusion gap the CA model may have let the velocity state
+        # drift.  Correct it by mixing the observed displacement velocity
+        # (Δpos / Δt over the gap) with the Kalman-predicted velocity.
+        # Only applied when the gap is at least oru_min_gap_frames long.
+        if (t.frames_since_update >= self._cfg.oru_min_gap_frames
+                and t.last_obs_ts > 0.0):
+            dt_gap = ts - t.last_obs_ts
+            if dt_gap > 0.01:
+                v_obs_x = (float(center[0]) - t.last_obs_cx) / dt_gap
+                v_obs_y = (float(center[1]) - t.last_obs_cy) / dt_gap
+                alpha = self._cfg.oru_alpha
+                t.kf.blend_velocity(v_obs_x, v_obs_y, alpha)
+                logger.debug(
+                    "Track %d ORU: gap=%d frames dt=%.3fs "
+                    "v_obs=(%.1f,%.1f) kf_vel_after=(%.1f,%.1f)",
+                    tid, t.frames_since_update, dt_gap,
+                    v_obs_x, v_obs_y,
+                    *t.kf.velocity,
+                )
+
         # Kalman measurement update — confidence-scaled R so high-conf detections
         # move the state estimate more aggressively while low-conf borderline
         # detections are smoothed (Kalman prediction trusted more).
@@ -781,6 +839,12 @@ class FusionMOT:
         elif t.state == "lost":
             t.state = "confirmed"
             logger.info("Track %d recovered from lost state", tid)
+
+        # Update ORU anchor: store the current matched observation position
+        # so it can be used for velocity correction after the next occlusion gap.
+        t.last_obs_cx = float(center[0])
+        t.last_obs_cy = float(center[1])
+        t.last_obs_ts = ts
 
     def _mark_unmatched_tracks(self, timestamp: float) -> None:
         for t in self._tracklets.values():

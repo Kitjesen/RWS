@@ -17,6 +17,22 @@ from ..types import (
 )
 
 
+class AxisController(Protocol):
+    """Single-axis rate controller: PID, MPC, or any drop-in replacement.
+
+    Both ``PID`` (in controller.py) and ``MPCController`` (in mpc_controller.py)
+    implement this protocol — no base class required.
+    """
+
+    def step(self, error: float, dt: float, feedforward: float = 0.0) -> float:
+        """Compute rate command for *error* over *dt* seconds."""
+        ...
+
+    def reset(self) -> None:
+        """Reset all internal state (integral, derivative, first-call flag)."""
+        ...
+
+
 class GimbalController(Protocol):
     """
     Takes a target observation and gimbal feedback, returns a control command.

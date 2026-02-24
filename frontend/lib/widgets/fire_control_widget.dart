@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/tracking_models.dart';
 import '../services/tracking_provider.dart';
 
 class FireControlWidget extends StatefulWidget {
@@ -11,6 +12,7 @@ class FireControlWidget extends StatefulWidget {
 
 class _FireControlWidgetState extends State<FireControlWidget> {
   late TextEditingController _opIdCtrl;
+  final TextEditingController _secondOpCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -22,6 +24,7 @@ class _FireControlWidgetState extends State<FireControlWidget> {
   @override
   void dispose() {
     _opIdCtrl.dispose();
+    _secondOpCtrl.dispose();
     super.dispose();
   }
 
@@ -102,6 +105,14 @@ class _FireControlWidgetState extends State<FireControlWidget> {
                       ),
                     ),
                   ],
+
+                  // 双人规则挂起提示 (two-man arming rule)
+                  if (p.armPendingStatus.pending)
+                    _TwoManArmBanner(
+                      pending: p.armPendingStatus,
+                      secondOpCtrl: _secondOpCtrl,
+                      onConfirm: () => _confirmSecondOperator(context, p),
+                    ),
 
                   // 按钮行: SAFE / ARM
                   Row(
@@ -215,11 +226,86 @@ class _FireControlWidgetState extends State<FireControlWidget> {
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
-              provider.armSystem();
+              final armed = await provider.armSystem();
+              if (!armed && provider.armPendingStatus.pending && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('双人规则已启用：等待第二操作员确认武装'),
+                    backgroundColor: Colors.amber,
+                    duration: Duration(seconds: 5),
+                  ),
+                );
+              }
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.amber),
+            child: const Text('确认武装'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 第二操作员确认对话框 (双人规则)
+  void _confirmSecondOperator(BuildContext context, TrackingProvider provider) {
+    _secondOpCtrl.clear();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.people, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('双人规则 — 第二操作员确认'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '操作员「${provider.armPendingStatus.initiatedBy ?? "?"}」已发起武装请求。\n'
+              '请第二操作员输入编号以确认武装。',
+              style: const TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _secondOpCtrl,
+              decoration: InputDecoration(
+                labelText: '第二操作员编号',
+                prefixIcon: const Icon(Icons.badge, size: 18),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                isDense: true,
+              ),
+              autofocus: true,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final secondId = _secondOpCtrl.text.trim();
+              if (secondId.isEmpty) return;
+              Navigator.of(ctx).pop();
+              final ok = await provider.armConfirm(secondId);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok ? '武装成功（双人规则已满足）' : '确认失败，请检查操作员编号'),
+                    backgroundColor: ok ? Colors.green : Colors.red,
+                  ),
+                );
+              }
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
             child: const Text('确认武装'),
           ),
         ],
@@ -255,6 +341,78 @@ class _FireControlWidgetState extends State<FireControlWidget> {
             },
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('确认开火'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Two-Man Arm Pending Banner
+// ---------------------------------------------------------------------------
+
+class _TwoManArmBanner extends StatelessWidget {
+  final ArmPendingStatus pending;
+  final TextEditingController secondOpCtrl;
+  final VoidCallback onConfirm;
+
+  const _TwoManArmBanner({
+    required this.pending,
+    required this.secondOpCtrl,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final expires = pending.expiresInS;
+    final expiresText = expires != null ? '（剩余 ${expires.toStringAsFixed(0)}s）' : '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.12),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.people, color: Colors.orange, size: 16),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '等待第二操作员确认$expiresText',
+                  style: const TextStyle(
+                      color: Colors.orange,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '操作员「${pending.initiatedBy ?? "?"}」已发起武装请求，'
+            '需要另一名操作员确认。',
+            style: TextStyle(fontSize: 11, color: Colors.orange.shade200),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onConfirm,
+              icon: const Icon(Icons.how_to_reg, size: 16),
+              label: const Text('第二操作员确认'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.orange,
+                side: const BorderSide(color: Colors.orange),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+              ),
+            ),
           ),
         ],
       ),

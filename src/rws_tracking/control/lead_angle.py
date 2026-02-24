@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -132,6 +133,11 @@ class LeadAngleCalculator:
         self._smoothed_vx: float = 0.0
         self._smoothed_vy: float = 0.0
         self._last_track_id: int | None = None
+        # Jerk estimation: track previous acceleration for maneuver detection.
+        # High jerk (da/dt) indicates an erratic maneuver, reducing prediction confidence.
+        self._prev_ax: float = 0.0
+        self._prev_ay: float = 0.0
+        self._prev_obs_ts: float = 0.0
 
     def compute(
         self,
@@ -171,6 +177,19 @@ class LeadAngleCalculator:
         ax, ay = (0.0, 0.0)
         if self._cfg.use_acceleration:
             ax, ay = target.acceleration_px_per_s2
+
+        # Jerk estimation: rate of change of acceleration (px/s³).
+        # Tracks how quickly the target is changing its acceleration pattern.
+        # Used in _assess_confidence() to penalise erratic manoeuvres.
+        now = time.monotonic()
+        jerk_x, jerk_y = 0.0, 0.0
+        if self._prev_obs_ts > 0.0 and target.track_id == self._last_track_id:
+            dt_obs = max(now - self._prev_obs_ts, 0.01)
+            jerk_x = (ax - self._prev_ax) / dt_obs
+            jerk_y = (ay - self._prev_ay) / dt_obs
+        self._prev_ax = ax
+        self._prev_ay = ay
+        self._prev_obs_ts = now
 
         # 目标当前中心
         cx, cy = (
@@ -215,7 +234,8 @@ class LeadAngleCalculator:
         lead_pitch = max(-max_lead, min(max_lead, lead_pitch))
 
         # 置信度评估
-        confidence = self._assess_confidence(target, vx, vy, ax, ay, t_flight)
+        confidence = self._assess_confidence(target, vx, vy, ax, ay, t_flight,
+                                             jerk_x, jerk_y)
 
         if confidence < self._cfg.min_confidence:
             lead_yaw *= confidence / self._cfg.min_confidence
@@ -248,6 +268,8 @@ class LeadAngleCalculator:
         ax: float,
         ay: float,
         t_flight: float,
+        jerk_x: float = 0.0,
+        jerk_y: float = 0.0,
     ) -> float:
         """评估提前量预测的置信度。
 
@@ -256,6 +278,7 @@ class LeadAngleCalculator:
         2. 加速度稳定性: 高加速度 → 运动不稳定 → 降低置信度
         3. 飞行时间: 越长预测越不可靠
         4. 目标置信度: 检测器置信度
+        5. 机动抖动 (jerk): 加速度变化率高 → 机动预测不可靠 → 降低置信度
         """
         speed = math.sqrt(vx**2 + vy**2)
         accel = math.sqrt(ax**2 + ay**2)
@@ -272,5 +295,10 @@ class LeadAngleCalculator:
         # 检测器置信度
         det_score = target.confidence
 
-        confidence = speed_score * accel_penalty * time_penalty * det_score
+        # 机动检测: 抖动 (jerk = da/dt) 越大，加速度预测越不可靠
+        # 参考值 2000 px/s³；超过此值时置信度降至 0.2
+        jerk_mag = math.sqrt(jerk_x ** 2 + jerk_y ** 2)
+        jerk_penalty = max(1.0 - jerk_mag / 2000.0, 0.2)
+
+        confidence = speed_score * accel_penalty * time_penalty * det_score * jerk_penalty
         return max(min(confidence, 1.0), 0.0)

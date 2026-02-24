@@ -45,6 +45,12 @@ class TrackingProvider extends ChangeNotifier {
   // 交战驻留计时器状态
   EngagementDwellStatus _dwellStatus = const EngagementDwellStatus();
 
+  // 双人规则武装挂起状态
+  ArmPendingStatus _armPendingStatus = ArmPendingStatus.none;
+
+  // 最近一次安全触发原因 (safety_triggered SSE)
+  String? _lastSafetyTriggerReason;
+
   // 操作员心跳定时器 (armed 时每 5s 发送一次, 防止 watchdog 自动安全)
   Timer? _heartbeatTimer;
 
@@ -83,6 +89,8 @@ class TrackingProvider extends ChangeNotifier {
   DateTime? get lastConfigReload => _lastConfigReload;
   List<SafetyZoneModel> get nfzZones => _nfzZones;
   EngagementDwellStatus get dwellStatus => _dwellStatus;
+  ArmPendingStatus get armPendingStatus => _armPendingStatus;
+  String? get lastSafetyTriggerReason => _lastSafetyTriggerReason;
   List<String> get stateHistory => _stateHistory;
 
   void startPolling({Duration interval = const Duration(milliseconds: 200)}) {
@@ -182,6 +190,7 @@ class TrackingProvider extends ChangeNotifier {
         _api.getFireStatus(),
         _api.getDesignatedTrackId(),
         _api.getDwellStatus(),
+        _api.getArmPendingStatus(),
       ]);
       final threatResult = results[0] as ({List<ThreatEntry> threats, bool pipelineActive});
       _threats = threatResult.threats;
@@ -191,6 +200,7 @@ class TrackingProvider extends ChangeNotifier {
       _fireStatus = newFireStatus;
       _designatedTrackId = results[3] as int?;
       _dwellStatus = results[4] as EngagementDwellStatus;
+      _armPendingStatus = results[5] as ArmPendingStatus;
       _updateHeartbeatTimer();
       notifyListeners();
     } catch (_) {
@@ -209,12 +219,37 @@ class TrackingProvider extends ChangeNotifier {
 
   // --- 火控操作 ---
 
-  Future<void> armSystem() async {
+  /// Returns true if armed immediately, false if a two-man pending request was started.
+  Future<bool> armSystem() async {
     try {
-      await _api.armSystem(_operatorId);
+      final result = await _api.armSystem(_operatorId);
+      if (result.pending) {
+        // Two-man rule: first operator initiated; fetch updated pending status
+        _armPendingStatus = await _api.getArmPendingStatus();
+        notifyListeners();
+        return false;
+      }
+      return result.success;
     } catch (e) {
       _error = e.toString();
       notifyListeners();
+      return false;
+    }
+  }
+
+  /// Second-operator confirmation for the two-man arming rule.
+  Future<bool> armConfirm(String secondOperatorId) async {
+    try {
+      final ok = await _api.confirmArm(secondOperatorId);
+      if (ok) {
+        _armPendingStatus = ArmPendingStatus.none;
+        notifyListeners();
+      }
+      return ok;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 
@@ -463,6 +498,16 @@ class TrackingProvider extends ChangeNotifier {
       case 'config_reloaded':
         // 配置热重载已应用 — 记录时间戳，UI 可据此展示"配置已更新"提示
         _lastConfigReload = DateTime.now();
+        notifyListeners();
+      case 'safety_triggered':
+        // 安全系统介入（NFZ、IFF、联锁等）— 强制刷新火控状态，展示原因
+        final reason = event.data['reason'] as String?;
+        _lastSafetyTriggerReason = reason;
+        _audio.playHealthDegraded(); // reuse degraded audio cue for safety alert
+        _api.getFireStatus().then((fs) {
+          _fireStatus = fs;
+          notifyListeners();
+        }).catchError((_) {});
         notifyListeners();
     }
   }

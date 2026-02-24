@@ -71,6 +71,7 @@ class IFFChecker:
         self,
         friendly_classes: frozenset[str] | set[str] = frozenset(),
         track_id_whitelist: set[int] | None = None,
+        min_hostile_confidence: float = 0.0,
     ) -> None:
         """
         Parameters
@@ -81,12 +82,20 @@ class IFFChecker:
         track_id_whitelist : set[int] | None
             Initial set of track IDs treated as friendly.
             Defaults to an empty set.
+        min_hostile_confidence : float
+            Minimum detection confidence required to classify a track as
+            hostile (and thus permit engagement).  Tracks with confidence
+            below this threshold are treated as "uncertain" and fire is
+            withheld (is_friend=True with reason "confidence_abstain").
+            Defaults to 0.0 (disabled — all non-whitelisted tracks are
+            eligible for engagement regardless of confidence).
         """
         self._friendly_classes: frozenset[str] = frozenset(friendly_classes)
         self._lock = threading.Lock()
         self._track_id_whitelist: set[int] = (
             set(track_id_whitelist) if track_id_whitelist is not None else set()
         )
+        self._min_hostile_confidence: float = min_hostile_confidence
 
     # ------------------------------------------------------------------
     # Public API
@@ -137,6 +146,27 @@ class IFFChecker:
                 )
                 logger.debug(
                     "IFF: track %d class '%s' flagged FRIEND", tid, track.class_id
+                )
+                continue
+
+            # Confidence threshold: if the detection score is too low to
+            # reliably identify the target, abstain from hostile classification
+            # to prevent inadvertent engagement on uncertain detections.
+            if (self._min_hostile_confidence > 0.0
+                    and track.confidence < self._min_hostile_confidence):
+                results[tid] = IFFResult(
+                    track_id=tid,
+                    is_friend=True,
+                    confidence=track.confidence,
+                    reason=(
+                        f"detection confidence {track.confidence:.2f} < "
+                        f"min_hostile_confidence {self._min_hostile_confidence:.2f}: "
+                        f"abstain from engagement"
+                    ),
+                )
+                logger.debug(
+                    "IFF: track %d conf=%.2f below threshold %.2f — ABSTAIN",
+                    tid, track.confidence, self._min_hostile_confidence,
                 )
                 continue
 
@@ -198,3 +228,8 @@ class IFFChecker:
     def friendly_classes(self) -> frozenset[str]:
         """The class-based friendly class set (immutable)."""
         return self._friendly_classes
+
+    @property
+    def min_hostile_confidence(self) -> float:
+        """Minimum confidence required to classify a track as hostile."""
+        return self._min_hostile_confidence

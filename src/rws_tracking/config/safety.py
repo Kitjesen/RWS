@@ -15,7 +15,7 @@ class SafetyZoneConfig:
 
 
 @dataclass(frozen=True)
-class SafetyInterlockCfg:
+class SafetyInterlockConfig:
     require_operator_auth: bool = True
     min_lock_time_s: float = 1.0
     min_engagement_range_m: float = 5.0
@@ -24,10 +24,14 @@ class SafetyInterlockCfg:
     heartbeat_timeout_s: float = 5.0
 
 
+# Backward-compat alias — remove after next major version
+SafetyInterlockCfg = SafetyInterlockConfig
+
+
 @dataclass(frozen=True)
 class SafetyConfig:
     enabled: bool = False
-    interlock: SafetyInterlockCfg = SafetyInterlockCfg()
+    interlock: SafetyInterlockConfig = SafetyInterlockConfig()
     nfz_slow_down_margin_deg: float = 5.0
     zones: tuple[SafetyZoneConfig, ...] = ()
     # --- Two-man arming rule ---

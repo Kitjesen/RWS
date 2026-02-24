@@ -91,6 +91,14 @@ class PID:
         )
         return max(-self.cfg.output_limit, min(self.cfg.output_limit, output))
 
+    def scale_integral(self, factor: float) -> None:
+        """Multiply the integral accumulator by *factor* (anti-windup / partial reset)."""
+        self.state.integral *= factor
+
+    def reset_derivative(self) -> None:
+        """Zero the derivative low-pass filter state."""
+        self.state.d_lpf = 0.0
+
     def reset(self) -> None:
         self.state = PIDState()
 
@@ -128,6 +136,11 @@ class TwoAxisGimbalController:
         self._last_error: TargetError | None = None
         self._last_target: TargetObservation | None = None
         self._last_tracked_id: int | None = None
+        # Disturbance Observer state
+        self._dob_yaw: float = 0.0
+        self._dob_pitch: float = 0.0
+        self._prev_cmd_yaw: float = 0.0
+        self._prev_cmd_pitch: float = 0.0
 
         # 状态机：外部注入优先，否则内部创建默认实现
         if state_machine is not None:
@@ -227,10 +240,10 @@ class TwoAxisGimbalController:
         # a transient kick from the previous target's wind-up.
         new_id = target.track_id if target is not None else None
         if new_id is not None and new_id != self._last_tracked_id:
-            self._yaw_pid.state.integral *= 0.1
-            self._yaw_pid.state.d_lpf = 0.0
-            self._pitch_pid.state.integral *= 0.1
-            self._pitch_pid.state.d_lpf = 0.0
+            self._yaw_pid.scale_integral(0.1)
+            self._yaw_pid.reset_derivative()
+            self._pitch_pid.scale_integral(0.1)
+            self._pitch_pid.reset_derivative()
             logger.debug("PID partial reset: track %s -> %s", self._last_tracked_id, new_id)
         self._last_tracked_id = new_id
 
@@ -238,8 +251,8 @@ class TwoAxisGimbalController:
         # integral each frame so it doesn't wind up while we can't fire.
         # At 30 Hz with α=0.95, the integral halves in ~0.45 s.
         if not fire_authorized:
-            self._yaw_pid.state.integral *= 0.95
-            self._pitch_pid.state.integral *= 0.95
+            self._yaw_pid.scale_integral(0.95)
+            self._pitch_pid.scale_integral(0.95)
 
         error, vel_yaw_dps, vel_pitch_dps = self._estimate_error(target, timestamp)
         ballistic_comp = 0.0
@@ -291,18 +304,21 @@ class TwoAxisGimbalController:
                     ki=self._cfg.pitch_pid.ki * ki_mult,
                     kd=self._cfg.pitch_pid.kd * kd_mult,
                 )
-                temp_yaw_pid = PID(temp_yaw_cfg)
-                temp_pitch_pid = PID(temp_pitch_cfg)
-                temp_yaw_pid.state = self._yaw_pid.state
-                temp_pitch_pid.state = self._pitch_pid.state
+                # Temporarily substitute gains then run a single step.
+                # Swap cfg on the live PID instances rather than creating
+                # throwaway objects — avoids state assignment across instances.
+                orig_yaw_cfg = self._yaw_pid.cfg
+                orig_pitch_cfg = self._pitch_pid.cfg
+                self._yaw_pid.cfg = temp_yaw_cfg
+                self._pitch_pid.cfg = temp_pitch_cfg
 
-                cmd_yaw = temp_yaw_pid.step(error.yaw_error_deg, dt, feedforward=vel_yaw_dps)
-                cmd_pitch = temp_pitch_pid.step(
+                cmd_yaw = self._yaw_pid.step(error.yaw_error_deg, dt, feedforward=vel_yaw_dps)
+                cmd_pitch = self._pitch_pid.step(
                     error.pitch_error_deg, dt, feedforward=vel_pitch_dps
                 )
 
-                self._yaw_pid.state = temp_yaw_pid.state
-                self._pitch_pid.state = temp_pitch_pid.state
+                self._yaw_pid.cfg = orig_yaw_cfg
+                self._pitch_pid.cfg = orig_pitch_cfg
             else:
                 # 标准PID
                 cmd_yaw = self._yaw_pid.step(error.yaw_error_deg, dt, feedforward=vel_yaw_dps)
@@ -342,6 +358,28 @@ class TwoAxisGimbalController:
             cmd_yaw = max(-max_rate, min(max_rate, cmd_yaw))
             cmd_pitch = max(-max_rate, min(max_rate, cmd_pitch))
 
+        # --- Disturbance Observer (DOB) inner loop ---
+        # Estimates persistent low-frequency disturbances (e.g. robot-dog gait
+        # vibrations at 2–4 Hz) by comparing the previous rate command with the
+        # actual measured rate from GimbalFeedback.  The IIR-filtered estimate
+        # is fed back to pre-compensate for the disturbance.
+        if self._cfg.dob_enabled:
+            alpha = self._cfg.dob_alpha
+            err_yaw = self._prev_cmd_yaw - feedback.yaw_rate_dps
+            err_pitch = self._prev_cmd_pitch - feedback.pitch_rate_dps
+            self._dob_yaw = (1.0 - alpha) * self._dob_yaw + alpha * err_yaw
+            self._dob_pitch = (1.0 - alpha) * self._dob_pitch + alpha * err_pitch
+            gain = self._cfg.dob_gain
+            cmd_yaw += gain * self._dob_yaw
+            cmd_pitch += gain * self._dob_pitch
+            max_r = self._cfg.max_rate_dps
+            cmd_yaw = max(-max_r, min(max_r, cmd_yaw))
+            cmd_pitch = max(-max_r, min(max_r, cmd_pitch))
+
+        # Store final command for DOB reference on next frame
+        self._prev_cmd_yaw = cmd_yaw
+        self._prev_cmd_pitch = cmd_pitch
+
         metadata = {
             "state": _STATE_INDEX[state],
             "yaw_error_deg": error.yaw_error_deg if error else 0.0,
@@ -355,6 +393,8 @@ class TwoAxisGimbalController:
             "adaptive_kp_mult": kp_mult,
             "adaptive_ki_mult": ki_mult,
             "adaptive_kd_mult": kd_mult,
+            "dob_yaw": self._dob_yaw,
+            "dob_pitch": self._dob_pitch,
         }
         return ControlCommand(
             timestamp=timestamp,

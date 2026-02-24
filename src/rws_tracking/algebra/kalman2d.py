@@ -33,6 +33,7 @@ Units: position in pixels, velocity in px/s, acceleration in px/s², dt in secon
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -240,6 +241,15 @@ class KalmanCAConfig:
     initial_velocity_var: float = 200.0
     initial_accel_var: float = 500.0
 
+    # Adaptive Q: scale acceleration process noise by estimated target speed.
+    # When True, faster-moving targets receive proportionally larger Q_acc
+    # so the filter adapts more aggressively to sudden maneuvers.
+    # speed_ref_px_s: reference speed (px/s); at this speed Q_acc is doubled.
+    # max_scale: maximum Q_acc multiplier (applied at >= 2×speed_ref).
+    adaptive_q_enabled: bool = False
+    adaptive_q_speed_ref_px_s: float = 150.0
+    adaptive_q_max_scale: float = 3.0
+
 
 class CentroidKalmanCA:
     """
@@ -292,6 +302,9 @@ class CentroidKalmanCA:
         self._q_pos = config.process_noise_pos
         self._q_vel = config.process_noise_vel
         self._q_acc = config.process_noise_acc
+        self._adaptive_q_enabled: bool = config.adaptive_q_enabled
+        self._adaptive_q_speed_ref: float = config.adaptive_q_speed_ref_px_s
+        self._adaptive_q_max_scale: float = config.adaptive_q_max_scale
 
         self._I6 = np.eye(6, dtype=np.float64)
 
@@ -300,13 +313,65 @@ class CentroidKalmanCA:
     # ------------------------------------------------------------------
 
     def predict(self, dt: float) -> None:
-        """Propagate state forward by *dt* seconds (constant-acceleration model)."""
+        """Propagate state forward by *dt* seconds (constant-acceleration model).
+
+        When ``adaptive_q_enabled`` is True (via KalmanCAConfig), the
+        acceleration process noise Q_acc is scaled by the current estimated
+        target speed: faster targets → larger Q_acc → faster adaptation to
+        sudden maneuvers.  The base ``_q_acc`` value is restored after the
+        predict step so it remains stable for inspection.
+        """
         if dt <= 0.0:
             return
+        q_acc_save = self._q_acc
+        if self._adaptive_q_enabled:
+            speed = math.sqrt(float(self._x[2]) ** 2 + float(self._x[3]) ** 2)
+            scale = min(1.0 + speed / self._adaptive_q_speed_ref, self._adaptive_q_max_scale)
+            self._q_acc = q_acc_save * scale
         F = self._transition(dt)
         Q = self._process_noise(dt)
         self._x = F @ self._x
         self._P = F @ self._P @ F.T + Q
+        self._q_acc = q_acc_save  # restore base value
+
+    def predict_with_ego_motion(
+        self,
+        dt: float,
+        d_yaw_deg: float,
+        d_pitch_deg: float,
+        fx: float,
+        fy: float,
+    ) -> None:
+        """Ego-Motion Aware Prediction (EMAP).
+
+        Applies standard CA prediction then corrects the predicted position
+        for camera rotation, so that world-fixed objects are not mistaken
+        for moving targets due to gimbal platform motion.
+
+        Physics (small-angle approximation):
+            Camera rotates right by Δψ → world-fixed point shifts left:
+                Δcx = -fx · tan(Δψ_rad)   (pixels)
+            Camera tilts up by Δθ   → world-fixed point shifts down:
+                Δcy =  fy · tan(Δθ_rad)   (pixels)
+
+        Parameters
+        ----------
+        dt : float
+            Integration timestep (seconds).
+        d_yaw_deg : float
+            Camera yaw change since last frame (degrees, positive = rightward).
+        d_pitch_deg : float
+            Camera pitch change since last frame (degrees, positive = upward).
+        fx, fy : float
+            Focal lengths in pixels (camera intrinsics).
+        """
+        self.predict(dt)  # standard CA prediction first
+        # Ego-motion compensation: offset predicted position by the pixel
+        # displacement that camera rotation would impose on a world-fixed point.
+        dx_cam = -fx * math.tan(math.radians(d_yaw_deg))
+        dy_cam =  fy * math.tan(math.radians(d_pitch_deg))
+        self._x[0] += dx_cam
+        self._x[1] += dy_cam
 
     def update(self, cx: float, cy: float) -> None:
         """Fuse a new centroid measurement."""
@@ -375,6 +440,28 @@ class CentroidKalmanCA:
         """Return a list of predicted future positions (parabolic arc)."""
         dt_step = horizon_s / steps
         return [self.predict_position(dt_step * i) for i in range(1, steps + 1)]
+
+    def blend_velocity(self, vx: float, vy: float, alpha: float) -> None:
+        """Blend observed velocity into the Kalman velocity state.
+
+        Used by OC-SORT ORU (Observation-Centric Re-Update) after an occlusion
+        gap to correct velocity drift without exposing the internal state vector.
+
+        Parameters
+        ----------
+        vx, vy : float
+            Observed velocity to blend in (px/s).
+        alpha : float
+            Weight given to observed velocity in [0, 1].
+            0 = keep Kalman unchanged, 1 = replace with observed.
+        """
+        self._x[2] = alpha * vx + (1.0 - alpha) * float(self._x[2])
+        self._x[3] = alpha * vy + (1.0 - alpha) * float(self._x[3])
+
+    @property
+    def covariance_2x2(self) -> np.ndarray:
+        """2×2 position covariance submatrix [P_cx, P_cy] (copy)."""
+        return self._P[:2, :2].copy()
 
     # ------------------------------------------------------------------
     # Internal

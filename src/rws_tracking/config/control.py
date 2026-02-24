@@ -68,6 +68,17 @@ class GimbalControllerConfig:
     latency_compensation_s: float = 0.0
     ballistic: BallisticConfig = BallisticConfig()
     adaptive_pid: AdaptivePIDConfig = AdaptivePIDConfig()
+    # Disturbance Observer (DOB) for inner-loop vibration rejection.
+    # Estimates low-frequency disturbances (e.g. robot-dog gait at 2–4 Hz)
+    # by comparing the previous rate command with the measured actual rate.
+    # The LPF-smoothed estimate is subtracted from the PID output to
+    # pre-compensate for persistent disturbances.
+    # dob_alpha : IIR update weight per sample (0=no update, 1=no smoothing).
+    #   At 30 Hz, alpha=0.5 → ~3.3 Hz bandwidth (passes gait, rejects fast noise).
+    # dob_gain  : Output scale (< 1.0 for conservative rejection).
+    dob_enabled: bool = False
+    dob_alpha: float = 0.5
+    dob_gain: float = 1.0
 
 
 @dataclass(frozen=True)

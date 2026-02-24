@@ -181,10 +181,38 @@ class RwsApiClient {
     return const EngagementDwellStatus();
   }
 
-  Future<bool> armSystem(String operatorId) async {
+  /// POST /api/fire/arm — initiates arm (or first-operator two-man request).
+  /// Returns (success: true) for immediate arm (200) or
+  /// (success: false, pending: true) for two-man pending (202).
+  Future<({bool success, bool pending})> armSystem(String operatorId) async {
     try {
       final resp = await _client.post(
         Uri.parse('$baseUrl/api/fire/arm'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'operator_id': operatorId}),
+      );
+      if (resp.statusCode == 200) return (success: true, pending: false);
+      if (resp.statusCode == 202) return (success: false, pending: true);
+    } catch (_) {}
+    return (success: false, pending: false);
+  }
+
+  /// GET /api/fire/arm/pending — two-man rule pending status.
+  Future<ArmPendingStatus> getArmPendingStatus() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/fire/arm/pending'));
+      if (resp.statusCode == 200) {
+        return ArmPendingStatus.fromJson(jsonDecode(resp.body));
+      }
+    } catch (_) {}
+    return ArmPendingStatus.none;
+  }
+
+  /// POST /api/fire/arm/confirm — second-operator confirmation for two-man rule.
+  Future<bool> confirmArm(String operatorId) async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/fire/arm/confirm'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'operator_id': operatorId}),
       );

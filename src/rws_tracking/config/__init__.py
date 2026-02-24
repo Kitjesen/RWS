@@ -4,7 +4,7 @@
 所有 ``from ..config import X`` 的既有代码无需修改。
 """
 
-from .api import VideoStreamCfg
+from .api import VideoStreamCfg, VideoStreamConfig
 from .control import (
     AdaptivePIDConfig,
     BallisticConfig,
@@ -18,7 +18,7 @@ from .environment import CameraConfig, EnvironmentConfig, ProjectileConfig
 from .hardware import DriverLimitsConfig, RangefinderConfig
 from .loader import SystemConfig, default_controller_config, load_config, save_config
 from .perception import DetectorConfig, SelectorConfig, SelectorWeights
-from .safety import SafetyConfig, SafetyInterlockCfg, SafetyZoneConfig
+from .safety import SafetyConfig, SafetyInterlockCfg, SafetyInterlockConfig, SafetyZoneConfig
 
 __all__ = [
     "AdaptivePIDConfig",
@@ -35,6 +35,7 @@ __all__ = [
     "RangefinderConfig",
     "SafetyConfig",
     "SafetyInterlockCfg",
+    "SafetyInterlockConfig",
     "SafetyZoneConfig",
     "SelectorConfig",
     "SelectorWeights",
@@ -42,6 +43,7 @@ __all__ = [
     "ThreatWeightsConfig",
     "TrajectoryPlannerConfig",
     "VideoStreamCfg",
+    "VideoStreamConfig",
     "default_controller_config",
     "load_config",
     "save_config",

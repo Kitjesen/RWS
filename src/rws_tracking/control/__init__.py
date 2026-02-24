@@ -1,9 +1,11 @@
 from .adaptive import DistanceBasedScheduler, ErrorBasedScheduler, GainScheduler
 from .ballistic import BallisticModel, SimpleBallisticModel, TableBallisticModel
 from .controller import TwoAxisGimbalController
-from .interfaces import GimbalController
+from .interfaces import AxisController, GimbalController
+from .mpc_controller import MPCConfig, MPCController
 
 __all__ = [
+    "AxisController",
     "GimbalController",
     "TwoAxisGimbalController",
     "BallisticModel",
@@ -12,4 +14,6 @@ __all__ = [
     "GainScheduler",
     "ErrorBasedScheduler",
     "DistanceBasedScheduler",
+    "MPCController",
+    "MPCConfig",
 ]
