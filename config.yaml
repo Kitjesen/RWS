@@ -99,6 +99,23 @@ controller:
     mass_kg: 0.0098
     caliber_m: 0.00762
 
+  # 控制器模式: 'pid' (默认) 或 'mpc' (批量 MPC 预计算增益)
+  # 更改在下次 Pipeline 启动时生效
+  controller_mode: "pid"
+
+  # MPC 轴控制器参数 (仅 controller_mode: mpc 时生效)
+  mpc:
+    horizon: 10          # 预测步数 N。更长 → 更有预见性，启动略慢
+    q_error: 100.0       # 误差代价权重。越大 → 越激进（类似 Kp 增大）
+    r_effort: 1.0        # 控制量代价权重。越大 → 越平滑
+    q_terminal: 0.0      # 终端代价（0 = 与 q_error 相同）
+    integral_limit: 30.0 # 积分饱和上限 (deg·s)
+    output_limit: 90.0   # 输出限幅 (deg/s)
+    ki: 0.3              # 积分增益（消除稳态误差）
+    derivative_lpf_alpha: 0.3  # 微分 LPF 系数（0=强滤波, 1=不滤波）
+    feedforward_kv: 0.0  # 速度前馈增益
+    plant_dt: 0.033      # 离线增益计算用时间步长（匹配 pipeline 循环周期）
+
   # 自适应 PID 增益调度
   adaptive_pid:
     enabled: true                  # 启用误差自适应增益调度

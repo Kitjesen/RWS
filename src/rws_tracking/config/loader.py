@@ -15,6 +15,7 @@ from .control import (
     BallisticConfig,
     GimbalControllerConfig,
     LeadAngleConfig,
+    MPCConfig,
     PIDConfig,
     TrajectoryPlannerConfig,
 )
@@ -161,6 +162,12 @@ def _nested_dict_to_config(data: dict[str, Any]) -> SystemConfig:
         **{k: v for k, v in adaptive_d.items() if k in AdaptivePIDConfig.__dataclass_fields__}
     )
 
+    mpc_d = ctrl_d.pop("mpc", {})
+    _warn_unknown_keys("controller.mpc", mpc_d, MPCConfig)
+    mpc = MPCConfig(
+        **{k: v for k, v in mpc_d.items() if k in MPCConfig.__dataclass_fields__}
+    )
+
     _warn_unknown_keys("controller.yaw_pid", yaw_d, PIDConfig)
     _warn_unknown_keys("controller.pitch_pid", pitch_d, PIDConfig)
     yaw_pid = PIDConfig(**{k: v for k, v in yaw_d.items() if k in PIDConfig.__dataclass_fields__})
@@ -174,11 +181,12 @@ def _nested_dict_to_config(data: dict[str, Any]) -> SystemConfig:
         scan_pattern=scan,
         ballistic=ballistic,
         adaptive_pid=adaptive_pid,
+        mpc=mpc,
         **{
             k: v
             for k, v in ctrl_d.items()
             if k in GimbalControllerConfig.__dataclass_fields__
-            and k not in ("yaw_pid", "pitch_pid", "scan_pattern", "ballistic", "adaptive_pid")
+            and k not in ("yaw_pid", "pitch_pid", "scan_pattern", "ballistic", "adaptive_pid", "mpc")
         },
     )
 
