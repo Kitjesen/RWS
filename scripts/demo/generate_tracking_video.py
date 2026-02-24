@@ -17,7 +17,7 @@ import numpy as np
 # ─────────────────────────────────────────────────────────
 WIDTH, HEIGHT = 1280, 720
 FPS           = 30
-TOTAL_FRAMES  = 310          # ~10 seconds, hyper-dense action
+TOTAL_FRAMES  = 240          # ~8 seconds
 OUTPUT_PATH   = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "logs", "tracking_demo.mp4",
@@ -145,20 +145,17 @@ class Target:
 
 # ── Wave 1 (frames 15–90): 3 fast targets, G0 handles T1+T3, G1 handles T2
 W1 = [
-    # Person A — diagonal upper-left → lower-right, zigzag
     Target(1,"Person", 0.91, 15, 90,  80,120,  5.2, 3.2,  12,8, 22,  76,116),
-    # Vehicle — right edge → left, fast, slight weave
     Target(2,"Vehicle",0.78, 15, 95, 1180,340, -6.5, 0.8,   0,14,40, 130, 78),
-    # Person B — bottom → up-right, jinking
     Target(3,"Person", 0.85, 15,100,  600,620,  2.8,-5.0,  16,0, 18,  72,112),
 ]
 
-# ── Wave 2 (frames 120–240): 4 targets simultaneously, two gimbals
+# ── Wave 2 (frames 110–220): 4 targets simultaneously, two gimbals
 W2 = [
-    Target(4,"Person", 0.89, 120,230,  50,200,  6.0, 2.5,  10,6, 28,  80,120),
-    Target(5,"Vehicle",0.72, 120,240,1220,420,  -7.5, 1.2,   0,10,35, 140, 82),
-    Target(6,"Person", 0.83, 130,245, 640, 50,  1.5, 5.8,  14,0, 24,  74,114),
-    Target(7,"Drone",  0.76, 130,250, 200,500,  5.0,-4.5,   8,8, 20,  60, 60),
+    Target(4,"Person", 0.89, 110,210,  50,200,  6.0, 2.5,  10,6, 28,  80,120),
+    Target(5,"Vehicle",0.72, 110,215, 1220,420, -7.5, 1.2,   0,10,35, 140, 82),
+    Target(6,"Person", 0.83, 118,218,  640, 50,  1.5, 5.8,  14,0, 24,  74,114),
+    Target(7,"Drone",  0.76, 118,222,  200,500,  5.0,-4.5,   8,8, 20,  60, 60),
 ]
 
 ALL_TARGETS = W1 + W2
@@ -169,16 +166,16 @@ ALL_TARGETS = W1 + W2
 # Tuple: (fire_frame, track_id, cx_at_fire, cy_at_fire)
 # ─────────────────────────────────────────────────────────
 
-# Wave 1 fires — rapid sequential every ~20 frames
+# Wave 1: 12-frame TRACK visible pursuit, then ~18 frames LOCK, then fire
 FIRE_EVENTS: List[dict] = [
-    dict(f=38,  tid=1),
-    dict(f=58,  tid=2),
-    dict(f=78,  tid=3),
+    dict(f=46,  tid=1),   # enter 15 + 12 TRACK + 19 LOCK
+    dict(f=62,  tid=2),   # staggered +16
+    dict(f=78,  tid=3),   # staggered +16
     # Wave 2 — dual simultaneous kills
-    dict(f=148, tid=4),
-    dict(f=150, tid=5),
-    dict(f=193, tid=6),
-    dict(f=195, tid=7),
+    dict(f=142, tid=4),   # enter 110 + 12 TRACK + 20 LOCK
+    dict(f=144, tid=5),
+    dict(f=160, tid=6),   # enter 118 + 12 TRACK + 30 LOCK
+    dict(f=162, tid=7),
 ]
 _NEUTRALIZED: set = set()
 
@@ -207,7 +204,7 @@ def get_target_state(tid:int, f:int) -> str:
         if tgt.tid==tid:
             if tgt.enter <= f < tgt.exit:
                 appear = f - tgt.enter
-                if appear < 5: return "TRACK"
+                if appear < 12: return "TRACK"
                 return "LOCK"
     return "SEARCH"
 
@@ -217,10 +214,12 @@ def yaw_err_for(tid:int, f:int) -> float:
         if tgt.tid==tid:
             appear = f - tgt.enter
             if appear < 0: return 0.0
-            if appear < 5:
-                return 3.5*math.exp(-appear*0.55)+0.2
-            t2 = appear - 5
-            return 0.2*math.exp(-t2*0.55)+0.03
+            if appear < 12:
+                # TRACK phase: large converging error
+                return 4.0*math.exp(-appear*0.22)+0.5
+            t2 = appear - 12
+            # LOCK phase: tight, fast settling
+            return 0.5*math.exp(-t2*0.45)+0.04
     return 0.0
 
 def chain_state_at(f:int) -> str:
@@ -502,7 +501,7 @@ def draw_mission_summary(frame, f:int, start:int):
         ("═"*38,""),
         ("     MISSION DEBRIEF",""),
         ("═"*38,""),
-        ("  Duration","10.3s"),
+        ("  Duration","8.0s"),
         ("  Targets tracked","7"),
         ("  Shots fired","7"),
         ("  Lock rate","94%"),
@@ -545,7 +544,8 @@ def render_video(output_path:str):
 
     aim: dict[int,GimbalAim] = {0:GimbalAim(WIDTH//2,HEIGHT//2),
                                   1:GimbalAim(WIDTH//2,HEIGHT//2)}
-    trails: dict[int, list]   = {}
+    trails: dict[int, list]      = {}   # target motion trails
+    aim_trails: dict[int, list]  = {0:[], 1:[]}  # gimbal crosshair trails
     t0=time.time()
 
     for f in range(TOTAL_FRAMES):
@@ -571,7 +571,7 @@ def render_video(output_path:str):
             active_tgts.append((tgt,threat))
 
         # ── Search sweep when no targets
-        if f<15 or (not active_raw and f<130):
+        if f<15 or (not active_raw and f<120):
             draw_search_sweep(frame,f)
 
         # ── Draw targets
@@ -580,23 +580,52 @@ def render_video(output_path:str):
         for tgt,(x,y,w,h,vx,vy) in active_raw:
             cx2,cy2=x+w//2,y+h//2
             state=get_target_state(tgt.tid,f)
+            appear=f-tgt.enter
             is_g0=(tgt.tid in G0_TIDS)
             alloc="G0" if is_g0 else "G1"
             rc=C_CYAN if is_g0 else C_MAGENTA
 
-            # Trail
+            # Target motion trail
             if tgt.tid not in trails: trails[tgt.tid]=[]
             trails[tgt.tid].append((cx2,cy2))
-            if len(trails[tgt.tid])>20: trails[tgt.tid].pop(0)
+            if len(trails[tgt.tid])>24: trails[tgt.tid].pop(0)
 
             draw_bbox(frame,x,y,w,h,tgt,state,alloc,f,trails.get(tgt.tid,[]))
             draw_reticle(frame,cx2,cy2,state,rc,f)
 
-            # Gimbal convergence
+            # Lead angle prediction dot — slightly ahead of motion vector
+            if state=="LOCK":
+                lead_frames=8
+                lx=int(cx2+vx*lead_frames); ly=int(cy2+vy*lead_frames)
+                cv2.circle(frame,(lx,ly),5,C_WHITE,1,cv2.LINE_AA)
+                cv2.circle(frame,(lx,ly),2,C_WHITE,-1,cv2.LINE_AA)
+                cv2.line(frame,(cx2,cy2),(lx,ly),C_WHITE,1,cv2.LINE_AA)
+
+            # "ACQUIRING" label during TRACK phase
+            if state=="TRACK":
+                prog=int((appear/12.0)*10)
+                bar="█"*prog+"░"*(10-prog)
+                cv2.putText(frame,f"ACQ [{bar}]",(x,y-22),FONT,F_XS,C_YELLOW,1,cv2.LINE_AA)
+
+            # Gimbal convergence — slow pursuit in TRACK, tight in LOCK
             gid=0 if is_g0 else 1
-            tau=0.58 if state=="LOCK" else 0.42
+            if state=="TRACK":
+                # Gradual acceleration: starts slow (0.08) → ramps to 0.28
+                tau=0.08+min(appear,11)*0.018
+            else:
+                tau=0.65  # tight lock tracking
+
             gx,gy=aim[gid].update(cx2,cy2,tau)
-            draw_crosshair(frame,gx,gy,rc,0.50)
+
+            # Gimbal crosshair trail — shows path of pursuit
+            aim_trails[gid].append((gx,gy))
+            if len(aim_trails[gid])>18: aim_trails[gid].pop(0)
+            for i,(tx2,ty2) in enumerate(aim_trails[gid][:-1]):
+                a=(i+1)/len(aim_trails[gid])
+                tc=tuple(int(c*a*0.55) for c in rc)
+                cv2.circle(frame,(tx2,ty2),2,tc,-1,cv2.LINE_AA)
+
+            draw_crosshair(frame,gx,gy,rc,0.65)
 
             # Pick primary (highest threat, G0 preferred)
             for tgt2,threat2 in active_tgts:
@@ -610,6 +639,7 @@ def render_video(output_path:str):
         if not active_raw:
             aim[0].update(WIDTH//2,HEIGHT//2,0.04)
             aim[1].update(WIDTH//2,HEIGHT//2,0.04)
+            aim_trails[0].clear(); aim_trails[1].clear()
 
         # ── Fire flash
         fl_int,fl_off,fl_cx,fl_cy=fire_flash_intensity(f)
@@ -629,8 +659,8 @@ def render_video(output_path:str):
             draw_wave2_header(frame)
 
         # Mission summary
-        if f>=240:
-            draw_mission_summary(frame,f,240)
+        if f>=185:
+            draw_mission_summary(frame,f,185)
 
         # HUD
         chain=chain_state_at(f)
