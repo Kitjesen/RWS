@@ -194,6 +194,21 @@ class MPCController:
         self._d_lpf = 0.0
         self._first_call = True
 
+    def scale_integral(self, factor: float) -> None:
+        """Multiply the integral accumulator by *factor* (anti-windup / partial reset).
+
+        Matches the PID.scale_integral() interface so TwoAxisGimbalController can call
+        this without knowing whether the axis controller is PID or MPC.
+        """
+        self._integral *= factor
+
+    def reset_derivative(self) -> None:
+        """Zero the derivative LPF state.
+
+        Matches the PID.reset_derivative() interface.
+        """
+        self._d_lpf = 0.0
+
     # ------------------------------------------------------------------
     # Gain precomputation
     # ------------------------------------------------------------------

@@ -10,6 +10,7 @@ from .control import (
     BallisticConfig,
     GimbalControllerConfig,
     LeadAngleConfig,
+    MPCConfig,
     PIDConfig,
     TrajectoryPlannerConfig,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "EnvironmentConfig",
     "GimbalControllerConfig",
     "LeadAngleConfig",
+    "MPCConfig",
     "PIDConfig",
     "ProjectileConfig",
     "RangefinderConfig",

@@ -20,10 +20,18 @@ class _ControlPanelState extends State<ControlPanel> {
   double _targetPitch = 0.0;
   bool _sendingAngle = false;
 
+  // 云台速率指令
+  double _rateYaw = 0.0;
+  double _ratePitch = 0.0;
+  bool _sendingRate = false;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPidFromConfig());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadPidFromConfig();
+      context.read<TrackingProvider>().fetchControllerMode();
+    });
   }
 
   Future<void> _loadPidFromConfig() async {
@@ -66,70 +74,147 @@ class _ControlPanelState extends State<ControlPanel> {
             ),
             const Divider(),
             Expanded(
-              child: ListView(
-                children: [
-                  _TrackingControls(sending: _sending, onToggle: _toggleTracking),
-                  const SizedBox(height: 16),
-                  _PidSection(
-                    title: '偏航 PID',
-                    params: _yawPid,
-                    onChanged: () => setState(() {}),
-                  ),
-                  const SizedBox(height: 12),
-                  _PidSection(
-                    title: '俯仰 PID',
-                    params: _pitchPid,
-                    onChanged: () => setState(() {}),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: _sending ? null : _applyPid,
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
-                    label: const Text('应用 PID 参数'),
-                  ),
-                  const SizedBox(height: 20),
-                  const Divider(),
-                  const SizedBox(height: 4),
-                  Text('云台角度控制',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 13)),
-                  const SizedBox(height: 8),
-                  _AngleSlider(
-                    label: '偏航',
-                    unit: '°',
-                    value: _targetYaw,
-                    min: -160,
-                    max: 160,
-                    onChanged: (v) => setState(() => _targetYaw = v),
-                  ),
-                  const SizedBox(height: 4),
-                  _AngleSlider(
-                    label: '俯仰',
-                    unit: '°',
-                    value: _targetPitch,
-                    min: -45,
-                    max: 75,
-                    onChanged: (v) => setState(() => _targetPitch = v),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: _sendingAngle ? null : _sendAngle,
-                    icon: _sendingAngle
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.control_camera),
-                    label: const Text('发送角度指令'),
-                  ),
-                ],
+              child: Consumer<TrackingProvider>(
+                builder: (_, p, __) => ListView(
+                  children: [
+                    _TrackingControls(sending: _sending, onToggle: _toggleTracking),
+                    const SizedBox(height: 12),
+
+                    // ---- 控制器模式切换 ----
+                    _ControllerModeToggle(
+                      mode: p.controllerMode,
+                      onChanged: (m) => p.setControllerMode(m),
+                    ),
+                    const SizedBox(height: 12),
+                    const Divider(),
+
+                    // ---- PID 参数 ----
+                    const SizedBox(height: 4),
+                    Text('偏航 PID',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    _PidSection(
+                      title: '',
+                      params: _yawPid,
+                      onChanged: () => setState(() {}),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('俯仰 PID',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 4),
+                    _PidSection(
+                      title: '',
+                      params: _pitchPid,
+                      onChanged: () => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _sending ? null : _applyPid,
+                      icon: _sending
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send),
+                      label: const Text('应用 PID 参数'),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+
+                    // ---- 云台角度控制 ----
+                    const SizedBox(height: 4),
+                    const Text('云台角度控制',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    _AngleSlider(
+                      label: '偏航',
+                      unit: '°',
+                      value: _targetYaw,
+                      min: -160,
+                      max: 160,
+                      onChanged: (v) => setState(() => _targetYaw = v),
+                    ),
+                    const SizedBox(height: 4),
+                    _AngleSlider(
+                      label: '俯仰',
+                      unit: '°',
+                      value: _targetPitch,
+                      min: -45,
+                      max: 75,
+                      onChanged: (v) => setState(() => _targetPitch = v),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.icon(
+                      onPressed: _sendingAngle ? null : _sendAngle,
+                      icon: _sendingAngle
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.control_camera),
+                      label: const Text('发送角度指令'),
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+
+                    // ---- 云台速率控制 ----
+                    const SizedBox(height: 4),
+                    const Text('手动速率控制',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    const SizedBox(height: 2),
+                    const Text('直接注入速率指令（deg/s），绕过视觉跟踪',
+                        style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    _AngleSlider(
+                      label: '偏航',
+                      unit: '°/s',
+                      value: _rateYaw,
+                      min: -90,
+                      max: 90,
+                      onChanged: (v) => setState(() => _rateYaw = v),
+                    ),
+                    const SizedBox(height: 4),
+                    _AngleSlider(
+                      label: '俯仰',
+                      unit: '°/s',
+                      value: _ratePitch,
+                      min: -45,
+                      max: 45,
+                      onChanged: (v) => setState(() => _ratePitch = v),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _sendingRate ? null : _sendRate,
+                            icon: _sendingRate
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.speed),
+                            label: const Text('发送速率'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: () {
+                            setState(() {
+                              _rateYaw = 0;
+                              _ratePitch = 0;
+                            });
+                            p.setGimbalRate(0, 0);
+                          },
+                          child: const Text('归零'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -159,6 +244,23 @@ class _ControlPanelState extends State<ControlPanel> {
         SnackBar(
           content: Text(ok
               ? '角度指令已发送  偏航 ${_targetYaw.toStringAsFixed(1)}°  俯仰 ${_targetPitch.toStringAsFixed(1)}°'
+              : '发送失败（请检查 pipeline 是否已启动）'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendRate() async {
+    setState(() => _sendingRate = true);
+    final provider = context.read<TrackingProvider>();
+    final ok = await provider.setGimbalRate(_rateYaw, _ratePitch);
+    setState(() => _sendingRate = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? '速率指令已发送  偏航 ${_rateYaw.toStringAsFixed(1)}°/s  俯仰 ${_ratePitch.toStringAsFixed(1)}°/s'
               : '发送失败（请检查 pipeline 是否已启动）'),
           duration: const Duration(seconds: 2),
         ),
@@ -349,6 +451,53 @@ class _PidFieldState extends State<_PidField> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// 控制器模式切换 (PID ↔ MPC)
+class _ControllerModeToggle extends StatelessWidget {
+  final String mode;
+  final ValueChanged<String> onChanged;
+
+  const _ControllerModeToggle({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isMpc = mode == 'mpc';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('控制器',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const Spacer(),
+            Tooltip(
+              message: '切换轴控制器算法。更改在下次 Pipeline 启动时生效。',
+              child: ToggleButtons(
+                isSelected: [!isMpc, isMpc],
+                onPressed: (i) => onChanged(i == 0 ? 'pid' : 'mpc'),
+                borderRadius: BorderRadius.circular(8),
+                selectedColor: theme.colorScheme.onPrimary,
+                fillColor: theme.colorScheme.primary,
+                textStyle: const TextStyle(fontSize: 12),
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 32),
+                children: const [Text('PID'), Text('MPC')],
+              ),
+            ),
+          ],
+        ),
+        if (isMpc)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'MPC 模式：预计算最优增益 K，可通过 q/r 比值调节激进程度',
+              style: TextStyle(fontSize: 10, color: theme.colorScheme.primary.withValues(alpha: 0.8)),
+            ),
+          ),
       ],
     );
   }

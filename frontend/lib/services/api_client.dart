@@ -92,6 +92,51 @@ class RwsApiClient {
     return false;
   }
 
+  // --- 云台速率控制 ---
+
+  /// POST /api/gimbal/rate — 速率指令 (deg/s)
+  Future<bool> setGimbalRate(double yawDps, double pitchDps) async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/gimbal/rate'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'yaw_rate_dps': yawDps, 'pitch_rate_dps': pitchDps}),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['success'] ?? false;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  // --- 控制器模式 ---
+
+  /// GET /api/controller/mode — 当前控制器模式
+  Future<String> getControllerMode() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/controller/mode'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        return data['mode'] as String? ?? 'pid';
+      }
+    } catch (_) {}
+    return 'pid';
+  }
+
+  /// POST /api/controller/mode — 设置控制器模式 ('pid' | 'mpc')
+  Future<bool> setControllerMode(String mode) async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/controller/mode'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'mode': mode}),
+      );
+      return resp.statusCode == 200;
+    } catch (_) {}
+    return false;
+  }
+
   // --- 安全区域 ---
 
   Future<bool> addSafetyZone(SafetyZoneModel zone) async {

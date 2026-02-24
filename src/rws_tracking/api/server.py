@@ -802,6 +802,10 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     from .video_record_routes import record_bp
     app.register_blueprint(record_bp)
 
+    # Controller mode / MPC config switching
+    from .controller_routes import controller_bp
+    app.register_blueprint(controller_bp)
+
     # Config file watcher — hot-reload config.yaml into live PID/selector params.
     try:
         from ..tools.config_reload import ConfigReloader

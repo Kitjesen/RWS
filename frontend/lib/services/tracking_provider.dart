@@ -51,6 +51,9 @@ class TrackingProvider extends ChangeNotifier {
   // 最近一次安全触发原因 (safety_triggered SSE)
   String? _lastSafetyTriggerReason;
 
+  // 控制器模式 ('pid' | 'mpc') — 下次 pipeline 启动时生效
+  String _controllerMode = 'pid';
+
   // 操作员心跳定时器 (armed 时每 5s 发送一次, 防止 watchdog 自动安全)
   Timer? _heartbeatTimer;
 
@@ -91,6 +94,7 @@ class TrackingProvider extends ChangeNotifier {
   EngagementDwellStatus get dwellStatus => _dwellStatus;
   ArmPendingStatus get armPendingStatus => _armPendingStatus;
   String? get lastSafetyTriggerReason => _lastSafetyTriggerReason;
+  String get controllerMode => _controllerMode;
   List<String> get stateHistory => _stateHistory;
 
   void startPolling({Duration interval = const Duration(milliseconds: 200)}) {
@@ -299,6 +303,33 @@ class TrackingProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> setGimbalRate(double yawDps, double pitchDps) async {
+    try {
+      return await _api.setGimbalRate(yawDps, pitchDps);
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> setControllerMode(String mode) async {
+    try {
+      final ok = await _api.setControllerMode(mode);
+      if (ok) {
+        _controllerMode = mode;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> fetchControllerMode() async {
+    try {
+      _controllerMode = await _api.getControllerMode();
+      notifyListeners();
+    } catch (_) {}
   }
 
   Future<bool> updatePid(String axis, PidParams params) async {

@@ -127,8 +127,26 @@ class TwoAxisGimbalController:
     ) -> None:
         self._transform = transform
         self._cfg = cfg
-        self._yaw_pid = PID(cfg.yaw_pid)
-        self._pitch_pid = PID(cfg.pitch_pid)
+
+        # Axis controllers: PID by default, MPC when controller_mode == 'mpc'.
+        # Both implement AxisController protocol (step / reset / scale_integral /
+        # reset_derivative).
+        _controller_mode = getattr(cfg, 'controller_mode', 'pid')
+        if _controller_mode == 'mpc':
+            import dataclasses as _dc
+            from .mpc_controller import MPCConfig as _MpcRtCfg
+            from .mpc_controller import MPCController
+            _mpc_src = getattr(cfg, 'mpc', None)
+            if _mpc_src is not None:
+                _mpc_rt = _MpcRtCfg(**_dc.asdict(_mpc_src))
+            else:
+                _mpc_rt = _MpcRtCfg()
+            self._yaw_pid = MPCController(_mpc_rt)  # type: ignore[assignment]
+            self._pitch_pid = MPCController(_mpc_rt)  # type: ignore[assignment]
+            logger.info("TwoAxisGimbalController: using MPC axis controllers (K=%.4f)", self._yaw_pid._K)
+        else:
+            self._yaw_pid = PID(cfg.yaw_pid)
+            self._pitch_pid = PID(cfg.pitch_pid)
         self._last_ts = 0.0
         self._last_cmd = (0.0, 0.0)
         self._scan_start_ts: float | None = None
