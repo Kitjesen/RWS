@@ -185,6 +185,22 @@ def mission_status():
     return jsonify(s)
 
 
+def _check_mission_rate_limit():
+    """Return a 429 response if the caller has exceeded the mission rate limit.
+
+    Uses ``mission_rate_limiter`` from ``current_app.extensions``.  Falls back
+    gracefully if the limiter is absent so the Blueprint works in bare test apps.
+    Returns None when allowed, or a (Response, 429) tuple when exceeded.
+    """
+    limiter = current_app.extensions.get("mission_rate_limiter")
+    if limiter is None:
+        return None
+    key = request.remote_addr or "unknown"
+    if not limiter.is_allowed(key):
+        return jsonify({"error": "Rate limit exceeded"}), 429
+    return None
+
+
 @mission_bp.route("/start", methods=["POST"])
 def mission_start():
     """Start a new mission.
@@ -210,6 +226,10 @@ def mission_start():
         "failed_checks": ["logs_dir_writable", "config_valid"]
     }
     """
+    rate_err = _check_mission_rate_limit()
+    if rate_err is not None:
+        return rate_err
+
     if _mission_state["active"]:
         return jsonify({"error": "Mission already active. Call /api/mission/end first."}), 409
 
@@ -231,73 +251,79 @@ def mission_start():
             return jsonify({
                 "success": False,
                 "error": "preflight_failed",
-                "message": (
-                    "Pre-mission selftest failed. "
-                    "Run GET /api/selftest for details."
-                ),
                 "failed_checks": failed_checks,
+                "hint": "Pass ?force=true to bypass",
             }), 424
 
-    # Load profile if specified
-    if profile_name:
-        from ..config.profiles import ProfileManager
-        try:
-            pm = ProfileManager()
-            profile_cfg = pm.load_profile(profile_name)
-            logger.info("mission: loaded profile '%s'", profile_name)
-        except (FileNotFoundError, ValueError) as exc:
-            return jsonify({"error": f"Profile '{profile_name}' not found: {exc}"}), 404
-
-    # Reset lifecycle + audit logger for fresh session
-    if api.pipeline is not None:
-        lm = getattr(api.pipeline, "_lifecycle_manager", None)
-        if lm is not None:
-            lm.reset()
-            logger.info("mission: lifecycle manager reset")
-
-        chain = getattr(api.pipeline, "_shooting_chain", None)
-        if chain is not None:
-            chain.safe("mission_start")
-
-    # Start tracking
-    result = api.start_tracking(camera_source)
-    if not result.get("success"):
-        return jsonify({"error": result.get("error", "Failed to start tracking")}), 500
-
-    session_id = f"{mission_name.replace(' ', '_')}_{datetime.datetime.now():%Y%m%d_%H%M%S}"
-    _mission_state.update(
-        active=True,
-        profile=profile_name,
-        roe_profile=profile_name,  # may be overridden by loaded profile metadata
-        started_at=time.time(),
-        started_at_str=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        camera_source=camera_source,
-        session_id=session_id,
-        targets_engaged=0,
-        targets_detected=0,
-        shots_fired=0,
-        last_report_path=None,
-    )
-
-    logger.info("mission START: session=%s profile=%s", session_id, profile_name)
-
     try:
-        from .events import event_bus
-        event_bus.emit("mission_started", {
+        # Load profile if specified
+        if profile_name:
+            from ..config.profiles import ProfileManager
+            try:
+                pm = ProfileManager()
+                profile_cfg = pm.load_profile(profile_name)  # noqa: F841
+                logger.info("mission: loaded profile '%s'", profile_name)
+            except (FileNotFoundError, ValueError) as exc:
+                return jsonify({"error": f"Profile '{profile_name}' not found: {exc}"}), 404
+
+        # Reset lifecycle + audit logger for fresh session
+        if api.pipeline is not None:
+            lm = getattr(api.pipeline, "_lifecycle_manager", None)
+            if lm is not None:
+                lm.reset()
+                logger.info("mission: lifecycle manager reset")
+
+            chain = getattr(api.pipeline, "_shooting_chain", None)
+            if chain is not None:
+                chain.safe("mission_start")
+
+        # Start tracking
+        result = api.start_tracking(camera_source)
+        if not result.get("success"):
+            return jsonify({"error": result.get("error", "Failed to start tracking")}), 500
+
+        session_id = f"{mission_name.replace(' ', '_')}_{datetime.datetime.now():%Y%m%d_%H%M%S}"
+        _mission_state.update(
+            active=True,
+            profile=profile_name,
+            roe_profile=profile_name,  # may be overridden by loaded profile metadata
+            started_at=time.time(),
+            started_at_str=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            camera_source=camera_source,
+            session_id=session_id,
+            targets_engaged=0,
+            targets_detected=0,
+            shots_fired=0,
+            last_report_path=None,
+        )
+
+        logger.info("mission START: session=%s profile=%s", session_id, profile_name)
+
+        try:
+            from .events import event_bus
+            event_bus.emit("mission_started", {
+                "session_id": session_id,
+                "profile": profile_name,
+                "ts": round(time.time(), 3),
+            })
+        except Exception:
+            pass
+
+        return jsonify({
+            "ok": True,
             "session_id": session_id,
             "profile": profile_name,
-            "ts": round(time.time(), 3),
+            "camera_source": camera_source,
+            "started_at": _mission_state["started_at_str"],
         })
-    except Exception:
-        pass
 
-    return jsonify({
-        "ok": True,
-        "session_id": session_id,
-        "profile": profile_name,
-        "camera_source": camera_source,
-        "started_at": _mission_state["started_at_str"],
-    })
+    except Exception as e:
+        logger.exception("mission_start failed: %s", e)
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }), 500
 
 
 @mission_bp.route("/end", methods=["POST"])
@@ -309,66 +335,79 @@ def mission_end():
 
     Returns the path to the generated HTML report.
     """
+    rate_err = _check_mission_rate_limit()
+    if rate_err is not None:
+        return rate_err
+
     if not _mission_state["active"]:
         return jsonify({"error": "No active mission"}), 409
 
-    api = _api()
-
-    # Auto-safe the fire chain before stopping
-    if api is not None and api.pipeline is not None:
-        chain = getattr(api.pipeline, "_shooting_chain", None)
-        if chain is not None:
-            chain.safe("mission_end")
-
-    # Stop tracking
-    if api is not None:
-        api.stop_tracking()
-
-    # Generate audit report
-    report_path = None
-    if api is not None and api.pipeline is not None:
-        audit = getattr(api.pipeline, "_audit_logger", None)
-        if audit is not None and audit._records:  # noqa: SLF001
-            from ..telemetry.report import generate_report
-            mission_label = _mission_state.get("session_id") or "mission"
-            report_dir = Path("logs/reports")
-            report_dir.mkdir(parents=True, exist_ok=True)
-            report_file = report_dir / f"{mission_label}_report.html"
-            generate_report(audit, mission_name=mission_label, output_path=str(report_file))
-            report_path = str(report_file)
-            logger.info("mission: report written to %s", report_path)
-
-    # Gather final stats
-    elapsed = round(time.time() - _mission_state["started_at"], 1) if _mission_state["started_at"] else 0
-    session_id = _mission_state.get("session_id")
-
-    _reset_state()
-
     try:
-        from .events import event_bus
-        event_bus.emit("mission_ended", {
+        api = _api()
+
+        # Auto-safe the fire chain before stopping
+        if api is not None and api.pipeline is not None:
+            chain = getattr(api.pipeline, "_shooting_chain", None)
+            if chain is not None:
+                chain.safe("mission_end")
+
+        # Stop tracking
+        if api is not None:
+            api.stop_tracking()
+
+        # Generate audit report
+        report_path = None
+        if api is not None and api.pipeline is not None:
+            audit = getattr(api.pipeline, "_audit_logger", None)
+            if audit is not None and audit._records:  # noqa: SLF001
+                from ..telemetry.report import generate_report
+                mission_label = _mission_state.get("session_id") or "mission"
+                report_dir = Path("logs/reports")
+                report_dir.mkdir(parents=True, exist_ok=True)
+                report_file = report_dir / f"{mission_label}_report.html"
+                generate_report(audit, mission_name=mission_label, output_path=str(report_file))
+                report_path = str(report_file)
+                logger.info("mission: report written to %s", report_path)
+
+        # Gather final stats
+        elapsed = round(time.time() - _mission_state["started_at"], 1) if _mission_state["started_at"] else 0
+        session_id = _mission_state.get("session_id")
+
+        _reset_state()
+
+        try:
+            from .events import event_bus
+            event_bus.emit("mission_ended", {
+                "session_id": session_id,
+                "elapsed_s": elapsed,
+                "report_path": report_path,
+                "ts": round(time.time(), 3),
+            })
+        except Exception:
+            pass
+
+        # Build a URL the frontend can open directly.
+        report_url = (
+            f"/api/mission/report/{Path(report_path).name}"
+            if report_path
+            else None
+        )
+
+        return jsonify({
+            "ok": True,
             "session_id": session_id,
             "elapsed_s": elapsed,
             "report_path": report_path,
-            "ts": round(time.time(), 3),
+            "report_url": report_url,
         })
-    except Exception:
-        pass
 
-    # Build a URL the frontend can open directly.
-    report_url = (
-        f"/api/mission/report/{Path(report_path).name}"
-        if report_path
-        else None
-    )
-
-    return jsonify({
-        "ok": True,
-        "session_id": session_id,
-        "elapsed_s": elapsed,
-        "report_path": report_path,
-        "report_url": report_url,
-    })
+    except Exception as e:
+        logger.exception("mission_end failed: %s", e)
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+        }), 500
 
 
 # ---------------------------------------------------------------------------

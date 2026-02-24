@@ -1,4 +1,5 @@
 // ignore: avoid_web_libraries_in_flutter
+import 'dart:async';
 import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
@@ -129,6 +130,12 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                   ),
                 ),
               ),
+              // Record button (top-right, below state badge)
+              Positioned(
+                top: 40,
+                right: 8,
+                child: _RecordButton(api: p.api),
+              ),
               // Reconnect / reload button
               Positioned(
                 bottom: 8,
@@ -176,5 +183,152 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
       'SEARCH' => Colors.amberAccent,
       _ => Colors.grey,
     };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Record Button widget
+// ---------------------------------------------------------------------------
+
+class _RecordButton extends StatefulWidget {
+  final dynamic api; // RwsApiClient
+
+  const _RecordButton({required this.api});
+
+  @override
+  State<_RecordButton> createState() => _RecordButtonState();
+}
+
+class _RecordButtonState extends State<_RecordButton> {
+  bool _recording = false;
+  String? _filename;
+  double _elapsed = 0.0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStatus();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchStatus() async {
+    try {
+      final status = await widget.api.getRecordingStatus() as Map<String, dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _recording = status['recording'] as bool? ?? false;
+        _filename = status['filename'] as String?;
+        _elapsed = (status['elapsed_s'] as num?)?.toDouble() ?? 0.0;
+      });
+      if (_recording) _startTimer();
+    } catch (_) {}
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _elapsed += 1.0);
+    });
+  }
+
+  void _stopTimer() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_recording) {
+      // Stop recording
+      try {
+        final result = await widget.api.stopRecording() as Map<String, dynamic>;
+        _stopTimer();
+        if (!mounted) return;
+        setState(() {
+          _recording = false;
+          _elapsed = 0.0;
+        });
+        final saved = result['filename'] as String? ?? '';
+        if (mounted && saved.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('片段已保存: $saved')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('停止录制失败: $e')),
+          );
+        }
+      }
+    } else {
+      // Start recording
+      try {
+        final result = await widget.api.startRecording() as Map<String, dynamic>;
+        if (!mounted) return;
+        if (result['ok'] == true) {
+          setState(() {
+            _recording = true;
+            _filename = result['filename'] as String?;
+            _elapsed = 0.0;
+          });
+          _startTimer();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('开始录制失败: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  String get _elapsedLabel {
+    final s = _elapsed.toInt();
+    final mm = (s ~/ 60).toString().padLeft(2, '0');
+    final ss = (s % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _toggleRecording,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _recording ? Icons.stop : Icons.fiber_manual_record,
+              size: 14,
+              color: Colors.red,
+            ),
+            if (_recording) ...[
+              const SizedBox(width: 4),
+              Text(
+                _elapsedLabel,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.white70,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }

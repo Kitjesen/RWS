@@ -15,6 +15,39 @@ class StatusCard extends StatelessWidget {
         final stateColor = _stateColor(s.state);
         final connected = p.connected;
 
+        if (!connected) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.wifi_off, size: 32, color: Colors.red.shade300),
+                  const SizedBox(height: 8),
+                  Text(
+                    '后端未连接',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'http://localhost:5000',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    p.error.isNotEmpty ? p.error : '正在重连...',
+                    style: TextStyle(fontSize: 10, color: Colors.red.shade300),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -24,39 +57,16 @@ class StatusCard extends StatelessWidget {
                 Row(
                   children: [
                     Icon(Icons.monitor_heart,
-                        color: connected
-                            ? theme.colorScheme.primary
-                            : Colors.red.shade300),
+                        color: theme.colorScheme.primary),
                     const SizedBox(width: 8),
                     Text('系统状态', style: theme.textTheme.titleMedium),
                     const Spacer(),
-                    if (!connected)
-                      _StatusChip(label: '离线', color: Colors.red)
-                    else
-                      _StatusChip(
-                        label: s.running ? '运行中' : '已停止',
-                        color: s.running ? Colors.green : Colors.grey,
-                      ),
+                    _StatusChip(
+                      label: s.running ? '运行中' : '已停止',
+                      color: s.running ? Colors.green : Colors.grey,
+                    ),
                   ],
                 ),
-                if (!connected)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6, bottom: 2),
-                    child: Row(
-                      children: [
-                        Icon(Icons.wifi_off, size: 14, color: Colors.red.shade300),
-                        const SizedBox(width: 6),
-                        Text(
-                          '后端无响应，显示最后已知状态',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.red.shade300,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 const Divider(),
                 Expanded(
                   child: Wrap(

@@ -94,7 +94,7 @@ def arm():
     if chain is None:
         return jsonify({"error": "shooting_chain not configured"}), 503
     data = request.get_json(silent=True) or {}
-    operator_id = data.get("operator_id", "")
+    operator_id = str(data.get("operator_id", ""))[:64]  # cap at 64 chars
     if not operator_id:
         return jsonify({"error": "operator_id required"}), 400
 
@@ -320,7 +320,7 @@ def operator_heartbeat():
     Calls safety_manager.interlock.operator_heartbeat() if available.
     """
     data = request.get_json(silent=True) or {}
-    operator_id = data.get("operator_id", "")
+    operator_id = str(data.get("operator_id", ""))[:64]  # cap at 64 chars
     if not operator_id:
         return jsonify({"error": "operator_id required"}), 400
 
@@ -473,13 +473,11 @@ def designate_target():
     data = request.get_json(silent=True) or {}
     track_id = data.get("track_id")
     if track_id is None:
-        return jsonify({"error": "track_id is required"}), 400
-    try:
-        track_id = int(track_id)
-    except (TypeError, ValueError):
-        return jsonify({"error": "track_id must be an integer"}), 400
+        return jsonify({"ok": False, "error": "track_id is required"}), 400
+    if not isinstance(track_id, int) or track_id <= 0 or track_id > 99999:
+        return jsonify({"ok": False, "error": "track_id must be a positive integer \u2264 99999"}), 400
 
-    operator_id = str(data.get("operator_id", ""))
+    operator_id = str(data.get("operator_id", ""))[:64]  # cap at 64 chars
     pipeline = _get_pipeline()
     if pipeline is None:
         return jsonify({"error": "pipeline not running"}), 503

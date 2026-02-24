@@ -80,6 +80,12 @@ class _RateLimiter:
 # Rate limiter for fire-control endpoints: 30 requests/minute per IP.
 _fire_rate_limiter = _RateLimiter(max_requests=30, window_s=60.0)
 
+# Rate limiter for mission lifecycle endpoints: 5 req/min per IP.
+_mission_rate_limiter = _RateLimiter(max_requests=5, window_s=60.0)
+
+# Rate limiter for config update endpoint: 10 req/min per IP.
+_config_rate_limiter = _RateLimiter(max_requests=10, window_s=60.0)
+
 
 class TrackingAPI:
     """
@@ -414,6 +420,13 @@ class TrackingAPI:
                     )
                     self._frame_buffer.push(annotated, ts)
 
+                    # Record frame to clip if recording is active.
+                    try:
+                        from .video_record_routes import record_frame
+                        record_frame(annotated)
+                    except Exception:
+                        pass
+
             except Exception as e:
                 logger.error(f"Error in tracking loop: {e}")
                 self.error_count += 1
@@ -478,8 +491,30 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     _api_key: str | None = os.environ.get("RWS_API_KEY") or None
 
     # Paths that are always accessible without a token (monitoring/streaming).
-    _AUTH_EXEMPT_EXACT = frozenset(["/api/health", "/api/events", "/metrics"])
-    _AUTH_EXEMPT_PREFIX = "/api/video/"
+    # These are read-only or infrastructure endpoints that must remain open.
+    _AUTH_EXEMPT_EXACT = frozenset([
+        "/api/health",
+        "/api/events",
+        "/metrics",
+        "/api/status",
+        "/api/selftest",
+        "/api/telemetry",
+        "/api/threats",
+    ])
+    _AUTH_EXEMPT_PREFIXES = (
+        "/api/health/",   # sub-health routes
+        "/api/video/",    # MJPEG stream + snapshot
+    )
+
+    # Only apply auth to mutating (non-GET) requests or sensitive paths.
+    # GET-only read endpoints are implicitly exempt when the method is GET.
+    _AUTH_REQUIRED_PREFIXES = (
+        "/api/fire/",
+        "/api/mission/",
+        "/api/config",
+        "/api/safety/",
+        "/api/gimbal/",
+    )
 
     if _api_key is not None:
         logger.info("RWS API: Bearer token authentication is ENABLED.")
@@ -487,8 +522,29 @@ def create_flask_app(api: TrackingAPI) -> Flask:
         @app.before_request
         def _check_auth():
             path = request.path
-            # Exempt monitoring, streaming, and video paths.
-            if path in _AUTH_EXEMPT_EXACT or path.startswith(_AUTH_EXEMPT_PREFIX):
+            method = request.method
+
+            # Always exempt: monitoring, SSE stream, video feed, read-only status.
+            if path in _AUTH_EXEMPT_EXACT:
+                return None
+            for prefix in _AUTH_EXEMPT_PREFIXES:
+                if path.startswith(prefix):
+                    return None
+
+            # Only enforce auth on mutating methods or explicitly sensitive paths.
+            # Pure GET requests to non-sensitive paths are allowed without auth.
+            needs_auth = False
+            if method != "GET":
+                for prefix in _AUTH_REQUIRED_PREFIXES:
+                    if path.startswith(prefix):
+                        needs_auth = True
+                        break
+            else:
+                # GET /api/fire/* is already secured by fire chain state; allow.
+                # GET /api/config and GET /api/safety/* are read-only; allow.
+                needs_auth = False
+
+            if not needs_auth:
                 return None
 
             auth_header = request.headers.get("Authorization", "")
@@ -499,9 +555,11 @@ def create_flask_app(api: TrackingAPI) -> Flask:
 
             return jsonify({"error": "Unauthorized"}), 401
 
-    # Expose the module-level fire rate limiter via app.extensions so blueprints
-    # can access it without a circular import.
+    # Expose rate limiters via app.extensions so blueprints can access them
+    # without a circular import.
     app.extensions["fire_rate_limiter"] = _fire_rate_limiter
+    app.extensions["mission_rate_limiter"] = _mission_rate_limiter
+    app.extensions["config_rate_limiter"] = _config_rate_limiter
 
     @app.route("/api/health", methods=["GET"])
     def health():
@@ -591,6 +649,12 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     @app.route("/api/config", methods=["POST"])
     def update_config():
         """Update configuration."""
+        limiter = app.extensions.get("config_rate_limiter")
+        if limiter is not None:
+            key = request.remote_addr or "unknown"
+            if not limiter.is_allowed(key):
+                return jsonify({"success": False, "error": "Rate limit exceeded"}), 429
+
         data = request.get_json()
         if not data:
             return jsonify({"success": False, "error": "No config data provided"}), 400
@@ -736,6 +800,10 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     # Multi-gimbal pipeline status (stub — pipeline not yet wired to HTTP)
     from .multi_routes import multi_bp
     app.register_blueprint(multi_bp)
+
+    # Video clip recording
+    from .video_record_routes import record_bp
+    app.register_blueprint(record_bp)
 
     # Config file watcher — hot-reload config.yaml into live PID/selector params.
     try:

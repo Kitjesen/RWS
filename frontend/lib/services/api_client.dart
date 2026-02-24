@@ -457,6 +457,70 @@ class RwsApiClient {
   String get videoFeedUrl => '$baseUrl/api/video/feed';
   String get snapshotUrl => '$baseUrl/api/video/snapshot';
 
+  // --- 视频录制 ---
+
+  Future<Map<String, dynamic>> startRecording() async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/video/record/start'),
+        headers: {'Content-Type': 'application/json'},
+        body: '{}',
+      );
+      if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return {'ok': false, 'error': 'HTTP ${resp.statusCode}'};
+    } catch (e) {
+      return {'ok': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> stopRecording() async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/video/record/stop'),
+        headers: {'Content-Type': 'application/json'},
+        body: '{}',
+      );
+      if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return {'ok': false, 'error': 'HTTP ${resp.statusCode}'};
+    } catch (e) {
+      return {'ok': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> getRecordingStatus() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/video/record/status'));
+      if (resp.statusCode == 200) return jsonDecode(resp.body) as Map<String, dynamic>;
+      return {'recording': false, 'filename': null, 'elapsed_s': 0.0};
+    } catch (_) {
+      return {'recording': false, 'filename': null, 'elapsed_s': 0.0};
+    }
+  }
+
+  Future<List<dynamic>> listClips() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/video/clips'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['clips'] as List? ?? [];
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> deleteClip(String filename) async {
+    try {
+      final resp = await _client.delete(Uri.parse('$baseUrl/api/video/clips/$filename'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['ok'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  String clipDownloadUrl(String filename) => '$baseUrl/api/video/clips/$filename';
+
   // --- Replay API ---
 
   Future<List<Map<String, dynamic>>> getReplaySessions() async {

@@ -12,21 +12,44 @@ class ReplayScreen extends StatefulWidget {
   State<ReplayScreen> createState() => _ReplayScreenState();
 }
 
-class _ReplayScreenState extends State<ReplayScreen> {
+class _ReplayScreenState extends State<ReplayScreen>
+    with SingleTickerProviderStateMixin {
+  // --- Tab controller ---
+  late final TabController _tabController;
+
+  // --- Events replay state ---
   List<Map<String, dynamic>> _sessions = [];
   Map<String, dynamic>? _selectedSession;
   List<Map<String, dynamic>> _selectedEvents = [];
   Set<String> _activeFilters = {};
   bool _loading = false;
 
+  // --- Fire-control clips state ---
   List<Map<String, dynamic>> _clips = [];
   bool _clipsLoading = false;
   bool _clipsExpanded = false;
 
+  // --- Recording clips state ---
+  List<dynamic> _recordClips = [];
+  bool _recordClipsLoading = false;
+
+  // --- Timeline scrubber state ---
+  RangeValues _timeRange = const RangeValues(0, 1);
+  double _totalDuration = 1.0;
+  double _baseTimestamp = 0.0;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadSessions();
+    _loadRecordClips();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   RwsApiClient get _api =>
@@ -47,15 +70,50 @@ class _ReplayScreenState extends State<ReplayScreen> {
     if (session != null) {
       final rawEvents = (session['events'] as List<dynamic>? ?? [])
           .cast<Map<String, dynamic>>();
+
+      // Compute timeline bounds from event timestamps
+      double base = 0.0;
+      double total = 1.0;
+      if (rawEvents.isNotEmpty) {
+        final ts = rawEvents
+            .map((e) => _parseTimestamp(e))
+            .where((t) => t != null)
+            .cast<double>()
+            .toList();
+        if (ts.isNotEmpty) {
+          base = ts.first;
+          final last = ts.last;
+          total = (last - base).clamp(1.0, double.infinity);
+        }
+      }
+
       setState(() {
         _selectedSession = session;
         _activeFilters = {};
         _selectedEvents = rawEvents;
+        _baseTimestamp = base;
+        _totalDuration = total;
+        _timeRange = RangeValues(0, total);
         _loading = false;
       });
     } else {
       setState(() => _loading = false);
     }
+  }
+
+  /// Parse an event's timestamp field to a Unix epoch double (seconds).
+  /// Supports ISO-8601 strings and raw numeric values.
+  double? _parseTimestamp(Map<String, dynamic> event) {
+    final raw = event['timestamp'] ?? event['ts'];
+    if (raw == null) return null;
+    if (raw is num) return raw.toDouble();
+    if (raw is String) {
+      final n = double.tryParse(raw);
+      if (n != null) return n;
+      final dt = DateTime.tryParse(raw);
+      if (dt != null) return dt.millisecondsSinceEpoch / 1000.0;
+    }
+    return null;
   }
 
   List<Map<String, dynamic>> get _allEvents {
@@ -84,14 +142,31 @@ class _ReplayScreenState extends State<ReplayScreen> {
 
   void _applyFilter() {
     final all = _allEvents;
+    // Type filter
+    List<Map<String, dynamic>> filtered;
     if (_activeFilters.isEmpty) {
-      _selectedEvents = all;
+      filtered = all;
     } else {
-      _selectedEvents = all
+      filtered = all
           .where((e) =>
               _activeFilters.contains(e['event_type'] as String? ?? ''))
           .toList();
     }
+    // Time range filter
+    filtered = filtered.where((e) {
+      final ts = _parseTimestamp(e);
+      if (ts == null) return true;
+      final offset = ts - _baseTimestamp;
+      return offset >= _timeRange.start && offset <= _timeRange.end;
+    }).toList();
+    _selectedEvents = filtered;
+  }
+
+  void _onTimeRangeChanged(RangeValues v) {
+    setState(() {
+      _timeRange = v;
+      _applyFilter();
+    });
   }
 
   void _clearSelection() {
@@ -99,6 +174,9 @@ class _ReplayScreenState extends State<ReplayScreen> {
       _selectedSession = null;
       _selectedEvents = [];
       _activeFilters = {};
+      _timeRange = const RangeValues(0, 1);
+      _totalDuration = 1.0;
+      _baseTimestamp = 0.0;
     });
   }
 
@@ -112,44 +190,99 @@ class _ReplayScreenState extends State<ReplayScreen> {
     });
   }
 
+  Future<void> _loadRecordClips() async {
+    setState(() => _recordClipsLoading = true);
+    try {
+      final clips = await _api.listClips();
+      setState(() {
+        _recordClips = clips;
+        _recordClipsLoading = false;
+      });
+    } catch (_) {
+      setState(() => _recordClipsLoading = false);
+    }
+  }
+
+  Future<void> _deleteRecordClip(String filename) async {
+    final ok = await _api.deleteClip(filename);
+    if (ok) {
+      await _loadRecordClips();
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('删除失败: $filename')),
+        );
+      }
+    }
+  }
+
+  void _downloadRecordClip(String filename) {
+    final url = _api.clipDownloadUrl(filename);
+    html.window.open(url, '_blank');
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_selectedSession != null) {
       return _buildSessionDetailView();
     }
-    return _buildSessionListView();
+    return _buildTabView();
   }
 
   // ---------------------------------------------------------------------------
-  // Session list view
+  // Main tab view
   // ---------------------------------------------------------------------------
 
-  Widget _buildSessionListView() {
+  Widget _buildTabView() {
     return Scaffold(
       appBar: AppBar(
         title: const Text('任务回放'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: '刷新列表',
-            onPressed: _loadSessions,
+            tooltip: '刷新',
+            onPressed: () {
+              _loadSessions();
+              _loadRecordClips();
+            },
           ),
         ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '历史任务',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const Divider(),
-            Flexible(flex: 3, child: _buildSessionListBody()),
-            _buildClipsSection(),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.history), text: '事件回放'),
+            Tab(icon: Icon(Icons.videocam), text: '录像片段'),
           ],
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildReplayTab(),
+          _buildRecordClipsTab(),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab 1: Event replay (sessions + fire clips)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildReplayTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '历史任务',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const Divider(),
+          Flexible(flex: 3, child: _buildSessionListBody()),
+          _buildClipsSection(),
+        ],
       ),
     );
   }
@@ -259,12 +392,90 @@ class _ReplayScreenState extends State<ReplayScreen> {
   }
 
   // ---------------------------------------------------------------------------
+  // Tab 2: Recording clips
+  // ---------------------------------------------------------------------------
+
+  Widget _buildRecordClipsTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '录像片段',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 18),
+                tooltip: '刷新列表',
+                onPressed: _loadRecordClips,
+              ),
+            ],
+          ),
+          const Divider(),
+          Expanded(child: _buildRecordClipsBody()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordClipsBody() {
+    if (_recordClipsLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_recordClips.isEmpty) {
+      return const Center(
+        child: Text('暂无录像片段', style: TextStyle(color: Colors.grey)),
+      );
+    }
+    return ListView.builder(
+      itemCount: _recordClips.length,
+      itemBuilder: (ctx, i) {
+        final clip = _recordClips[i] as Map<String, dynamic>;
+        final filename = clip['filename'] as String? ?? '';
+        final sizeMb = (clip['size_mb'] as num?)?.toDouble() ?? 0.0;
+        final createdAt = clip['created_at'] as String? ?? '';
+
+        return Card(
+          child: ListTile(
+            leading: const Icon(Icons.videocam, color: Colors.blue),
+            title: Text(filename, style: const TextStyle(fontSize: 13)),
+            subtitle: Text(
+              '${sizeMb.toStringAsFixed(2)} MB · $createdAt',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.download, size: 20),
+                  tooltip: '下载',
+                  onPressed: () => _downloadRecordClip(filename),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                  tooltip: '删除',
+                  onPressed: () => _deleteRecordClip(filename),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Session detail view
   // ---------------------------------------------------------------------------
 
   Widget _buildSessionDetailView() {
     final allTypes = _allEventTypes.toList()..sort();
     final events = _selectedEvents;
+    final totalEvents = _allEvents.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -298,6 +509,50 @@ class _ReplayScreenState extends State<ReplayScreen> {
                         ),
                       );
                     }).toList(),
+                  ),
+                ),
+                // Timeline scrubber
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'T+${_timeRange.start.toStringAsFixed(0)}s',
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.grey),
+                          ),
+                          Expanded(
+                            child: RangeSlider(
+                              values: _timeRange,
+                              min: 0,
+                              max: _totalDuration,
+                              labels: RangeLabels(
+                                'T+${_timeRange.start.toStringAsFixed(0)}s',
+                                'T+${_timeRange.end.toStringAsFixed(0)}s',
+                              ),
+                              onChanged: _onTimeRangeChanged,
+                            ),
+                          ),
+                          Text(
+                            'T+${_timeRange.end.toStringAsFixed(0)}s',
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '${events.length} / $totalEvents 条事件',
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.grey),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const Divider(height: 1),
@@ -437,7 +692,7 @@ class _EventTile extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Clip tile
+// Clip tile (fire-control clips)
 // ---------------------------------------------------------------------------
 
 class _ClipTile extends StatelessWidget {

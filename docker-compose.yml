@@ -61,6 +61,18 @@ services:
     # devices:
     #   - /dev/video0:/dev/video0
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 3g
+          cpus: '3.0'
+        reservations:
+          memory: 512m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:5000/api/health"]
       interval: 15s
@@ -83,6 +95,11 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.5'
 
   # ----------------------------------------------------------
   # Prometheus — scrapes /metrics from the backend
@@ -99,6 +116,11 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=30d"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
 
   # ----------------------------------------------------------
   # Grafana — visualizes Prometheus metrics
@@ -117,6 +139,11 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
 
 volumes:
   prometheus_data:

@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/tracking_models.dart';
 import 'api_client.dart';
+import 'audio_service.dart';
 import 'event_stream.dart';
 
 class TrackingProvider extends ChangeNotifier {
@@ -386,6 +387,8 @@ class TrackingProvider extends ChangeNotifier {
     }
   }
 
+  final _audio = AudioService();
+
   // --- SSE 事件即时响应 ---
   // Called from main.dart when the EventStreamService emits an event.
   // This provides sub-200ms updates on critical state changes without
@@ -401,16 +404,19 @@ class TrackingProvider extends ChangeNotifier {
             canFire: event.data['can_fire'] as bool? ?? false,
             operatorId: event.data['operator_id'] as String?,
           );
+          if (stateStr == 'armed') _audio.playArmed();
           _updateHeartbeatTimer();
           notifyListeners();
         }
       case 'operator_timeout':
         // Watchdog fired — force to safe state immediately in UI
+        _audio.playOperatorTimeout();
         _fireStatus = FireChainStatus(state: 'safe', canFire: false);
         _stopHeartbeat();
         notifyListeners();
       case 'health_degraded':
         // Re-fetch health subsystems immediately
+        _audio.playHealthDegraded();
         _api.getSubsystemHealth().then((h) {
           _health = h;
           notifyListeners();
@@ -438,6 +444,7 @@ class TrackingProvider extends ChangeNotifier {
         loadNfzZones();
       case 'fire_executed':
         // 射击已执行 — 累计开火次数，同步刷新任务状态（更新 targets_engaged 等统计）
+        _audio.playFireExecuted();
         _shotsFiredCount++;
         _api.getMissionStatus().then((ms) {
           _missionStatus = ms;

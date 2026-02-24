@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../services/audio_service.dart';
 import '../services/tracking_provider.dart';
 import '../services/event_stream.dart';
 import '../widgets/alert_banner.dart';
@@ -24,6 +25,19 @@ class DashboardScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('RWS 火控指挥中心'),
         actions: [
+          // 静音切换
+          StatefulBuilder(
+            builder: (ctx, setState) => IconButton(
+              icon: Icon(
+                AudioService().enabled ? Icons.volume_up : Icons.volume_off,
+              ),
+              tooltip: AudioService().enabled ? '静音' : '开启声音',
+              onPressed: () {
+                AudioService().setEnabled(!AudioService().enabled);
+                setState(() {});
+              },
+            ),
+          ),
           // 调参 Drawer 入口
           Builder(
             builder: (ctx) => IconButton(
@@ -33,24 +47,77 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
           Consumer<TrackingProvider>(
-            builder: (_, p, __) => Row(
-              children: [
-                Consumer<EventStreamService>(
-                  builder: (_, es, __) => Tooltip(
-                    message: es.connected ? 'SSE 已连接' : 'SSE 已断开',
-                    child: Icon(
-                      es.connected ? Icons.bolt : Icons.bolt_outlined,
-                      color: es.connected ? Colors.amber : Colors.grey,
+            builder: (_, p, __) => Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // SSE bolt indicator
+                  Consumer<EventStreamService>(
+                    builder: (_, es, __) => Tooltip(
+                      message: es.connected ? 'SSE 已连接' : 'SSE 已断开',
+                      child: Icon(
+                        es.connected ? Icons.bolt : Icons.bolt_outlined,
+                        color: es.connected ? Colors.amber : Colors.grey,
+                        size: 18,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  p.connected ? Icons.wifi : Icons.wifi_off,
-                  color: p.connected ? Colors.green : Colors.red,
-                ),
-                const SizedBox(width: 12),
-              ],
+                  const SizedBox(width: 8),
+                  // Connection status dot + label
+                  if (p.connected)
+                    Tooltip(
+                      message: '已连接 · ${p.status.fps.toStringAsFixed(1)} FPS',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'LIVE',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Tooltip(
+                      message: '连接中断 · ${p.error}',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            '离线',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ],

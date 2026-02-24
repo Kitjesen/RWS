@@ -70,20 +70,27 @@ class ThreatQueueWidget extends StatelessWidget {
                   Expanded(
                     child: Center(
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
                             pipelineActive
-                                ? Icons.visibility
+                                ? Icons.shield_outlined
                                 : Icons.videocam_off,
-                            color: Colors.grey.shade700,
-                            size: 28,
+                            color: pipelineActive
+                                ? Colors.green.shade400
+                                : Colors.grey.shade700,
+                            size: 40,
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            pipelineActive ? '未检测到威胁目标' : 'Pipeline 未运行',
+                            pipelineActive ? '区域清洁 — 无威胁目标' : '跟踪未启动',
                             style: TextStyle(
-                                color: Colors.grey.shade600, fontSize: 14),
+                              color: pipelineActive
+                                  ? Colors.green.shade400
+                                  : Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                            ),
                           ),
                           if (!pipelineActive)
                             Padding(
