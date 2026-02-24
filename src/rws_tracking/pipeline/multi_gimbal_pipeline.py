@@ -1,4 +1,54 @@
-"""Multi-gimbal pipeline for coordinated multi-target tracking."""
+"""Multi-gimbal pipeline for coordinated multi-target tracking.
+
+Overview
+--------
+``MultiGimbalPipeline`` coordinates N independent gimbals to simultaneously
+track up to N distinct targets using the Hungarian algorithm for optimal
+target-to-gimbal assignment.
+
+Architecture
+------------
+A single shared ``Detector`` + ``Tracker`` pair processes each video frame.
+``WeightedMultiTargetSelector`` returns the top-N candidate targets.
+``TargetAllocator`` (Hungarian algorithm) assigns one target per gimbal,
+minimising total angular travel cost across all units.  Each ``GimbalUnit``
+then runs its own ``GimbalController`` + ``GimbalDriver`` independently.
+
+Usage Example
+-------------
+    from rws_tracking.pipeline.multi_gimbal_pipeline import (
+        MultiGimbalPipeline, GimbalUnit
+    )
+    from rws_tracking.perception.multi_target import TargetAllocator
+    from rws_tracking.perception.multi_target_selector import WeightedMultiTargetSelector
+
+    units = [
+        GimbalUnit(unit_id=0, controller=ctrl0, driver=drv0, telemetry=tel0),
+        GimbalUnit(unit_id=1, controller=ctrl1, driver=drv1, telemetry=tel1),
+    ]
+    pipeline = MultiGimbalPipeline(
+        detector=detector,
+        tracker=tracker,
+        selector=WeightedMultiTargetSelector(cfg),
+        allocator=TargetAllocator(),
+        gimbal_units=units,
+    )
+
+    # In your main loop:
+    outputs = pipeline.step(frame, timestamp)
+    # outputs.assignments  -> list[TargetAssignment]
+    # outputs.commands     -> list[ControlCommand]  (one per gimbal)
+    # outputs.all_targets  -> list[TargetObservation]
+
+Why not exposed via HTTP yet
+-----------------------------
+Each gimbal unit needs its own physical camera feed and associated
+``Detector``/``Tracker`` instances (or a shared stereo/multi-sensor rig).
+Wiring multiple independent camera streams into a single Flask application
+requires per-gimbal frame-buffer management that is not yet implemented.
+Until that infrastructure exists, instantiate ``MultiGimbalPipeline``
+directly in ``scripts/`` rather than through the REST API.
+"""
 
 from __future__ import annotations
 

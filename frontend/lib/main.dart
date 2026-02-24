@@ -12,13 +12,16 @@ void main() {
   const backendUrl = 'http://localhost:5000';
   final api = RwsApiClient(baseUrl: backendUrl);
   final eventStream = EventStreamService(baseUrl: backendUrl)..connect();
+  final trackingProvider = TrackingProvider(api: api)..startPolling();
+
+  // Wire SSE events to tracking provider for immediate UI updates
+  // (no need to wait for next 200ms poll on critical state changes)
+  eventStream.events.listen(trackingProvider.onSseEvent);
 
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(
-          create: (_) => TrackingProvider(api: api)..startPolling(),
-        ),
+        ChangeNotifierProvider.value(value: trackingProvider),
         ChangeNotifierProvider.value(value: eventStream),
       ],
       child: const RwsApp(),
@@ -32,7 +35,7 @@ class RwsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'RWS Dashboard',
+      title: 'RWS 火控指挥中心',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -79,22 +82,22 @@ class _RwsHomeState extends State<RwsHome> {
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+            label: '仪表盘',
           ),
           NavigationDestination(
             icon: Icon(Icons.stream_outlined),
             selectedIcon: Icon(Icons.stream),
-            label: 'Events',
+            label: '事件',
           ),
           NavigationDestination(
             icon: Icon(Icons.history_outlined),
             selectedIcon: Icon(Icons.history),
-            label: 'Replay',
+            label: '回放',
           ),
           NavigationDestination(
             icon: Icon(Icons.security_outlined),
             selectedIcon: Icon(Icons.security),
-            label: 'Safety',
+            label: '安全',
           ),
         ],
       ),

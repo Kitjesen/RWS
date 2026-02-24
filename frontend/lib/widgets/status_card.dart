@@ -31,7 +31,7 @@ class StatusCard extends StatelessWidget {
                     Text('系统状态', style: theme.textTheme.titleMedium),
                     const Spacer(),
                     if (!connected)
-                      _StatusChip(label: 'OFFLINE', color: Colors.red)
+                      _StatusChip(label: '离线', color: Colors.red)
                     else
                       _StatusChip(
                         label: s.running ? '运行中' : '已停止',
@@ -47,7 +47,7 @@ class StatusCard extends StatelessWidget {
                         Icon(Icons.wifi_off, size: 14, color: Colors.red.shade300),
                         const SizedBox(width: 6),
                         Text(
-                          'Backend unreachable — showing last known state',
+                          '后端无响应，显示最后已知状态',
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.red.shade300,
@@ -75,10 +75,12 @@ class StatusCard extends StatelessWidget {
                         value: '${s.frameCount}',
                       ),
                       _Metric(
-                        icon: Icons.error_outline,
+                        icon: s.errorCount > 0
+                            ? Icons.error_outline
+                            : Icons.check_circle_outline,
                         label: '错误',
                         value: '${s.errorCount}',
-                        color: s.errorCount > 0 ? Colors.red : null,
+                        color: s.errorCount > 0 ? Colors.red : Colors.green,
                       ),
                       _Metric(
                         icon: Icons.lock,
@@ -90,6 +92,17 @@ class StatusCard extends StatelessWidget {
                                 ? Colors.orange
                                 : Colors.red,
                       ),
+                      if (s.fps > 0)
+                        _Metric(
+                          icon: Icons.speed,
+                          label: 'FPS',
+                          value: s.fps.toStringAsFixed(1),
+                          color: s.fps >= 25
+                              ? Colors.green
+                              : s.fps >= 15
+                                  ? Colors.orange
+                                  : Colors.red,
+                        ),
                     ],
                   ),
                 ),
@@ -102,11 +115,13 @@ class StatusCard extends StatelessWidget {
   }
 
   Color _stateColor(String state) {
+    // Color semantics: green=success/locked, cyan=active/tracking,
+    // grey=idle/normal, orange=attention-needed, red=error
     return switch (state) {
-      'TRACK' => Colors.green,
-      'LOCK' => Colors.blue,
-      'ENGAGE' => Colors.orange,
-      'SEARCH' => Colors.amber,
+      'LOCK' => Colors.green,       // 目标锁定 = 成功 (绿)
+      'TRACK' => Colors.cyan,       // 正在跟踪 = 活跃 (青)
+      'LOST' => Colors.orange,      // 目标丢失 = 需要注意 (橙)
+      'SEARCH' => Colors.blueGrey,  // 扫描搜索 = 正常待机 (灰蓝)
       _ => Colors.grey,
     };
   }

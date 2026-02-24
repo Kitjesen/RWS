@@ -75,8 +75,8 @@ class _GimbalIndicatorState extends State<GimbalIndicator> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _AngleLabel(label: 'Yaw', valueDeg: s.yawDeg, errorDeg: s.yawErrorDeg),
-                    _AngleLabel(label: 'Pitch', valueDeg: s.pitchDeg, errorDeg: s.pitchErrorDeg),
+                    _AngleLabel(label: '偏航', valueDeg: s.yawDeg, errorDeg: s.yawErrorDeg, rateDps: s.yawRateDps),
+                    _AngleLabel(label: '俯仰', valueDeg: s.pitchDeg, errorDeg: s.pitchErrorDeg, rateDps: s.pitchRateDps),
                   ],
                 ),
               ],
@@ -92,8 +92,14 @@ class _AngleLabel extends StatelessWidget {
   final String label;
   final double valueDeg;
   final double errorDeg;
+  final double rateDps;
 
-  const _AngleLabel({required this.label, required this.valueDeg, required this.errorDeg});
+  const _AngleLabel({
+    required this.label,
+    required this.valueDeg,
+    required this.errorDeg,
+    this.rateDps = 0.0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -103,13 +109,21 @@ class _AngleLabel extends StatelessWidget {
             ? Colors.orange
             : Colors.red;
 
+    final rateColor = rateDps.abs() < 30.0
+        ? Colors.green
+        : rateDps.abs() < 100.0
+            ? Colors.orange
+            : Colors.red;
+
     return Column(
       children: [
         Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
         Text('${valueDeg.toStringAsFixed(1)}°',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        Text('err ${errorDeg.toStringAsFixed(2)}°',
+        Text('误差 ${errorDeg.toStringAsFixed(2)}°',
             style: TextStyle(fontSize: 11, color: errColor)),
+        Text('速率 ${rateDps.toStringAsFixed(1)}°/s',
+            style: TextStyle(fontSize: 10, color: rateColor)),
       ],
     );
   }

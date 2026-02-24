@@ -15,6 +15,11 @@ class _ControlPanelState extends State<ControlPanel> {
   final _pitchPid = PidParams(kp: 4.0, ki: 0.3, kd: 0.30);
   bool _sending = false;
 
+  // 云台角度指令
+  double _targetYaw = 0.0;
+  double _targetPitch = 0.0;
+  bool _sendingAngle = false;
+
   @override
   void initState() {
     super.initState();
@@ -66,13 +71,13 @@ class _ControlPanelState extends State<ControlPanel> {
                   _TrackingControls(sending: _sending, onToggle: _toggleTracking),
                   const SizedBox(height: 16),
                   _PidSection(
-                    title: 'Yaw PID',
+                    title: '偏航 PID',
                     params: _yawPid,
                     onChanged: () => setState(() {}),
                   ),
                   const SizedBox(height: 12),
                   _PidSection(
-                    title: 'Pitch PID',
+                    title: '俯仰 PID',
                     params: _pitchPid,
                     onChanged: () => setState(() {}),
                   ),
@@ -87,6 +92,42 @@ class _ControlPanelState extends State<ControlPanel> {
                           )
                         : const Icon(Icons.send),
                     label: const Text('应用 PID 参数'),
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 4),
+                  Text('云台角度控制',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  _AngleSlider(
+                    label: '偏航',
+                    unit: '°',
+                    value: _targetYaw,
+                    min: -160,
+                    max: 160,
+                    onChanged: (v) => setState(() => _targetYaw = v),
+                  ),
+                  const SizedBox(height: 4),
+                  _AngleSlider(
+                    label: '俯仰',
+                    unit: '°',
+                    value: _targetPitch,
+                    min: -45,
+                    max: 75,
+                    onChanged: (v) => setState(() => _targetPitch = v),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: _sendingAngle ? null : _sendAngle,
+                    icon: _sendingAngle
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.control_camera),
+                    label: const Text('发送角度指令'),
                   ),
                 ],
               ),
@@ -106,6 +147,23 @@ class _ControlPanelState extends State<ControlPanel> {
       await provider.startTracking();
     }
     setState(() => _sending = false);
+  }
+
+  Future<void> _sendAngle() async {
+    setState(() => _sendingAngle = true);
+    final provider = context.read<TrackingProvider>();
+    final ok = await provider.setGimbalPosition(_targetYaw, _targetPitch);
+    setState(() => _sendingAngle = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? '角度指令已发送  偏航 ${_targetYaw.toStringAsFixed(1)}°  俯仰 ${_targetPitch.toStringAsFixed(1)}°'
+              : '发送失败（请检查 pipeline 是否已启动）'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _applyPid() async {
@@ -134,22 +192,33 @@ class _TrackingControls extends StatelessWidget {
     return Consumer<TrackingProvider>(
       builder: (_, p, __) {
         final running = p.status.running;
-        return Row(
-          children: [
-            Expanded(
-              child: FilledButton.tonalIcon(
-                onPressed: sending ? null : onToggle,
-                icon: Icon(running ? Icons.stop : Icons.play_arrow),
-                label: Text(running ? '停止跟踪' : '开始跟踪'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: running
-                      ? Colors.red.withValues(alpha: 0.15)
-                      : Colors.green.withValues(alpha: 0.15),
-                  foregroundColor: running ? Colors.red : Colors.green,
+        return Tooltip(
+          message: running
+              ? '停止视觉检测与云台跟踪 pipeline'
+              : '启动视觉检测与云台跟踪 pipeline（独立于任务，可在任务开始前先行测试）',
+          child: Row(
+            children: [
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: sending ? null : onToggle,
+                  icon: sending
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(running ? Icons.stop : Icons.play_arrow),
+                  label: Text(running ? '停止跟踪' : '开始跟踪'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: running
+                        ? Colors.red.withValues(alpha: 0.15)
+                        : Colors.green.withValues(alpha: 0.15),
+                    foregroundColor: running ? Colors.red : Colors.green,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -175,26 +244,128 @@ class _PidSection extends StatelessWidget {
         Text(title,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         const SizedBox(height: 4),
-        _PidSlider(label: 'Kp', value: params.kp, min: 0, max: 20,
+        _PidField(label: 'Kp', value: params.kp, min: 0, max: 20,
             onChanged: (v) { params.kp = v; onChanged(); }),
-        _PidSlider(label: 'Ki', value: params.ki, min: 0, max: 5,
+        _PidField(label: 'Ki', value: params.ki, min: 0, max: 5,
             onChanged: (v) { params.ki = v; onChanged(); }),
-        _PidSlider(label: 'Kd', value: params.kd, min: 0, max: 5,
+        _PidField(label: 'Kd', value: params.kd, min: 0, max: 5,
             onChanged: (v) { params.kd = v; onChanged(); }),
       ],
     );
   }
 }
 
-class _PidSlider extends StatelessWidget {
+/// PID 参数行：滑块粗调 + 文本框精确输入
+/// 两者联动：拖动滑块自动更新文本框，文本框回车更新滑块
+class _PidField extends StatefulWidget {
   final String label;
   final double value;
   final double min;
   final double max;
   final ValueChanged<double> onChanged;
 
-  const _PidSlider({
+  const _PidField({
     required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+
+  @override
+  State<_PidField> createState() => _PidFieldState();
+}
+
+class _PidFieldState extends State<_PidField> {
+  late TextEditingController _ctrl;
+  bool _hasFocus = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.value.toStringAsFixed(3));
+  }
+
+  @override
+  void didUpdateWidget(_PidField old) {
+    super.didUpdateWidget(old);
+    if (!_hasFocus && old.value != widget.value) {
+      _ctrl.text = widget.value.toStringAsFixed(3);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _commitText(String s) {
+    final v = double.tryParse(s);
+    if (v != null) {
+      final clamped = v.clamp(widget.min, widget.max);
+      widget.onChanged(clamped);
+      _ctrl.text = clamped.toStringAsFixed(3);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 24,
+          child: Text(widget.label,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+        ),
+        Expanded(
+          child: Slider(
+            value: widget.value.clamp(widget.min, widget.max),
+            min: widget.min,
+            max: widget.max,
+            divisions: ((widget.max - widget.min) * 20).round(),
+            onChanged: (v) {
+              widget.onChanged(v);
+              if (!_hasFocus) _ctrl.text = v.toStringAsFixed(3);
+            },
+          ),
+        ),
+        // 精确数值输入框 (按回车或失焦时生效)
+        SizedBox(
+          width: 72,
+          child: Focus(
+            onFocusChange: (f) => setState(() => _hasFocus = f),
+            child: TextField(
+              controller: _ctrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: _commitText,
+              onEditingComplete: () => _commitText(_ctrl.text),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 角度滑块组件（用于云台角度控制）
+class _AngleSlider extends StatelessWidget {
+  final String label;
+  final String unit;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+
+  const _AngleSlider({
+    required this.label,
+    required this.unit,
     required this.value,
     required this.min,
     required this.max,
@@ -205,19 +376,22 @@ class _PidSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        SizedBox(width: 24, child: Text(label, style: const TextStyle(fontSize: 11))),
+        SizedBox(
+          width: 32,
+          child: Text(label, style: const TextStyle(fontSize: 11)),
+        ),
         Expanded(
           child: Slider(
             value: value,
             min: min,
             max: max,
-            divisions: ((max - min) * 20).round(),
+            divisions: ((max - min) * 2).round(),
             onChanged: onChanged,
           ),
         ),
         SizedBox(
-          width: 44,
-          child: Text(value.toStringAsFixed(2),
+          width: 52,
+          child: Text('${value.toStringAsFixed(1)}$unit',
               style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
         ),
       ],

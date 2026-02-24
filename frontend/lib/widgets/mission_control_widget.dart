@@ -71,7 +71,10 @@ class _MissionControlWidgetState extends State<MissionControlWidget> {
 
                 // ── Active mission status ─────────────────────────────────
                 if (mission.active) ...[
-                  _ActiveStatusSection(mission: mission),
+                  _ActiveStatusSection(
+                    mission: mission,
+                    dwell: provider.dwellStatus,
+                  ),
                   const SizedBox(height: 12),
                 ],
 
@@ -215,11 +218,13 @@ class _MissionStatusChip extends StatelessWidget {
 
 class _ActiveStatusSection extends StatelessWidget {
   final MissionStatus mission;
+  final EngagementDwellStatus dwell;
 
-  const _ActiveStatusSection({required this.mission});
+  const _ActiveStatusSection({required this.mission, required this.dwell});
 
   @override
   Widget build(BuildContext context) {
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -266,7 +271,7 @@ class _ActiveStatusSection extends StatelessWidget {
                 const Icon(Icons.radar, size: 14, color: Colors.white54),
                 const SizedBox(width: 4),
                 Text(
-                  '${mission.targetsEngaged} target${mission.targetsEngaged == 1 ? '' : 's'} engaged',
+                  '${mission.targetsEngaged} 个目标已交战',
                   style: const TextStyle(fontSize: 12, color: Colors.white70),
                 ),
                 const SizedBox(width: 12),
@@ -275,8 +280,79 @@ class _ActiveStatusSection extends StatelessWidget {
                 _FireChainChip(state: mission.fireChainState!),
             ],
           ),
+
+          // Engagement dwell timer — only visible when pipeline is dwelling
+          if (dwell.active) ...[
+            const SizedBox(height: 10),
+            _DwellTimerBar(dwell: dwell),
+          ],
+
+          // Lifecycle breakdown row (shown only when data is available)
+          if (mission.lifecycleByState.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _LifecycleStatsRow(lifecycleByState: mission.lifecycleByState),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// Countdown progress bar shown while the pipeline dwells on a locked target.
+///
+/// Counts from 0 → [dwell.totalS] seconds before auto-advancing to the next
+/// engagement target.  The bar fills amber → green as the dwell completes.
+class _DwellTimerBar extends StatelessWidget {
+  final EngagementDwellStatus dwell;
+
+  const _DwellTimerBar({required this.dwell});
+
+  @override
+  Widget build(BuildContext context) {
+    // Color ramps from amber (just started) → green (nearly complete)
+    final color = dwell.fraction >= 0.8
+        ? Colors.green
+        : dwell.fraction >= 0.4
+            ? Colors.amber
+            : Colors.orange;
+
+    final elapsed = dwell.elapsedS.toStringAsFixed(1);
+    final total = dwell.totalS.toStringAsFixed(1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.hourglass_bottom, size: 13, color: color),
+            const SizedBox(width: 5),
+            Text(
+              '交战驻留  $elapsed s / $total s',
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontFamily: 'monospace',
+              ),
+            ),
+            const Spacer(),
+            if (dwell.trackId != null)
+              Text(
+                '目标 #${dwell.trackId}',
+                style: const TextStyle(fontSize: 11, color: Colors.white54),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: LinearProgressIndicator(
+            value: dwell.fraction.clamp(0.0, 1.0),
+            minHeight: 6,
+            backgroundColor: Colors.white10,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -500,4 +576,121 @@ class _ReportLink extends StatelessWidget {
   }
 
   void _launchUrl(String url) => launchExternalUrl(url);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lifecycle breakdown
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Maps a normalised (lower-case) lifecycle state key to a human-readable
+/// Chinese label and a display colour.
+const _kLifecycleConfig = <String, (String, Color)>{
+  'detected':    ('发现',   Colors.blue),
+  'tracked':     ('跟踪中', Colors.cyan),
+  'archived':    ('已归档', Colors.grey),
+  'neutralized': ('已中和', Colors.green),
+};
+
+/// Ordered display sequence for the chips.
+const _kLifecycleOrder = ['detected', 'tracked', 'neutralized', 'archived'];
+
+class _LifecycleStatsRow extends StatelessWidget {
+  final Map<String, int> lifecycleByState;
+
+  const _LifecycleStatsRow({required this.lifecycleByState});
+
+  @override
+  Widget build(BuildContext context) {
+    // Normalise keys to lower-case so the widget works regardless of whether
+    // the server sends 'DETECTED' or 'detected'.
+    final normalised = {
+      for (final e in lifecycleByState.entries)
+        e.key.toLowerCase(): e.value,
+    };
+
+    final chips = _kLifecycleOrder
+        .where((key) => normalised.containsKey(key))
+        .map((key) {
+          final (label, color) = _kLifecycleConfig[key]!;
+          return _StatChip(
+            label: label,
+            count: normalised[key]!,
+            color: color,
+          );
+        })
+        .toList();
+
+    // Also render any keys returned by the server that are not in our known
+    // list, so new states from the backend are not silently dropped.
+    for (final key in normalised.keys) {
+      if (!_kLifecycleOrder.contains(key)) {
+        chips.add(_StatChip(
+          label: key,
+          count: normalised[key]!,
+          color: Colors.blueGrey,
+        ));
+      }
+    }
+
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: chips,
+    );
+  }
+}
+
+/// Small coloured pill showing a state label and its count.
+class _StatChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _StatChip({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color.withValues(alpha: 0.85),
+            ),
+          ),
+          const SizedBox(width: 5),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.22),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

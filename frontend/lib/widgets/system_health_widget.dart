@@ -28,7 +28,7 @@ class SystemHealthWidget extends StatelessWidget {
                     Icon(Icons.monitor_heart,
                         color: theme.colorScheme.primary),
                     const SizedBox(width: 8),
-                    Text('系统健康 System Health',
+                    Text('系统健康',
                         style: theme.textTheme.titleMedium),
                     const Spacer(),
                     _OverallChip(status: overall),
@@ -51,7 +51,7 @@ class SystemHealthWidget extends StatelessWidget {
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        childAspectRatio: 3.0,
+                        childAspectRatio: 2.5,
                         crossAxisSpacing: 8,
                         mainAxisSpacing: 8,
                       ),
@@ -85,10 +85,10 @@ class _OverallChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, label) = switch (status) {
-      'ok' => (Colors.green, 'OK'),
-      'degraded' => (Colors.orange, 'DEGRADED'),
-      'failed' => (Colors.red, 'FAILED'),
-      _ => (Colors.grey, 'UNKNOWN'),
+      'ok' => (Colors.green, '正常'),
+      'degraded' => (Colors.orange, '降级'),
+      'failed' => (Colors.red, '故障'),
+      _ => (Colors.grey, '未知'),
     };
 
     return Container(
@@ -134,43 +134,68 @@ class _SubsystemChip extends StatelessWidget {
 
     final icon = _subsystemIcon(sub.name);
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: sub.error != null
-          ? () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${sub.name}: ${sub.error}'),
-                  duration: const Duration(seconds: 3),
+    final ageStr = sub.lastHeartbeatAgeS != null
+        ? '${sub.lastHeartbeatAgeS!.toStringAsFixed(1)}s 前'
+        : null;
+    final tapMessage = [
+      if (sub.error != null) sub.error!,
+      if (ageStr != null) '最近心跳: $ageStr',
+    ].join(' · ');
+
+    return Tooltip(
+      message: tapMessage.isNotEmpty ? tapMessage : _displayName(sub.name),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: tapMessage.isNotEmpty
+            ? () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${_displayName(sub.name)}: $tapMessage'),
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+            : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: dotColor.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: dotColor.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: Colors.white70),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _displayName(sub.name),
+                      style: const TextStyle(fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (ageStr != null)
+                      Text(
+                        ageStr,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.white.withValues(alpha: 0.4),
+                        ),
+                      ),
+                  ],
                 ),
-              );
-            }
-          : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: dotColor.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: dotColor.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: Colors.white70),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                _displayName(sub.name),
-                style: const TextStyle(fontSize: 12),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            Container(
-              width: 10,
-              height: 10,
-              decoration:
-                  BoxDecoration(color: dotColor, shape: BoxShape.circle),
-            ),
-          ],
+              Container(
+                width: 10,
+                height: 10,
+                decoration:
+                    BoxDecoration(color: dotColor, shape: BoxShape.circle),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -190,12 +215,12 @@ class _SubsystemChip extends StatelessWidget {
 
   String _displayName(String name) {
     return switch (name) {
-      'camera' => 'Camera',
-      'gimbal_driver' => 'Gimbal',
-      'imu' => 'IMU',
-      'rangefinder' => 'Rangefinder',
-      'safety' => 'Safety',
-      'api' => 'API',
+      'camera' => '摄像头',
+      'gimbal_driver' => '云台驱动',
+      'imu' => '惯导单元',
+      'rangefinder' => '测距仪',
+      'safety' => '安全系统',
+      'api' => 'API 服务',
       _ => name,
     };
   }

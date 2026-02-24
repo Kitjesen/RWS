@@ -28,16 +28,16 @@ class _TypeSpec {
 }
 
 const Map<String, _TypeSpec> _typeSpecs = {
-  'fire_executed':    _TypeSpec(Color(0xFFD32F2F), Icons.whatshot,            'FIRED'),
-  'fire_chain_state': _TypeSpec(Color(0xFFF57C00), Icons.security,            'FIRE CHAIN'),
-  'operator_timeout': _TypeSpec(Color(0xFF6A1B9A), Icons.timer_off,           'TIMEOUT'),
-  'mission_started':  _TypeSpec(Color(0xFF2E7D32), Icons.play_circle_filled,  'MISSION START'),
-  'mission_ended':    _TypeSpec(Color(0xFF1565C0), Icons.stop_circle,         'MISSION END'),
-  'target_designated':_TypeSpec(Color(0xFF00838F), Icons.gps_fixed,           'DESIGNATED'),
-  'config_reloaded':  _TypeSpec(Color(0xFF4E342E), Icons.settings_backup_restore, 'CFG RELOAD'),
-  'nfz_added':        _TypeSpec(Color(0xFFAD1457), Icons.block,               'NFZ ADDED'),
-  'nfz_removed':      _TypeSpec(Color(0xFF558B2F), Icons.check_circle_outline, 'NFZ REMOVED'),
-  'heartbeat':        _TypeSpec(Color(0xFF37474F), Icons.favorite_outline,    'HEARTBEAT'),
+  'fire_executed':    _TypeSpec(Color(0xFFD32F2F), Icons.whatshot,            '开火'),
+  'fire_chain_state': _TypeSpec(Color(0xFFF57C00), Icons.security,            '火控链'),
+  'operator_timeout': _TypeSpec(Color(0xFF6A1B9A), Icons.timer_off,           '操作员超时'),
+  'mission_started':  _TypeSpec(Color(0xFF2E7D32), Icons.play_circle_filled,  '任务开始'),
+  'mission_ended':    _TypeSpec(Color(0xFF1565C0), Icons.stop_circle,         '任务结束'),
+  'target_designated':_TypeSpec(Color(0xFF00838F), Icons.gps_fixed,           '目标指定'),
+  'config_reloaded':  _TypeSpec(Color(0xFF4E342E), Icons.settings_backup_restore, '配置重载'),
+  'nfz_added':        _TypeSpec(Color(0xFFAD1457), Icons.block,               'NFZ 添加'),
+  'nfz_removed':      _TypeSpec(Color(0xFF558B2F), Icons.check_circle_outline, 'NFZ 移除'),
+  'heartbeat':        _TypeSpec(Color(0xFF37474F), Icons.favorite_outline,    '心跳'),
 };
 
 _TypeSpec _specFor(String type) =>
@@ -105,7 +105,7 @@ class _EventsScreenState extends State<EventsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live Event Log'),
+        title: const Text('实时事件日志'),
         actions: [
           // Event-type filter
           _TypeFilterMenu(
@@ -136,7 +136,7 @@ class _EventsScreenState extends State<EventsScreen> {
           // Clear button
           IconButton(
             icon: const Icon(Icons.clear_all),
-            tooltip: 'Clear log',
+            tooltip: '清除日志',
             onPressed: _events.isEmpty ? null : _clear,
           ),
         ],
@@ -176,14 +176,14 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            connected ? 'Waiting for events…' : 'SSE disconnected',
+            connected ? '等待事件...' : 'SSE 已断开',
             style: const TextStyle(color: Colors.white54, fontSize: 16),
           ),
           if (!connected)
             const Padding(
               padding: EdgeInsets.only(top: 6),
               child: Text(
-                'Reconnecting automatically…',
+                '自动重连中...',
                 style: TextStyle(color: Colors.white38, fontSize: 13),
               ),
             ),
@@ -296,16 +296,16 @@ class _TypeFilterMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = current == null ? 'All' : _specFor(current!).label;
+    final label = current == null ? '全部' : _specFor(current!).label;
 
     return PopupMenuButton<String?>(
-      tooltip: 'Filter by type',
+      tooltip: '按类型筛选',
       initialValue: current,
       onSelected: onSelected,
       itemBuilder: (_) => [
         const PopupMenuItem<String?>(
           value: null,
-          child: Text('All events'),
+          child: Text('全部事件'),
         ),
         const PopupMenuDivider(),
         for (final entry in _typeSpecs.entries)

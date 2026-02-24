@@ -142,4 +142,22 @@ def metrics():
     lines.append(_gauge("rws_pipeline_fps", round(_fps(), 1),
                         help_text="Estimated pipeline frames per second"))
 
+    # ---- gimbal position & tracking error ----
+    if pipeline is not None:
+        import time as _time
+        try:
+            fb = pipeline.driver.get_feedback(_time.monotonic())
+            lines.append(_gauge("rws_gimbal_yaw_deg", round(fb.yaw_deg, 3),
+                                help_text="Current gimbal yaw position (degrees)"))
+            lines.append(_gauge("rws_gimbal_pitch_deg", round(fb.pitch_deg, 3),
+                                help_text="Current gimbal pitch position (degrees)"))
+        except Exception:
+            pass
+        lines.append(_gauge("rws_yaw_error_deg",
+                            round(getattr(pipeline, "_last_yaw_error_deg", 0.0), 3),
+                            help_text="Current yaw tracking error (degrees)"))
+        lines.append(_gauge("rws_pitch_error_deg",
+                            round(getattr(pipeline, "_last_pitch_error_deg", 0.0), 3),
+                            help_text="Current pitch tracking error (degrees)"))
+
     return Response("\n".join(lines) + "\n", mimetype="text/plain; version=0.0.4")

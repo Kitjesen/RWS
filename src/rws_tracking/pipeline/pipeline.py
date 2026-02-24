@@ -12,8 +12,9 @@
 from __future__ import annotations
 
 import logging
+import math
 import signal
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from ..control.interfaces import (
@@ -184,6 +185,11 @@ class VisionGimbalPipeline:
         self._engagement_dwell_id: int | None = None
         self._engagement_dwell_start: float | None = None
 
+        # SSE state-change tracking — used to detect transitions and emit events.
+        self._last_threat_track_ids: set[int] = set()
+        self._last_fire_authorized: bool | None = None
+        self._last_health_statuses: dict[str, str] = {}
+
     # ------------------------------------------------------------------
     # Target designation (operator C2 override)
     # ------------------------------------------------------------------
@@ -208,6 +214,34 @@ class VisionGimbalPipeline:
     @property
     def designated_track_id(self) -> int | None:
         return self._designated_track_id
+
+    @property
+    def dwell_status(self) -> dict:
+        """Return current engagement dwell timer state (for API consumption).
+
+        Uses time.monotonic() to compute elapsed seconds since dwell began.
+        Returns a dict with keys: active, track_id, elapsed_s, total_s, fraction.
+        """
+        import time as _time
+
+        total = self._engagement_dwell_time_s
+        if self._engagement_dwell_start is None or self._engagement_dwell_id is None:
+            return {
+                "active": False,
+                "track_id": None,
+                "elapsed_s": 0.0,
+                "total_s": total,
+                "fraction": 0.0,
+            }
+        elapsed = _time.monotonic() - self._engagement_dwell_start
+        fraction = min(elapsed / total, 1.0) if total > 0 else 0.0
+        return {
+            "active": True,
+            "track_id": self._engagement_dwell_id,
+            "elapsed_s": round(elapsed, 2),
+            "total_s": total,
+            "fraction": round(fraction, 3),
+        }
 
     def install_signal_handlers(self) -> None:
         """安装 SIGINT/SIGTERM 信号处理器，支持优雅退出"""
@@ -276,6 +310,21 @@ class VisionGimbalPipeline:
         # Update lifecycle state for all current tracks.
         if self._lifecycle_manager is not None:
             self._lifecycle_manager.update(tracks, threat_assessments, timestamp)
+
+        # SSE: emit threat_detected for tracks newly entering the high-priority list.
+        if _event_bus is not None:
+            current_high_ids = {ta.track_id for ta in threat_assessments
+                                if ta.threat_score >= 0.3}
+            new_threat_ids = current_high_ids - self._last_threat_track_ids
+            for ta in threat_assessments:
+                if ta.track_id in new_threat_ids:
+                    _event_bus.emit("threat_detected", {
+                        "track_id": ta.track_id,
+                        "threat_score": round(ta.threat_score, 4),
+                        "priority_rank": ta.priority_rank,
+                        "ts": round(timestamp, 3),
+                    })
+            self._last_threat_track_ids = current_high_ids
 
         # =====================================================================
         # 3. 目标选择
@@ -386,6 +435,17 @@ class VisionGimbalPipeline:
                     operator_override=safety_status.operator_override,
                     emergency_stop=safety_status.emergency_stop,
                 )
+
+        # SSE: emit safety_triggered on the first frame fire transitions to blocked.
+        if _event_bus is not None and safety_status is not None:
+            if not safety_status.fire_authorized and self._last_fire_authorized is not False:
+                _event_bus.emit("safety_triggered", {
+                    "reason": safety_status.blocked_reason or "interlock",
+                    "yaw_deg": round(feedback.yaw_deg, 2),
+                    "pitch_deg": round(feedback.pitch_deg, 2),
+                    "ts": round(timestamp, 3),
+                })
+            self._last_fire_authorized = safety_status.fire_authorized
 
         # =====================================================================
         # 7c. 交战队列自动推进 (可选)
@@ -502,6 +562,14 @@ class VisionGimbalPipeline:
                         self._lifecycle_manager.mark_neutralized(
                             selected.track_id, timestamp
                         )
+                        if _event_bus is not None:
+                            _event_bus.emit("target_neutralized", {
+                                "track_id": selected.track_id,
+                                "threat_score": round(
+                                    threat_assessments[0].threat_score
+                                    if threat_assessments else 0.0, 4),
+                                "ts": round(timestamp, 3),
+                            })
                     if self._video_ring_buffer is not None:
                         track_id_for_clip = (
                             selected.track_id if selected is not None else None
@@ -513,6 +581,25 @@ class VisionGimbalPipeline:
         # HealthMonitor: report pipeline heartbeat each frame.
         if self._health_monitor is not None:
             self._health_monitor.heartbeat("pipeline", timestamp)
+            # SSE: emit health_degraded when a subsystem transitions to degraded/failed.
+            if _event_bus is not None:
+                try:
+                    for name, info in self._health_monitor.get_status().items():
+                        status_str = (
+                            info.get("status", "unknown")
+                            if isinstance(info, dict)
+                            else info.compute_status()
+                        )
+                        prev = self._last_health_statuses.get(name, "ok")
+                        if status_str in ("degraded", "failed") and status_str != prev:
+                            _event_bus.emit("health_degraded", {
+                                "subsystem": name,
+                                "status": status_str,
+                                "ts": round(timestamp, 3),
+                            })
+                        self._last_health_statuses[name] = status_str
+                except Exception:
+                    pass
 
         # =====================================================================
         # 8. 控制指令计算 (PID + 弹道 + 提前量)
@@ -523,8 +610,39 @@ class VisionGimbalPipeline:
             else None
         )
 
+        # --- 提前量位置补偿 (在 PID 之前修正目标坐标) ---
+        #
+        # 正确做法: 将 lead_angle (°) 转换为像素偏移量，调整 TargetObservation
+        # 的 mask_center，使 PID 控制器将云台瞄准弹丸将抵达时的目标预测位置。
+        #
+        # 旧方案（×2.0 乘以速率）维度有误（°/s ≠ °），已废弃。
+        #
+        # 转换公式: Δpx = Δangle_deg · fx / (180/π)
+        #   其中 fx 来自已配置的相机内参。
+        control_target = selected
+        if lead_angle is not None and lead_angle.confidence > 0 and selected is not None:
+            cam = self.controller._transform.camera
+            lead_px_yaw = lead_angle.yaw_lead_deg * cam.fx / math.degrees(1.0)
+            lead_px_pitch = lead_angle.pitch_lead_deg * cam.fy / math.degrees(1.0)
+            # Pixel convention: right = +x, down = +y; gimbal yaw right = +°, pitch up = -°
+            if selected.mask_center is not None:
+                mcx, mcy = selected.mask_center
+                control_target = replace(
+                    selected,
+                    mask_center=(mcx + lead_px_yaw, mcy - lead_px_pitch),
+                )
+            else:
+                cx, cy = selected.bbox.center
+                control_target = replace(
+                    selected,
+                    mask_center=(cx + lead_px_yaw, cy - lead_px_pitch),
+                )
+
+        fire_auth_for_pid = safety_status.fire_authorized if safety_status is not None else True
         command = self.controller.compute_command(
-            selected, feedback, timestamp, body_state=body_state,
+            control_target, feedback, timestamp,
+            body_state=body_state,
+            fire_authorized=fire_auth_for_pid,
         )
 
         state_val = command.metadata.get("state", 0.0)
@@ -537,12 +655,60 @@ class VisionGimbalPipeline:
         else:
             self._last_track_state = TrackState.SEARCH.value
 
-        # 叠加提前量到控制指令 (在 PID 输出之后附加)
+        # =====================================================================
+        # 8b. 轨迹规划器覆盖 (可选)
+        #
+        # 当检测到目标切换时 (selected.track_id != _last_target_id)，
+        # 将新目标的像素中心转换为云台角度目标，并触发梯形轨迹规划。
+        # 在轨迹激活期间，以轨迹速率指令覆盖 PID 输出，实现平滑切换。
+        #
+        # 转换公式: angle_deg = feedback_deg + (px - cx) * degrees(1) / f
+        #   其中 f 为相机焦距 (px), cx/cy 为主点坐标。
+        # =====================================================================
+        if self._trajectory_planner is not None and selected is not None:
+            # Detect target switch: _last_target_id still holds the PREVIOUS
+            # target ID at this point (updated later in section 11).
+            target_switched = (
+                selected.track_id != self._last_target_id
+                and self._last_target_id is not None
+            )
+            if target_switched:
+                cam = self.controller._transform.camera
+                cx, cy = (
+                    control_target.mask_center
+                    if control_target is not None and control_target.mask_center is not None
+                    else control_target.bbox.center
+                    if control_target is not None
+                    else selected.bbox.center
+                )
+                # Angular resolution: degrees per pixel
+                # math.degrees(1.0) converts 1 radian to degrees;
+                # dividing by focal length gives deg/px.
+                target_yaw_deg = feedback.yaw_deg + (cx - cam.cx) * math.degrees(1.0) / cam.fx
+                target_pitch_deg = feedback.pitch_deg - (cy - cam.cy) * math.degrees(1.0) / cam.fy
+                self._trajectory_planner.set_target(
+                    target_yaw_deg,
+                    target_pitch_deg,
+                    feedback.yaw_deg,
+                    feedback.pitch_deg,
+                    timestamp,
+                )
+
+            if self._trajectory_planner.is_active:
+                traj_yaw, traj_pitch = self._trajectory_planner.get_rate_command(timestamp)
+                command = ControlCommand(
+                    timestamp=command.timestamp,
+                    yaw_rate_cmd_dps=traj_yaw,
+                    pitch_rate_cmd_dps=traj_pitch,
+                    metadata={**command.metadata, "trajectory_active": True},
+                )
+
+        # 在 metadata 中记录提前量（供遥测使用），不再直接叠加速率
         if lead_angle is not None and lead_angle.confidence > 0:
             command = ControlCommand(
                 timestamp=command.timestamp,
-                yaw_rate_cmd_dps=command.yaw_rate_cmd_dps + lead_angle.yaw_lead_deg * 2.0,
-                pitch_rate_cmd_dps=command.pitch_rate_cmd_dps + lead_angle.pitch_lead_deg * 2.0,
+                yaw_rate_cmd_dps=command.yaw_rate_cmd_dps,
+                pitch_rate_cmd_dps=command.pitch_rate_cmd_dps,
                 metadata={
                     **command.metadata,
                     "lead_yaw_deg": lead_angle.yaw_lead_deg,
@@ -552,10 +718,14 @@ class VisionGimbalPipeline:
             )
 
         # 叠加风偏补偿 (弹道解算的 yaw 方向补偿)
+        # 风偏是外部环境因素，仍以速率形式叠加（短时平滑等效于位置偏移）
         if ballistic_solution is not None and ballistic_solution.windage_deg != 0:
+            # 用 Kp 增益将角度补偿转化为等效速率 (°/s)
+            kp_yaw = self.controller._cfg.yaw_pid.kp
+            windage_rate = ballistic_solution.windage_deg * kp_yaw
             command = ControlCommand(
                 timestamp=command.timestamp,
-                yaw_rate_cmd_dps=command.yaw_rate_cmd_dps + ballistic_solution.windage_deg * 2.0,
+                yaw_rate_cmd_dps=command.yaw_rate_cmd_dps + windage_rate,
                 pitch_rate_cmd_dps=command.pitch_rate_cmd_dps,
                 metadata={
                     **command.metadata,

@@ -10,6 +10,9 @@ class TrackingStatus {
   final double pitchDeg;
   final double yawErrorDeg;
   final double pitchErrorDeg;
+  final double yawRateDps;   // gimbal angular velocity yaw axis (°/s)
+  final double pitchRateDps; // gimbal angular velocity pitch axis (°/s)
+  final double fps;          // pipeline processing rate
   final double lockRate;
   final double avgError;
   final double switchesPerMin;
@@ -23,21 +26,29 @@ class TrackingStatus {
     this.pitchDeg = 0.0,
     this.yawErrorDeg = 0.0,
     this.pitchErrorDeg = 0.0,
+    this.yawRateDps = 0.0,
+    this.pitchRateDps = 0.0,
+    this.fps = 0.0,
     this.lockRate = 0.0,
     this.avgError = 0.0,
     this.switchesPerMin = 0.0,
   });
 
   factory TrackingStatus.fromJson(Map<String, dynamic> json) {
+    // Gimbal rates may be nested under 'gimbal' or at top level
+    final gimbal = json['gimbal'] as Map<String, dynamic>? ?? {};
     return TrackingStatus(
       running: json['running'] ?? false,
       frameCount: json['frame_count'] ?? 0,
       errorCount: json['error_count'] ?? 0,
       state: json['state'] ?? 'SEARCH',
-      yawDeg: (json['yaw_deg'] ?? 0.0).toDouble(),
-      pitchDeg: (json['pitch_deg'] ?? 0.0).toDouble(),
+      yawDeg: (json['yaw_deg'] ?? gimbal['yaw_deg'] ?? 0.0).toDouble(),
+      pitchDeg: (json['pitch_deg'] ?? gimbal['pitch_deg'] ?? 0.0).toDouble(),
       yawErrorDeg: (json['yaw_error_deg'] ?? 0.0).toDouble(),
       pitchErrorDeg: (json['pitch_error_deg'] ?? 0.0).toDouble(),
+      yawRateDps: (gimbal['yaw_rate_dps'] ?? json['yaw_rate_dps'] ?? 0.0).toDouble(),
+      pitchRateDps: (gimbal['pitch_rate_dps'] ?? json['pitch_rate_dps'] ?? 0.0).toDouble(),
+      fps: (json['fps'] ?? json['pipeline_fps'] ?? 0.0).toDouble(),
       lockRate: (json['lock_rate'] ?? 0.0).toDouble(),
       avgError: (json['avg_abs_error_deg'] ?? 0.0).toDouble(),
       switchesPerMin: (json['switches_per_min'] ?? 0.0).toDouble(),
@@ -160,6 +171,8 @@ class MissionStatus {
   final double elapsedS;
   final String? fireChainState;
   final int? targetsEngaged;
+  // Lifecycle breakdown: DETECTED / TRACKED / ARCHIVED / NEUTRALIZED counts
+  final Map<String, int> lifecycleByState;
 
   MissionStatus({
     this.active = false,
@@ -168,16 +181,22 @@ class MissionStatus {
     this.elapsedS = 0.0,
     this.fireChainState,
     this.targetsEngaged,
+    this.lifecycleByState = const {},
   });
 
-  factory MissionStatus.fromJson(Map<String, dynamic> j) => MissionStatus(
-    active: j['active'] ?? false,
-    profile: j['profile'],
-    sessionId: j['session_id'],
-    elapsedS: (j['elapsed_s'] ?? 0.0).toDouble(),
-    fireChainState: j['fire_chain_state'],
-    targetsEngaged: j['targets_engaged'],
-  );
+  factory MissionStatus.fromJson(Map<String, dynamic> j) {
+    final lifecycle = j['lifecycle'] as Map<String, dynamic>? ?? {};
+    final byState = lifecycle['by_state'] as Map<String, dynamic>? ?? {};
+    return MissionStatus(
+      active: j['active'] ?? false,
+      profile: j['profile'],
+      sessionId: j['session_id'],
+      elapsedS: (j['elapsed_s'] ?? 0.0).toDouble(),
+      fireChainState: j['fire_chain_state'],
+      targetsEngaged: j['targets_engaged'],
+      lifecycleByState: byState.map((k, v) => MapEntry(k, (v as num).toInt())),
+    );
+  }
 
   /// Convenience: format elapsed seconds as mm:ss string
   String get elapsedFormatted {
@@ -186,6 +205,53 @@ class MissionStatus {
     final ss = (total % 60).toString().padLeft(2, '0');
     return '$mm:$ss';
   }
+}
+
+// --- 交战驻留计时器状态 ---
+
+class EngagementDwellStatus {
+  final bool active;
+  final int? trackId;
+  final double elapsedS;
+  final double totalS;
+  final double fraction; // [0.0, 1.0]
+
+  const EngagementDwellStatus({
+    this.active = false,
+    this.trackId,
+    this.elapsedS = 0.0,
+    this.totalS = 0.0,
+    this.fraction = 0.0,
+  });
+
+  factory EngagementDwellStatus.fromJson(Map<String, dynamic> j) =>
+      EngagementDwellStatus(
+        active: j['active'] ?? false,
+        trackId: j['track_id'] as int?,
+        elapsedS: (j['elapsed_s'] ?? 0.0).toDouble(),
+        totalS: (j['total_s'] ?? 0.0).toDouble(),
+        fraction: (j['fraction'] ?? 0.0).toDouble(),
+      );
+}
+
+// --- 任务前自检 ---
+
+class SelfTestCheck {
+  final String name;
+  final bool passed;
+  final String message;
+
+  const SelfTestCheck({
+    required this.name,
+    required this.passed,
+    required this.message,
+  });
+
+  factory SelfTestCheck.fromJson(Map<String, dynamic> j) => SelfTestCheck(
+        name: j['name'] as String? ?? '',
+        passed: j['passed'] as bool? ?? false,
+        message: j['message'] as String? ?? '',
+      );
 }
 
 // --- 火控链状态 ---

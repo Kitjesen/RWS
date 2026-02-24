@@ -45,6 +45,63 @@ service TrackingService {
 
   // Get threat assessment
   rpc GetThreatAssessment(GetThreatAssessmentRequest) returns (GetThreatAssessmentResponse);
+
+  // -------------------------------------------------------------------------
+  // Fire control
+  // -------------------------------------------------------------------------
+
+  // Arm the shooting chain (SAFE -> ARMED)
+  rpc ArmSystem(ArmRequest) returns (FireControlResponse);
+
+  // Return the shooting chain to SAFE state
+  rpc SafeSystem(SafeRequest) returns (FireControlResponse);
+
+  // Request fire (FIRE_AUTHORIZED -> FIRE_REQUESTED)
+  rpc RequestFire(RequestFireRequest) returns (FireControlResponse);
+
+  // Get current fire chain status
+  rpc GetFireStatus(GetFireStatusRequest) returns (FireControlResponse);
+
+  // Operator heartbeat (prevent watchdog timeout)
+  rpc OperatorHeartbeat(OperatorHeartbeatRequest) returns (OperatorHeartbeatResponse);
+
+  // Designate a specific target for engagement (C2 override)
+  rpc DesignateTarget(DesignateTargetRequest) returns (DesignateTargetResponse);
+
+  // Clear operator target designation (return to auto-selection)
+  rpc ClearDesignation(ClearDesignationRequest) returns (DesignateTargetResponse);
+
+  // Get current designation status
+  rpc GetDesignation(GetDesignationRequest) returns (DesignateTargetResponse);
+
+  // -------------------------------------------------------------------------
+  // Mission management
+  // -------------------------------------------------------------------------
+
+  // Start a new mission session
+  rpc StartMission(StartMissionRequest) returns (MissionResponse);
+
+  // End the active mission and generate debrief report
+  rpc EndMission(EndMissionRequest) returns (MissionResponse);
+
+  // Get current mission status
+  rpc GetMissionStatus(GetMissionStatusRequest) returns (MissionStatusResponse);
+
+  // -------------------------------------------------------------------------
+  // Safety zone CRUD (No-Fire Zones)
+  // -------------------------------------------------------------------------
+
+  // List all active no-fire zones
+  rpc ListZones(ListZonesRequest) returns (ListZonesResponse);
+
+  // Add a new no-fire zone
+  rpc AddZone(AddZoneRequest) returns (ZoneResponse);
+
+  // Remove a no-fire zone by ID
+  rpc RemoveZone(RemoveZoneRequest) returns (ZoneResponse);
+
+  // Get a specific no-fire zone by ID
+  rpc GetZone(GetZoneRequest) returns (SafetyZoneMsg);
 }
 
 // ============================================================================
@@ -288,4 +345,142 @@ message ThreatTarget {
   float class_score = 5;
   float heading_score = 6;
   int32 priority_rank = 7;
+}
+
+// ============================================================================
+// Fire Control
+// ============================================================================
+
+// Generic response for fire-chain state transitions.
+message FireControlResponse {
+  bool success = 1;
+  string state = 2;         // Current ShootingChain state value (e.g. "ARMED")
+  bool can_fire = 3;        // True when chain.can_fire is set
+  string message = 4;       // Human-readable detail or error text
+  string operator_id = 5;   // Operator that performed the action
+}
+
+message ArmRequest {
+  string operator_id = 1;   // Required — identifies the arming operator
+}
+
+message SafeRequest {
+  string reason = 1;        // Optional — reason for returning to safe
+}
+
+message RequestFireRequest {
+  string operator_id = 1;   // Required — human confirmation of fire request
+}
+
+message GetFireStatusRequest {}
+
+// ============================================================================
+// Operator Heartbeat
+// ============================================================================
+
+message OperatorHeartbeatRequest {
+  string operator_id = 1;
+}
+
+message OperatorHeartbeatResponse {
+  bool ok = 1;
+  string operator_id = 2;
+}
+
+// ============================================================================
+// Target Designation
+// ============================================================================
+
+message DesignateTargetRequest {
+  int32 track_id = 1;
+  string operator_id = 2;  // Optional
+}
+
+message ClearDesignationRequest {}
+
+message GetDesignationRequest {}
+
+message DesignateTargetResponse {
+  bool ok = 1;
+  int32 track_id = 2;         // Designated track ID; 0 means none
+  bool designated = 3;        // True when a designation is active
+  string cleared_track_id = 4; // Used by ClearDesignation to report previous ID
+}
+
+// ============================================================================
+// Mission Management
+// ============================================================================
+
+message StartMissionRequest {
+  string profile = 1;          // Optional mission profile name
+  int32 camera_source = 2;     // Camera index (default 0)
+  string mission_name = 3;     // Optional display name
+}
+
+message EndMissionRequest {
+  string reason = 1;           // Optional reason for ending mission
+}
+
+message GetMissionStatusRequest {}
+
+message MissionResponse {
+  bool ok = 1;
+  string session_id = 2;
+  string message = 3;
+  string error = 4;
+  double elapsed_s = 5;
+  string report_path = 6;
+  string report_url = 7;
+}
+
+message MissionStatusResponse {
+  bool active = 1;
+  string session_id = 2;
+  string profile = 3;
+  string started_at = 4;
+  double elapsed_s = 5;
+  int32 targets_engaged = 6;
+  string fire_chain_state = 7;
+}
+
+// ============================================================================
+// Safety Zone CRUD (No-Fire Zones)
+// ============================================================================
+
+message SafetyZoneMsg {
+  string zone_id = 1;
+  double center_yaw_deg = 2;
+  double center_pitch_deg = 3;
+  double radius_deg = 4;
+  string zone_type = 5;         // e.g. "no_fire"
+  bool found = 6;               // False when get_zone returns a 404
+  string error = 7;
+}
+
+message ListZonesRequest {}
+
+message ListZonesResponse {
+  repeated SafetyZoneMsg zones = 1;
+}
+
+message AddZoneRequest {
+  string zone_id = 1;           // Optional — auto-generated when empty
+  double center_yaw_deg = 2;
+  double center_pitch_deg = 3;
+  double radius_deg = 4;
+  string zone_type = 5;         // Default "no_fire"
+}
+
+message RemoveZoneRequest {
+  string zone_id = 1;
+}
+
+message GetZoneRequest {
+  string zone_id = 1;
+}
+
+message ZoneResponse {
+  bool ok = 1;
+  string zone_id = 2;
+  string error = 3;
 }

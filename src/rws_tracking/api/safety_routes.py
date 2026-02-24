@@ -14,7 +14,9 @@ GET    /api/safety/zones/<zone_id> — get one zone by ID
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import uuid
 
 from flask import Blueprint, current_app, jsonify, request
@@ -23,10 +25,70 @@ logger = logging.getLogger(__name__)
 
 safety_bp = Blueprint("safety", __name__, url_prefix="/api/safety")
 
+_NFZ_PERSIST_PATH = os.path.join("logs", "nfz_zones.json")
+
+
+def _save_zones(sm) -> None:
+    """Atomically persist the current NFZ zone list to disk.
+
+    Uses a write-to-temp-then-rename pattern so the file is never partially
+    written even if the process is killed mid-write.
+    """
+    try:
+        zones_data = [
+            {
+                "zone_id": z.zone_id,
+                "center_yaw_deg": z.center_yaw_deg,
+                "center_pitch_deg": z.center_pitch_deg,
+                "radius_deg": z.radius_deg,
+                "zone_type": z.zone_type,
+            }
+            for z in sm._nfz.zones
+        ]
+        os.makedirs(os.path.dirname(_NFZ_PERSIST_PATH), exist_ok=True)
+        tmp = _NFZ_PERSIST_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(zones_data, f, indent=2)
+        os.replace(tmp, _NFZ_PERSIST_PATH)
+        logger.debug("NFZ: persisted %d zones to %s", len(zones_data), _NFZ_PERSIST_PATH)
+    except Exception as exc:
+        logger.warning("NFZ: failed to persist zones: %s", exc)
+
+
+def load_persisted_zones(safety_manager) -> int:
+    """Load zones from the persist file into *safety_manager*.
+
+    Returns the number of zones loaded (0 if file missing or on error).
+    Called once at server startup after the pipeline is built.
+    """
+    if not os.path.exists(_NFZ_PERSIST_PATH):
+        return 0
+    try:
+        with open(_NFZ_PERSIST_PATH, encoding="utf-8") as f:
+            zones_data = json.load(f)
+        from ..types import SafetyZone
+        loaded = 0
+        for z in zones_data:
+            safety_manager.add_no_fire_zone(SafetyZone(**z))
+            loaded += 1
+        logger.info("NFZ: loaded %d persisted zones from %s", loaded, _NFZ_PERSIST_PATH)
+        return loaded
+    except Exception as exc:
+        logger.warning("NFZ: failed to load persisted zones: %s", exc)
+        return 0
+
 
 def _get_safety_manager():
-    """Return the SafetyManager from app extensions, or None."""
-    return current_app.extensions.get("safety_manager")
+    """Return the SafetyManager from app extensions, falling back to the live pipeline."""
+    sm = current_app.extensions.get("safety_manager")
+    if sm is not None:
+        return sm
+    api = current_app.extensions.get("tracking_api")
+    if api is not None:
+        pipeline = getattr(api, "pipeline", None)
+        if pipeline is not None:
+            return getattr(pipeline, "_safety_manager", None)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +209,7 @@ def add_zone():
         zone_type=zone_type,
     )
     sm.add_no_fire_zone(zone)
+    _save_zones(sm)
 
     # Emit SSE notification.
     try:
@@ -180,6 +243,8 @@ def remove_zone(zone_id: str):
     removed = sm.remove_no_fire_zone(zone_id)
     if not removed:
         return jsonify({"error": f"zone '{zone_id}' not found"}), 404
+
+    _save_zones(sm)
 
     # Emit SSE notification.
     try:

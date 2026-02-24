@@ -58,9 +58,14 @@ class TestTrackToLock:
 
 class TestLockToTrack:
     def test_large_error_drops_to_track(self, sm):
+        # Achieve lock
         for i in range(20):
             sm.update(_err(yaw=0.3, ts=i * 0.1), i * 0.1)
-        state = sm.update(_err(yaw=3.0, ts=3.0), 3.0)
+        # Sustained large error for > exit hysteresis (lock_hold_time_s * 0.5).
+        # Fixture uses lock_hold_time_s=0.5 so exit_hold=0.25s; run 0.3s to clear it.
+        state = None
+        for i in range(7):
+            state = sm.update(_err(yaw=3.0, ts=3.0 + i * 0.05), 3.0 + i * 0.05)
         assert state == TrackState.TRACK
 
 

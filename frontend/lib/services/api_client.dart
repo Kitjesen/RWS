@@ -74,6 +74,24 @@ class RwsApiClient {
     return false;
   }
 
+  // --- 云台角度控制 ---
+
+  /// POST /api/gimbal/position — 绝对角度指令 (偏航/俯仰)
+  Future<bool> setGimbalPosition(double yawDeg, double pitchDeg) async {
+    try {
+      final resp = await _client.post(
+        Uri.parse('$baseUrl/api/gimbal/position'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'yaw_deg': yawDeg, 'pitch_deg': pitchDeg}),
+      );
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return data['success'] ?? false;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   // --- 安全区域 ---
 
   Future<bool> addSafetyZone(SafetyZoneModel zone) async {
@@ -153,6 +171,16 @@ class RwsApiClient {
     return FireChainStatus(state: 'not_configured', canFire: false);
   }
 
+  Future<EngagementDwellStatus> getDwellStatus() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/fire/dwell'));
+      if (resp.statusCode == 200) {
+        return EngagementDwellStatus.fromJson(jsonDecode(resp.body));
+      }
+    } catch (_) {}
+    return const EngagementDwellStatus();
+  }
+
   Future<bool> armSystem(String operatorId) async {
     try {
       final resp = await _client.post(
@@ -217,6 +245,27 @@ class RwsApiClient {
       return {'go': false, 'error': 'HTTP ${resp.statusCode}'};
     } catch (e) {
       return {'go': false, 'error': e.toString()};
+    }
+  }
+
+  /// GET /api/selftest — typed variant returning go flag + structured check list.
+  /// Handles both HTTP 200 (all pass) and HTTP 424 (one or more failures).
+  Future<({bool go, List<SelfTestCheck> checks})> runSelftest() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/selftest'));
+      // Both 200 (GO) and 424 (NO-GO) carry a valid JSON body.
+      if (resp.statusCode == 200 || resp.statusCode == 424) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final go = data['go'] as bool? ?? false;
+        final rawChecks = data['checks'] as List<dynamic>? ?? [];
+        final checks = rawChecks
+            .map((j) => SelfTestCheck.fromJson(j as Map<String, dynamic>))
+            .toList();
+        return (go: go, checks: checks);
+      }
+      return (go: false, checks: <SelfTestCheck>[]);
+    } catch (_) {
+      return (go: false, checks: <SelfTestCheck>[]);
     }
   }
 
@@ -453,6 +502,21 @@ class RwsApiClient {
     } catch (_) {}
     return null;
   }
+
+  /// List all fire-event video clips.
+  Future<List<Map<String, dynamic>>> getClips() async {
+    try {
+      final resp = await _client.get(Uri.parse('$baseUrl/api/fire/clips'));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        return (data as List).cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// URL for downloading/viewing a specific clip.
+  String clipUrl(String filename) => '$baseUrl/api/fire/clips/$filename';
 
   /// Fetches the current effective configuration from GET /api/config.
   /// Returns null on any error.

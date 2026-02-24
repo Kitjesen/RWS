@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/tracking_models.dart';
 import 'api_client.dart';
+import 'event_stream.dart';
 
 class TrackingProvider extends ChangeNotifier {
   final RwsApiClient _api;
@@ -31,16 +32,35 @@ class TrackingProvider extends ChangeNotifier {
   // 目标指定状态 (C2)
   int? _designatedTrackId;
 
+  // 开火统计 — 每次 fire_executed SSE 事件自增
+  int _shotsFiredCount = 0;
+
+  // 上次配置热重载时间戳
+  DateTime? _lastConfigReload;
+
   // 禁射区列表
   List<SafetyZoneModel> _nfzZones = [];
 
+  // 交战驻留计时器状态
+  EngagementDwellStatus _dwellStatus = const EngagementDwellStatus();
+
   // 操作员心跳定时器 (armed 时每 5s 发送一次, 防止 watchdog 自动安全)
   Timer? _heartbeatTimer;
+
+  // 连续轮询失败计数器 — 超过阈值才标记离线，避免单次网络抖动导致状态闪烁
+  int _consecutiveFailures = 0;
+  static const int _maxFailuresBeforeOffline = 3;
+
+  // 指数退避: 连续失败时加倍轮询间隔，最长 10s，恢复后立即重置到基础间隔
+  static const Duration _pollIntervalBase = Duration(milliseconds: 200);
+  static const Duration _pollIntervalMax = Duration(seconds: 10);
+  Duration _currentPollInterval = _pollIntervalBase;
 
   // 误差历史 (用于图表)
   final List<double> yawErrorHistory = [];
   final List<double> pitchErrorHistory = [];
   final List<double> timestampHistory = [];
+  final List<String> _stateHistory = [];
   static const int maxHistory = 300; // 10s @ 30Hz
 
   TrackingProvider({required RwsApiClient api}) : _api = api;
@@ -58,16 +78,31 @@ class TrackingProvider extends ChangeNotifier {
   MissionStatus get missionStatus => _missionStatus;
   String? get lastReportPath => _lastReportPath;
   int? get designatedTrackId => _designatedTrackId;
+  int get shotsFiredCount => _shotsFiredCount;
+  DateTime? get lastConfigReload => _lastConfigReload;
   List<SafetyZoneModel> get nfzZones => _nfzZones;
+  EngagementDwellStatus get dwellStatus => _dwellStatus;
+  List<String> get stateHistory => _stateHistory;
 
   void startPolling({Duration interval = const Duration(milliseconds: 200)}) {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(interval, (_) => _poll());
+    _currentPollInterval = interval;
+    _schedulePoll();
+  }
+
+  /// Schedule the next poll as a single-shot timer so the interval can vary.
+  void _schedulePoll() {
+    _pollTimer = Timer(_currentPollInterval, () async {
+      await _poll();
+      // Re-schedule only if polling is still active (stopPolling sets timer=null).
+      if (_pollTimer != null) _schedulePoll();
+    });
   }
 
   void stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _currentPollInterval = _pollIntervalBase;
     _stopHeartbeat();
   }
 
@@ -102,6 +137,8 @@ class TrackingProvider extends ChangeNotifier {
   Future<void> _poll() async {
     try {
       _status = await _api.getStatus();
+      _consecutiveFailures = 0;
+      _currentPollInterval = _pollIntervalBase; // recover to full speed on success
       _connected = true;
       _error = '';
 
@@ -110,10 +147,12 @@ class TrackingProvider extends ChangeNotifier {
       yawErrorHistory.add(_status.yawErrorDeg);
       pitchErrorHistory.add(_status.pitchErrorDeg);
       timestampHistory.add(now);
+      _stateHistory.add(_status.state);
       if (yawErrorHistory.length > maxHistory) {
         yawErrorHistory.removeAt(0);
         pitchErrorHistory.removeAt(0);
         timestampHistory.removeAt(0);
+        _stateHistory.removeAt(0);
       }
 
       notifyListeners();
@@ -121,9 +160,16 @@ class TrackingProvider extends ChangeNotifier {
       // 并行拉取威胁、健康、火控 (不阻塞主状态)
       _pollExtended();
     } catch (e) {
-      _connected = false;
-      _error = e.toString();
-      notifyListeners();
+      _consecutiveFailures++;
+      if (_consecutiveFailures >= _maxFailuresBeforeOffline) {
+        _connected = false;
+        _error = e.toString();
+        // Exponential backoff: double interval on each failure, cap at max.
+        final nextMs = (_currentPollInterval.inMilliseconds * 2)
+            .clamp(0, _pollIntervalMax.inMilliseconds);
+        _currentPollInterval = Duration(milliseconds: nextMs);
+        notifyListeners();
+      }
     }
   }
 
@@ -134,6 +180,7 @@ class TrackingProvider extends ChangeNotifier {
         _api.getSubsystemHealth(),
         _api.getFireStatus(),
         _api.getDesignatedTrackId(),
+        _api.getDwellStatus(),
       ]);
       final threatResult = results[0] as ({List<ThreatEntry> threats, bool pipelineActive});
       _threats = threatResult.threats;
@@ -142,6 +189,7 @@ class TrackingProvider extends ChangeNotifier {
       final newFireStatus = results[2] as FireChainStatus;
       _fireStatus = newFireStatus;
       _designatedTrackId = results[3] as int?;
+      _dwellStatus = results[4] as EngagementDwellStatus;
       _updateHeartbeatTimer();
       notifyListeners();
     } catch (_) {
@@ -200,6 +248,16 @@ class TrackingProvider extends ChangeNotifier {
   Future<bool> stopTracking() async {
     try {
       return await _api.stopTracking();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> setGimbalPosition(double yawDeg, double pitchDeg) async {
+    try {
+      return await _api.setGimbalPosition(yawDeg, pitchDeg);
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -325,6 +383,80 @@ class TrackingProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       return false;
+    }
+  }
+
+  // --- SSE 事件即时响应 ---
+  // Called from main.dart when the EventStreamService emits an event.
+  // This provides sub-200ms updates on critical state changes without
+  // waiting for the next polling cycle.
+  void onSseEvent(RwsEvent event) {
+    switch (event.type) {
+      case 'fire_chain_state':
+        // Update fire status directly from event data — fastest possible update
+        final stateStr = event.data['state'] as String?;
+        if (stateStr != null) {
+          _fireStatus = FireChainStatus(
+            state: stateStr,
+            canFire: event.data['can_fire'] as bool? ?? false,
+            operatorId: event.data['operator_id'] as String?,
+          );
+          _updateHeartbeatTimer();
+          notifyListeners();
+        }
+      case 'operator_timeout':
+        // Watchdog fired — force to safe state immediately in UI
+        _fireStatus = FireChainStatus(state: 'safe', canFire: false);
+        _stopHeartbeat();
+        notifyListeners();
+      case 'health_degraded':
+        // Re-fetch health subsystems immediately
+        _api.getSubsystemHealth().then((h) {
+          _health = h;
+          notifyListeners();
+        }).catchError((_) {});
+      case 'threat_detected':
+        // New high-threat target — re-fetch threat queue immediately
+        _api.getThreats().then((result) {
+          _threats = result.threats;
+          _pipelineActive = result.pipelineActive;
+          notifyListeners();
+        }).catchError((_) {});
+      case 'target_neutralized':
+        // Target lifecycle changed — refresh threats + mission status
+        _pollExtended();
+      case 'mission_started':
+      case 'mission_ended':
+        // Mission lifecycle changed — refresh mission status
+        _api.getMissionStatus().then((ms) {
+          _missionStatus = ms;
+          notifyListeners();
+        }).catchError((_) {});
+      case 'nfz_added':
+      case 'nfz_removed':
+        // Safety zone changed — refresh NFZ list
+        loadNfzZones();
+      case 'fire_executed':
+        // 射击已执行 — 累计开火次数，同步刷新任务状态（更新 targets_engaged 等统计）
+        _shotsFiredCount++;
+        _api.getMissionStatus().then((ms) {
+          _missionStatus = ms;
+          notifyListeners();
+        }).catchError((_) {});
+        notifyListeners();
+      case 'target_designated':
+        // 操作员指定目标 — 直接从事件数据同步，避免等待下次轮询
+        final trackId = event.data['track_id'];
+        if (trackId != null) {
+          _designatedTrackId = trackId is int ? trackId : int.tryParse(trackId.toString());
+        } else {
+          _designatedTrackId = null; // 清除指定
+        }
+        notifyListeners();
+      case 'config_reloaded':
+        // 配置热重载已应用 — 记录时间戳，UI 可据此展示"配置已更新"提示
+        _lastConfigReload = DateTime.now();
+        notifyListeners();
     }
   }
 

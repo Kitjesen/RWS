@@ -13,6 +13,7 @@ class SelectorWeights:
     track_age: float = 0.15
     class_weight: float = 0.10
     switch_penalty: float = 0.30
+    velocity_approach: float = 0.12  # bonus for targets moving toward frame center
 
 
 @dataclass(frozen=True)

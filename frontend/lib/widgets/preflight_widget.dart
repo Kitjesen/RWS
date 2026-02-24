@@ -1,143 +1,127 @@
-/// 任务前自检面板 — Pre-flight Go/No-Go check.
+/// 任务前自检面板 — runs GET /api/selftest and shows a go/no-go checklist.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import '../models/tracking_models.dart';
 import '../services/api_client.dart';
-import '../services/tracking_provider.dart';
+
+/// Maps known selftest check names to their Chinese display labels.
+const _nameTranslations = <String, String>{
+  'pipeline_imports': '模块导入',
+  'shooting_chain': '射击链',
+  'audit_logger': '审计日志',
+  'health_monitor': '健康监视',
+  'lifecycle_manager': '生命周期管理',
+  'logs_dir_writable': '日志目录',
+  'config_valid': '配置验证',
+};
 
 class PreflightWidget extends StatefulWidget {
-  const PreflightWidget({super.key});
+  final RwsApiClient api;
+
+  const PreflightWidget({super.key, required this.api});
 
   @override
   State<PreflightWidget> createState() => _PreflightWidgetState();
 }
 
 class _PreflightWidgetState extends State<PreflightWidget> {
-  Map<String, dynamic>? _result;
-  bool _loading = false;
+  bool _running = false;
+  bool _go = false;
+  List<SelfTestCheck> _checks = [];
+  bool _ran = false;
 
-  RwsApiClient get _api => context.read<TrackingProvider>().api;
-
-  Future<void> _runSelfTest() async {
+  Future<void> _runSelftest() async {
     setState(() {
-      _loading = true;
-      _result = null;
+      _running = true;
+      _ran = false;
+      _checks = [];
     });
+
     try {
-      final r = await _api.runSelfTest();
-      if (mounted) setState(() => _result = r);
-    } catch (e) {
-      if (mounted) setState(() => _result = {'go': false, 'error': e.toString()});
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      final result = await widget.api.runSelftest();
+      if (mounted) {
+        setState(() {
+          _running = false;
+          _ran = true;
+          _go = result.go;
+          _checks = result.checks;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _running = false;
+          _ran = true;
+          _go = false;
+          _checks = [];
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final checks = _result?['checks'] as List<dynamic>?;
-    final allOk = _result?['go'] == true;
-    final errorMsg = _result?['error'] as String?;
 
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // --- 标题行 ---
+            // --- Header row ---
             Row(
               children: [
-                Icon(
-                  _result == null
-                      ? Icons.checklist
-                      : (allOk ? Icons.check_circle : Icons.cancel),
-                  color: _result == null
-                      ? theme.colorScheme.primary
-                      : (allOk ? Colors.green : Colors.red),
-                  size: 20,
-                ),
+                Icon(Icons.flight_takeoff,
+                    color: theme.colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('任务前自检 Pre-flight',
-                      style: theme.textTheme.titleMedium),
-                ),
-                if (_result != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: (allOk ? Colors.green : Colors.red)
-                          .withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      allOk ? 'GO' : 'NO-GO',
-                      style: TextStyle(
-                        color: allOk ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 1,
-                      ),
-                    ),
+                  child: Text(
+                    '任务前自检',
+                    style: theme.textTheme.titleMedium,
                   ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _running ? null : _runSelftest,
+                  icon: _running
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.play_arrow, size: 16),
+                  label: Text(
+                    _running ? '检测中...' : '运行自检',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
               ],
             ),
-            const Divider(),
 
-            // --- 自检结果列表 ---
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 10),
-                    Text('自检中...', style: TextStyle(fontSize: 13)),
-                  ],
-                ),
-              )
-            else if (_result == null)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  '点击运行以检查各子系统状态',
-                  style: TextStyle(color: Colors.grey, fontSize: 13),
-                ),
-              )
-            else if (errorMsg != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  '自检失败: $errorMsg',
-                  style: const TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              )
-            else if (checks != null)
-              ...checks.map((e) => _CheckRow(
-                    entry: e as Map<String, dynamic>,
-                  )),
+            // --- Progress indicator while running ---
+            if (_running) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
 
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _loading ? null : _runSelfTest,
-                icon: _loading
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.play_circle_outline, size: 18),
-                label: Text(_result == null ? '运行自检' : '重新运行'),
-              ),
-            ),
+            // --- Results ---
+            if (_ran && !_running) ...[
+              const SizedBox(height: 12),
+              _GoBanner(go: _go),
+              if (_checks.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 6),
+                ..._checks.map((c) => _CheckRow(check: c)),
+              ],
+            ],
           ],
         ),
       ),
@@ -145,49 +129,97 @@ class _PreflightWidgetState extends State<PreflightWidget> {
   }
 }
 
-class _CheckRow extends StatelessWidget {
-  final Map<String, dynamic> entry;
+// --- GO / NO-GO colored banner ---
 
-  const _CheckRow({required this.entry});
+class _GoBanner extends StatelessWidget {
+  final bool go;
+
+  const _GoBanner({required this.go});
 
   @override
   Widget build(BuildContext context) {
-    final ok = entry['status'] == 'pass';
-    final name = entry['name'] as String? ?? '?';
-    final message = entry['message'] as String? ?? '';
-    final elapsedMs = entry['elapsed_ms'];
-    final icon = ok ? Icons.check_circle_outline : Icons.error_outline;
-    final color = ok ? Colors.green : Colors.red;
+    final color = go ? Colors.green : Colors.red;
+    final label = go ? '系统就绪  GO' : '系统异常  NO-GO';
+    final icon = go ? Icons.check_circle_outline : Icons.cancel_outlined;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 130,
-            child: Text(
-              name,
-              style: TextStyle(
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  color: color.withValues(alpha: 0.9)),
-              overflow: TextOverflow.ellipsis,
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              letterSpacing: 0.5,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- Individual check row ---
+
+class _CheckRow extends StatelessWidget {
+  final SelfTestCheck check;
+
+  const _CheckRow({required this.check});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final passed = check.passed;
+    final color = passed ? Colors.green : Colors.red;
+    final icon = passed ? Icons.check_circle : Icons.cancel;
+    final displayName = _nameTranslations[check.name] ?? check.name;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(fontSize: 11, color: Colors.white54),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+                if (check.message.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      check.message,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white60,
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          if (elapsedMs != null)
-            Text(
-              '${elapsedMs}ms',
-              style: const TextStyle(fontSize: 10, color: Colors.white38),
-            ),
         ],
       ),
     );

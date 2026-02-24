@@ -11,7 +11,15 @@ health_bp = Blueprint("health_ext", __name__)
 
 
 def _get_monitor():
-    return current_app.extensions.get("health_monitor")
+    monitor = current_app.extensions.get("health_monitor")
+    if monitor is not None:
+        return monitor
+    api = current_app.extensions.get("tracking_api")
+    if api is not None:
+        pipeline = getattr(api, "pipeline", None)
+        if pipeline is not None:
+            return getattr(pipeline, "_health_monitor", None)
+    return None
 
 
 def _get_profile_manager():

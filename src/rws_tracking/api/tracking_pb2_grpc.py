@@ -80,6 +80,106 @@ class TrackingServiceStub(object):
                 request_serializer=tracking__pb2.StreamStatusRequest.SerializeToString,
                 response_deserializer=tracking__pb2.StatusUpdate.FromString,
                 _registered_method=True)
+        self.StreamFrames = channel.unary_stream(
+                '/rws_tracking.TrackingService/StreamFrames',
+                request_serializer=tracking__pb2.StreamFramesRequest.SerializeToString,
+                response_deserializer=tracking__pb2.VideoFrame.FromString,
+                _registered_method=True)
+        self.GetSafetyStatus = channel.unary_unary(
+                '/rws_tracking.TrackingService/GetSafetyStatus',
+                request_serializer=tracking__pb2.GetSafetyStatusRequest.SerializeToString,
+                response_deserializer=tracking__pb2.GetSafetyStatusResponse.FromString,
+                _registered_method=True)
+        self.SetOperatorAuth = channel.unary_unary(
+                '/rws_tracking.TrackingService/SetOperatorAuth',
+                request_serializer=tracking__pb2.SetOperatorAuthRequest.SerializeToString,
+                response_deserializer=tracking__pb2.SetOperatorAuthResponse.FromString,
+                _registered_method=True)
+        self.EmergencyStop = channel.unary_unary(
+                '/rws_tracking.TrackingService/EmergencyStop',
+                request_serializer=tracking__pb2.EmergencyStopRequest.SerializeToString,
+                response_deserializer=tracking__pb2.EmergencyStopResponse.FromString,
+                _registered_method=True)
+        self.GetThreatAssessment = channel.unary_unary(
+                '/rws_tracking.TrackingService/GetThreatAssessment',
+                request_serializer=tracking__pb2.GetThreatAssessmentRequest.SerializeToString,
+                response_deserializer=tracking__pb2.GetThreatAssessmentResponse.FromString,
+                _registered_method=True)
+        self.ArmSystem = channel.unary_unary(
+                '/rws_tracking.TrackingService/ArmSystem',
+                request_serializer=tracking__pb2.ArmRequest.SerializeToString,
+                response_deserializer=tracking__pb2.FireControlResponse.FromString,
+                _registered_method=True)
+        self.SafeSystem = channel.unary_unary(
+                '/rws_tracking.TrackingService/SafeSystem',
+                request_serializer=tracking__pb2.SafeRequest.SerializeToString,
+                response_deserializer=tracking__pb2.FireControlResponse.FromString,
+                _registered_method=True)
+        self.RequestFire = channel.unary_unary(
+                '/rws_tracking.TrackingService/RequestFire',
+                request_serializer=tracking__pb2.RequestFireRequest.SerializeToString,
+                response_deserializer=tracking__pb2.FireControlResponse.FromString,
+                _registered_method=True)
+        self.GetFireStatus = channel.unary_unary(
+                '/rws_tracking.TrackingService/GetFireStatus',
+                request_serializer=tracking__pb2.GetFireStatusRequest.SerializeToString,
+                response_deserializer=tracking__pb2.FireControlResponse.FromString,
+                _registered_method=True)
+        self.OperatorHeartbeat = channel.unary_unary(
+                '/rws_tracking.TrackingService/OperatorHeartbeat',
+                request_serializer=tracking__pb2.OperatorHeartbeatRequest.SerializeToString,
+                response_deserializer=tracking__pb2.OperatorHeartbeatResponse.FromString,
+                _registered_method=True)
+        self.DesignateTarget = channel.unary_unary(
+                '/rws_tracking.TrackingService/DesignateTarget',
+                request_serializer=tracking__pb2.DesignateTargetRequest.SerializeToString,
+                response_deserializer=tracking__pb2.DesignateTargetResponse.FromString,
+                _registered_method=True)
+        self.ClearDesignation = channel.unary_unary(
+                '/rws_tracking.TrackingService/ClearDesignation',
+                request_serializer=tracking__pb2.ClearDesignationRequest.SerializeToString,
+                response_deserializer=tracking__pb2.DesignateTargetResponse.FromString,
+                _registered_method=True)
+        self.GetDesignation = channel.unary_unary(
+                '/rws_tracking.TrackingService/GetDesignation',
+                request_serializer=tracking__pb2.GetDesignationRequest.SerializeToString,
+                response_deserializer=tracking__pb2.DesignateTargetResponse.FromString,
+                _registered_method=True)
+        self.StartMission = channel.unary_unary(
+                '/rws_tracking.TrackingService/StartMission',
+                request_serializer=tracking__pb2.StartMissionRequest.SerializeToString,
+                response_deserializer=tracking__pb2.MissionResponse.FromString,
+                _registered_method=True)
+        self.EndMission = channel.unary_unary(
+                '/rws_tracking.TrackingService/EndMission',
+                request_serializer=tracking__pb2.EndMissionRequest.SerializeToString,
+                response_deserializer=tracking__pb2.MissionResponse.FromString,
+                _registered_method=True)
+        self.GetMissionStatus = channel.unary_unary(
+                '/rws_tracking.TrackingService/GetMissionStatus',
+                request_serializer=tracking__pb2.GetMissionStatusRequest.SerializeToString,
+                response_deserializer=tracking__pb2.MissionStatusResponse.FromString,
+                _registered_method=True)
+        self.ListZones = channel.unary_unary(
+                '/rws_tracking.TrackingService/ListZones',
+                request_serializer=tracking__pb2.ListZonesRequest.SerializeToString,
+                response_deserializer=tracking__pb2.ListZonesResponse.FromString,
+                _registered_method=True)
+        self.AddZone = channel.unary_unary(
+                '/rws_tracking.TrackingService/AddZone',
+                request_serializer=tracking__pb2.AddZoneRequest.SerializeToString,
+                response_deserializer=tracking__pb2.ZoneResponse.FromString,
+                _registered_method=True)
+        self.RemoveZone = channel.unary_unary(
+                '/rws_tracking.TrackingService/RemoveZone',
+                request_serializer=tracking__pb2.RemoveZoneRequest.SerializeToString,
+                response_deserializer=tracking__pb2.ZoneResponse.FromString,
+                _registered_method=True)
+        self.GetZone = channel.unary_unary(
+                '/rws_tracking.TrackingService/GetZone',
+                request_serializer=tracking__pb2.GetZoneRequest.SerializeToString,
+                response_deserializer=tracking__pb2.SafetyZoneMsg.FromString,
+                _registered_method=True)
 
 
 class TrackingServiceServicer(object):
@@ -149,6 +249,158 @@ class TrackingServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def StreamFrames(self, request, context):
+        """Stream video frames (annotated JPEG)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetSafetyStatus(self, request, context):
+        """Get safety status
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetOperatorAuth(self, request, context):
+        """Set operator authorization
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EmergencyStop(self, request, context):
+        """Emergency stop
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetThreatAssessment(self, request, context):
+        """Get threat assessment
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ArmSystem(self, request, context):
+        """-------------------------------------------------------------------------
+        Fire control
+        -------------------------------------------------------------------------
+
+        Arm the shooting chain (SAFE -> ARMED)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SafeSystem(self, request, context):
+        """Return the shooting chain to SAFE state
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RequestFire(self, request, context):
+        """Request fire (FIRE_AUTHORIZED -> FIRE_REQUESTED)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetFireStatus(self, request, context):
+        """Get current fire chain status
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def OperatorHeartbeat(self, request, context):
+        """Operator heartbeat (prevent watchdog timeout)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DesignateTarget(self, request, context):
+        """Designate a specific target for engagement (C2 override)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ClearDesignation(self, request, context):
+        """Clear operator target designation (return to auto-selection)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDesignation(self, request, context):
+        """Get current designation status
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def StartMission(self, request, context):
+        """-------------------------------------------------------------------------
+        Mission management
+        -------------------------------------------------------------------------
+
+        Start a new mission session
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EndMission(self, request, context):
+        """End the active mission and generate debrief report
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetMissionStatus(self, request, context):
+        """Get current mission status
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListZones(self, request, context):
+        """-------------------------------------------------------------------------
+        Safety zone CRUD (No-Fire Zones)
+        -------------------------------------------------------------------------
+
+        List all active no-fire zones
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddZone(self, request, context):
+        """Add a new no-fire zone
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RemoveZone(self, request, context):
+        """Remove a no-fire zone by ID
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetZone(self, request, context):
+        """Get a specific no-fire zone by ID
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_TrackingServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -196,6 +448,106 @@ def add_TrackingServiceServicer_to_server(servicer, server):
                     servicer.StreamStatus,
                     request_deserializer=tracking__pb2.StreamStatusRequest.FromString,
                     response_serializer=tracking__pb2.StatusUpdate.SerializeToString,
+            ),
+            'StreamFrames': grpc.unary_stream_rpc_method_handler(
+                    servicer.StreamFrames,
+                    request_deserializer=tracking__pb2.StreamFramesRequest.FromString,
+                    response_serializer=tracking__pb2.VideoFrame.SerializeToString,
+            ),
+            'GetSafetyStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSafetyStatus,
+                    request_deserializer=tracking__pb2.GetSafetyStatusRequest.FromString,
+                    response_serializer=tracking__pb2.GetSafetyStatusResponse.SerializeToString,
+            ),
+            'SetOperatorAuth': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetOperatorAuth,
+                    request_deserializer=tracking__pb2.SetOperatorAuthRequest.FromString,
+                    response_serializer=tracking__pb2.SetOperatorAuthResponse.SerializeToString,
+            ),
+            'EmergencyStop': grpc.unary_unary_rpc_method_handler(
+                    servicer.EmergencyStop,
+                    request_deserializer=tracking__pb2.EmergencyStopRequest.FromString,
+                    response_serializer=tracking__pb2.EmergencyStopResponse.SerializeToString,
+            ),
+            'GetThreatAssessment': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetThreatAssessment,
+                    request_deserializer=tracking__pb2.GetThreatAssessmentRequest.FromString,
+                    response_serializer=tracking__pb2.GetThreatAssessmentResponse.SerializeToString,
+            ),
+            'ArmSystem': grpc.unary_unary_rpc_method_handler(
+                    servicer.ArmSystem,
+                    request_deserializer=tracking__pb2.ArmRequest.FromString,
+                    response_serializer=tracking__pb2.FireControlResponse.SerializeToString,
+            ),
+            'SafeSystem': grpc.unary_unary_rpc_method_handler(
+                    servicer.SafeSystem,
+                    request_deserializer=tracking__pb2.SafeRequest.FromString,
+                    response_serializer=tracking__pb2.FireControlResponse.SerializeToString,
+            ),
+            'RequestFire': grpc.unary_unary_rpc_method_handler(
+                    servicer.RequestFire,
+                    request_deserializer=tracking__pb2.RequestFireRequest.FromString,
+                    response_serializer=tracking__pb2.FireControlResponse.SerializeToString,
+            ),
+            'GetFireStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetFireStatus,
+                    request_deserializer=tracking__pb2.GetFireStatusRequest.FromString,
+                    response_serializer=tracking__pb2.FireControlResponse.SerializeToString,
+            ),
+            'OperatorHeartbeat': grpc.unary_unary_rpc_method_handler(
+                    servicer.OperatorHeartbeat,
+                    request_deserializer=tracking__pb2.OperatorHeartbeatRequest.FromString,
+                    response_serializer=tracking__pb2.OperatorHeartbeatResponse.SerializeToString,
+            ),
+            'DesignateTarget': grpc.unary_unary_rpc_method_handler(
+                    servicer.DesignateTarget,
+                    request_deserializer=tracking__pb2.DesignateTargetRequest.FromString,
+                    response_serializer=tracking__pb2.DesignateTargetResponse.SerializeToString,
+            ),
+            'ClearDesignation': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClearDesignation,
+                    request_deserializer=tracking__pb2.ClearDesignationRequest.FromString,
+                    response_serializer=tracking__pb2.DesignateTargetResponse.SerializeToString,
+            ),
+            'GetDesignation': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDesignation,
+                    request_deserializer=tracking__pb2.GetDesignationRequest.FromString,
+                    response_serializer=tracking__pb2.DesignateTargetResponse.SerializeToString,
+            ),
+            'StartMission': grpc.unary_unary_rpc_method_handler(
+                    servicer.StartMission,
+                    request_deserializer=tracking__pb2.StartMissionRequest.FromString,
+                    response_serializer=tracking__pb2.MissionResponse.SerializeToString,
+            ),
+            'EndMission': grpc.unary_unary_rpc_method_handler(
+                    servicer.EndMission,
+                    request_deserializer=tracking__pb2.EndMissionRequest.FromString,
+                    response_serializer=tracking__pb2.MissionResponse.SerializeToString,
+            ),
+            'GetMissionStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetMissionStatus,
+                    request_deserializer=tracking__pb2.GetMissionStatusRequest.FromString,
+                    response_serializer=tracking__pb2.MissionStatusResponse.SerializeToString,
+            ),
+            'ListZones': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListZones,
+                    request_deserializer=tracking__pb2.ListZonesRequest.FromString,
+                    response_serializer=tracking__pb2.ListZonesResponse.SerializeToString,
+            ),
+            'AddZone': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddZone,
+                    request_deserializer=tracking__pb2.AddZoneRequest.FromString,
+                    response_serializer=tracking__pb2.ZoneResponse.SerializeToString,
+            ),
+            'RemoveZone': grpc.unary_unary_rpc_method_handler(
+                    servicer.RemoveZone,
+                    request_deserializer=tracking__pb2.RemoveZoneRequest.FromString,
+                    response_serializer=tracking__pb2.ZoneResponse.SerializeToString,
+            ),
+            'GetZone': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetZone,
+                    request_deserializer=tracking__pb2.GetZoneRequest.FromString,
+                    response_serializer=tracking__pb2.SafetyZoneMsg.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -442,6 +794,546 @@ class TrackingService(object):
             '/rws_tracking.TrackingService/StreamStatus',
             tracking__pb2.StreamStatusRequest.SerializeToString,
             tracking__pb2.StatusUpdate.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StreamFrames(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/rws_tracking.TrackingService/StreamFrames',
+            tracking__pb2.StreamFramesRequest.SerializeToString,
+            tracking__pb2.VideoFrame.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSafetyStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/GetSafetyStatus',
+            tracking__pb2.GetSafetyStatusRequest.SerializeToString,
+            tracking__pb2.GetSafetyStatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetOperatorAuth(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/SetOperatorAuth',
+            tracking__pb2.SetOperatorAuthRequest.SerializeToString,
+            tracking__pb2.SetOperatorAuthResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EmergencyStop(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/EmergencyStop',
+            tracking__pb2.EmergencyStopRequest.SerializeToString,
+            tracking__pb2.EmergencyStopResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetThreatAssessment(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/GetThreatAssessment',
+            tracking__pb2.GetThreatAssessmentRequest.SerializeToString,
+            tracking__pb2.GetThreatAssessmentResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ArmSystem(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/ArmSystem',
+            tracking__pb2.ArmRequest.SerializeToString,
+            tracking__pb2.FireControlResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SafeSystem(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/SafeSystem',
+            tracking__pb2.SafeRequest.SerializeToString,
+            tracking__pb2.FireControlResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RequestFire(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/RequestFire',
+            tracking__pb2.RequestFireRequest.SerializeToString,
+            tracking__pb2.FireControlResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetFireStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/GetFireStatus',
+            tracking__pb2.GetFireStatusRequest.SerializeToString,
+            tracking__pb2.FireControlResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def OperatorHeartbeat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/OperatorHeartbeat',
+            tracking__pb2.OperatorHeartbeatRequest.SerializeToString,
+            tracking__pb2.OperatorHeartbeatResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DesignateTarget(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/DesignateTarget',
+            tracking__pb2.DesignateTargetRequest.SerializeToString,
+            tracking__pb2.DesignateTargetResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClearDesignation(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/ClearDesignation',
+            tracking__pb2.ClearDesignationRequest.SerializeToString,
+            tracking__pb2.DesignateTargetResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDesignation(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/GetDesignation',
+            tracking__pb2.GetDesignationRequest.SerializeToString,
+            tracking__pb2.DesignateTargetResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def StartMission(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/StartMission',
+            tracking__pb2.StartMissionRequest.SerializeToString,
+            tracking__pb2.MissionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EndMission(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/EndMission',
+            tracking__pb2.EndMissionRequest.SerializeToString,
+            tracking__pb2.MissionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetMissionStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/GetMissionStatus',
+            tracking__pb2.GetMissionStatusRequest.SerializeToString,
+            tracking__pb2.MissionStatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListZones(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/ListZones',
+            tracking__pb2.ListZonesRequest.SerializeToString,
+            tracking__pb2.ListZonesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddZone(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/AddZone',
+            tracking__pb2.AddZoneRequest.SerializeToString,
+            tracking__pb2.ZoneResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RemoveZone(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/RemoveZone',
+            tracking__pb2.RemoveZoneRequest.SerializeToString,
+            tracking__pb2.ZoneResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetZone(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rws_tracking.TrackingService/GetZone',
+            tracking__pb2.GetZoneRequest.SerializeToString,
+            tracking__pb2.SafetyZoneMsg.FromString,
             options,
             channel_credentials,
             insecure,

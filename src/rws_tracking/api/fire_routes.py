@@ -13,14 +13,54 @@ from pathlib import Path
 
 from flask import Blueprint, Response, current_app, jsonify, request, send_file
 
+
+def _check_fire_rate_limit():
+    """Return a 429 response if the caller has exceeded the fire-endpoint rate limit.
+
+    Uses the ``fire_rate_limiter`` stored in ``current_app.extensions`` (set by
+    ``create_flask_app``).  Falls back gracefully if the limiter is absent so
+    the Blueprint can be mounted on a bare Flask app in tests without issues.
+
+    Returns None when the request is allowed, or a (Response, 429) tuple when
+    the limit is exceeded.
+    """
+    limiter = current_app.extensions.get("fire_rate_limiter")
+    if limiter is None:
+        return None
+    key = request.remote_addr or "unknown"
+    if not limiter.is_allowed(key):
+        return jsonify({"error": "Rate limit exceeded"}), 429
+    return None
+
 logger = logging.getLogger(__name__)
 
 fire_bp = Blueprint("fire", __name__, url_prefix="/api/fire")
 
 
 def _get_chain():
-    """Get ShootingChain from app extensions, or None."""
-    return current_app.extensions.get("shooting_chain")
+    """Get ShootingChain from app extensions, falling back to the live pipeline."""
+    chain = current_app.extensions.get("shooting_chain")
+    if chain is not None:
+        return chain
+    api = current_app.extensions.get("tracking_api")
+    if api is not None:
+        pipeline = getattr(api, "pipeline", None)
+        if pipeline is not None:
+            return getattr(pipeline, "_shooting_chain", None)
+    return None
+
+
+def _get_iff():
+    """Get IFFChecker from app extensions, falling back to the live pipeline."""
+    iff = current_app.extensions.get("iff_checker")
+    if iff is not None:
+        return iff
+    api = current_app.extensions.get("tracking_api")
+    if api is not None:
+        pipeline = getattr(api, "pipeline", None)
+        if pipeline is not None:
+            return getattr(pipeline, "_iff_checker", None)
+    return None
 
 
 @fire_bp.route("/status", methods=["GET"])
@@ -39,6 +79,9 @@ def get_status():
 @fire_bp.route("/arm", methods=["POST"])
 def arm():
     """ARM the system.  Body: {"operator_id": "op1"}"""
+    rate_err = _check_fire_rate_limit()
+    if rate_err is not None:
+        return rate_err
     chain = _get_chain()
     if chain is None:
         return jsonify({"error": "shooting_chain not configured"}), 503
@@ -57,6 +100,9 @@ def arm():
 @fire_bp.route("/safe", methods=["POST"])
 def make_safe():
     """Return to SAFE.  Body: {"reason": "optional"}"""
+    rate_err = _check_fire_rate_limit()
+    if rate_err is not None:
+        return rate_err
     chain = _get_chain()
     if chain is None:
         return jsonify({"error": "shooting_chain not configured"}), 503
@@ -72,6 +118,9 @@ def request_fire():
 
     Returns 403 if not in FIRE_AUTHORIZED state.
     """
+    rate_err = _check_fire_rate_limit()
+    if rate_err is not None:
+        return rate_err
     chain = _get_chain()
     if chain is None:
         return jsonify({"error": "shooting_chain not configured"}), 503
@@ -117,7 +166,7 @@ def iff_mark_friendly():
 
     Body: {"track_id": 3}
     """
-    iff = current_app.extensions.get("iff_checker")
+    iff = _get_iff()
     if iff is None:
         return jsonify({"error": "iff_checker not configured"}), 503
     data = request.get_json(silent=True) or {}
@@ -139,7 +188,7 @@ def iff_unmark_friendly():
 
     Body: {"track_id": 3}
     """
-    iff = current_app.extensions.get("iff_checker")
+    iff = _get_iff()
     if iff is None:
         return jsonify({"error": "iff_checker not configured"}), 503
     data = request.get_json(silent=True) or {}
@@ -158,7 +207,7 @@ def iff_unmark_friendly():
 @fire_bp.route("/iff/status", methods=["GET"])
 def iff_status():
     """Return the list of operator-designated friendly track IDs."""
-    iff = current_app.extensions.get("iff_checker")
+    iff = _get_iff()
     if iff is None:
         return jsonify({"error": "iff_checker not configured"}), 503
     return jsonify({"friendly_track_ids": iff.friendly_track_ids})
@@ -176,6 +225,12 @@ def operator_heartbeat():
         return jsonify({"error": "operator_id required"}), 400
 
     sm = current_app.extensions.get("safety_manager")
+    if sm is None:
+        api = current_app.extensions.get("tracking_api")
+        if api is not None:
+            pipeline = getattr(api, "pipeline", None)
+            if pipeline is not None:
+                sm = getattr(pipeline, "_safety_manager", None)
     if sm is not None and hasattr(sm, "interlock"):
         sm.interlock.operator_heartbeat()
 
@@ -272,6 +327,31 @@ def _get_pipeline():
     if api is not None:
         return getattr(api, "pipeline", None)
     return None
+
+
+@fire_bp.route("/dwell", methods=["GET"])
+def get_dwell_status():
+    """Return engagement dwell timer status.
+
+    While the pipeline has a target in LOCK + fire_authorized, a dwell timer
+    counts up to ``engagement_dwell_time_s``.  This endpoint exposes the
+    current fraction so the UI can show a countdown progress bar.
+
+    Response schema::
+
+        {
+          "active": true,         // true when dwell is running
+          "track_id": 5,          // track being dwelled (null when inactive)
+          "elapsed_s": 1.23,      // seconds elapsed
+          "total_s": 2.0,         // configured dwell duration
+          "fraction": 0.615       // elapsed / total [0.0, 1.0]
+        }
+    """
+    pipeline = _get_pipeline()
+    if pipeline is None:
+        return jsonify({"active": False, "track_id": None,
+                        "elapsed_s": 0.0, "total_s": 0.0, "fraction": 0.0})
+    return jsonify(pipeline.dwell_status)
 
 
 @fire_bp.route("/designate", methods=["POST"])

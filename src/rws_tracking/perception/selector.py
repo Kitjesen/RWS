@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from ..config import SelectorConfig
 from ..types import TargetObservation, Track
@@ -35,12 +36,36 @@ class WeightedTargetSelector:
         size = min(track.bbox.area / max(self._w * self._h, 1.0), 1.0)
         age_norm = min(track.age_frames / max(self._cfg.age_norm_frames, 1), 1.0)
         class_bonus = self._cfg.class_weights().get(track.class_id, 0.0)
-        score = (
+
+        # Velocity approach score: reward targets moving toward frame center.
+        # A target closing on the crosshair is a higher threat and easier to lock.
+        # Score = 0 (moving away) .. 0.5 (stationary) .. 1.0 (approaching fast).
+        vx, vy = track.velocity_px_per_s
+        speed = math.sqrt(vx * vx + vy * vy)
+        if speed > 1.0:
+            dx = self._w * 0.5 - cx
+            dy = self._h * 0.5 - cy
+            dist_to_center = math.sqrt(dx * dx + dy * dy) + 1e-6
+            cos_theta = (vx * dx + vy * dy) / (speed * dist_to_center)
+            # Normalise speed: half-frame-size/s counts as "fast"
+            speed_norm = min(speed / (max(self._w, self._h) * 0.5), 1.0)
+            approach = (cos_theta + 1.0) * 0.5 * speed_norm
+        else:
+            approach = 0.0
+
+        # Stability penalty: a track with recent missed detections (misses > 0)
+        # is partially occluded or uncertain.  Decay the raw score so that a
+        # fully-confirmed track is preferred over an equally-scored occluded one.
+        # misses=0 → no penalty; misses=3 (lost_patience) → ~22% penalty.
+        stability = 1.0 / (1.0 + track.misses * 0.08)
+
+        score = stability * (
             weights.confidence * track.confidence
             + weights.size * size
             + weights.center_proximity * center_proximity
             + weights.track_age * age_norm
             + weights.class_weight * class_bonus
+            + weights.velocity_approach * approach
         )
         if self._current_id is not None and track.track_id != self._current_id:
             score -= weights.switch_penalty

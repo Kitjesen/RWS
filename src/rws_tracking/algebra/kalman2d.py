@@ -317,6 +317,34 @@ class CentroidKalmanCA:
         self._x = self._x + K @ y
         self._P = (self._I6 - K @ self._H) @ self._P
 
+    def update_with_confidence(self, cx: float, cy: float,
+                               confidence: float = 1.0) -> None:
+        """Fuse a centroid measurement with confidence-scaled noise.
+
+        Higher detection confidence → smaller R → measurement trusted more.
+        Lower confidence → larger R → Kalman prediction trusted more.
+
+        Parameters
+        ----------
+        cx, cy : float
+            Measured centroid position (pixels).
+        confidence : float
+            Detection confidence in [0, 1]. At 1.0 behaves identically to
+            ``update()``.  At 0.35 (typical threshold) R is scaled ×2.9,
+            letting the Kalman prediction dominate over a noisy bbox.
+        """
+        if confidence <= 0.0:
+            return
+        # r_scale: confidence=1.0 → 1.0x, confidence=0.5 → 2.0x, clamped to [0.5, 4.0]
+        r_scale = max(0.5, min(4.0, 1.0 / max(confidence, 0.1)))
+        z = np.array([cx, cy], dtype=np.float64)
+        y = z - self._H @ self._x
+        R_scaled = self._R * r_scale
+        S = self._H @ self._P @ self._H.T + R_scaled
+        K = self._P @ self._H.T @ np.linalg.inv(S)
+        self._x = self._x + K @ y
+        self._P = (self._I6 - K @ self._H) @ self._P
+
     @property
     def position(self) -> tuple[float, float]:
         return (float(self._x[0]), float(self._x[1]))

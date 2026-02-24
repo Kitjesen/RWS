@@ -130,6 +130,16 @@ class FusionMOTConfig:
     skeleton_gate: float = 0.8
     kp_visibility_thresh: float = 0.2
 
+    # Dynamic ReID weight during occlusion.
+    # When a confirmed track misses detections for more than occlusion_onset_frames,
+    # gradually shift weight FROM w_iou TOWARD w_appearance (max boost =
+    # occlusion_app_boost).  IoU becomes unreliable as the bbox drifts; the
+    # feature bank provides a more stable identity signal.
+    # At full occlusion (onset + 5 frames): w_app += occlusion_app_boost,
+    #                                        w_iou -= occlusion_app_boost.
+    occlusion_onset_frames: int = 2
+    occlusion_app_boost: float = 0.15
+
 
 class _Tracklet:
     """Internal tracklet state with embedded Kalman CA filter."""
@@ -451,6 +461,22 @@ class FusionMOT:
             else:
                 cov_inv = None
 
+            # Dynamic ReID weight: during occlusion (missed detections), shift
+            # weight from IoU toward appearance.  IoU reliability degrades as the
+            # Kalman-predicted bbox drifts; appearance (feature bank) is more
+            # identity-stable.  Only active when features are available.
+            if (t.frames_since_update > cfg.occlusion_onset_frames
+                    and det_features is not None):
+                occ_alpha = min(
+                    (t.frames_since_update - cfg.occlusion_onset_frames) / 5.0, 1.0
+                )
+                transfer = cfg.occlusion_app_boost * occ_alpha
+                w_iou_eff = max(cfg.w_iou - transfer, 0.05)
+                w_app_eff = cfg.w_appearance + transfer
+            else:
+                w_iou_eff = cfg.w_iou
+                w_app_eff = cfg.w_appearance
+
             for j in range(N):
                 # --- IoU distance (using Kalman-predicted bbox) ---
                 iou = self._iou(t_pred_bbox, det_bboxes[j])
@@ -505,8 +531,8 @@ class FusionMOT:
                         continue  # biomechanical gate: body proportions too different
                     skel_cost = min(dist / max(cfg.skeleton_gate, 1e-6), 1.0)
 
-                total = (cfg.w_iou * iou_cost
-                         + cfg.w_appearance * app_cost
+                total = (w_iou_eff * iou_cost
+                         + w_app_eff * app_cost
                          + cfg.w_motion * motion_cost
                          + cfg.w_height * h_cost
                          + cfg.w_skeleton * skel_cost)
@@ -697,8 +723,10 @@ class FusionMOT:
             if hip is not None:
                 center = np.array(hip, dtype=np.float64)
 
-        # Kalman measurement update (fuses position observation into state)
-        t.kf.update(float(center[0]), float(center[1]))
+        # Kalman measurement update — confidence-scaled R so high-conf detections
+        # move the state estimate more aggressively while low-conf borderline
+        # detections are smoothed (Kalman prediction trusted more).
+        t.kf.update_with_confidence(float(center[0]), float(center[1]), conf)
 
         # Store observed bbox (w/h from detection, position from Kalman)
         t.bbox = bbox.copy()

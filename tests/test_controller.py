@@ -218,7 +218,12 @@ class TestStateMachine:
         assert cmd.metadata["state"] == 2.0
 
     def test_lock_to_track_on_large_error(self, controller):
-        """Should drop from LOCK to TRACK if error increases."""
+        """Should drop from LOCK to TRACK after sustained large error.
+
+        LOCK exit requires the error to stay above the threshold for
+        lock_hold_time_s * 0.5 (= 0.15s with default config) to prevent
+        noise-induced fire-authorization interruptions.
+        """
         # First, achieve lock
         target_center = create_target((638, 358, 642, 362))
         feedback = create_feedback(yaw=0.0, pitch=0.0)
@@ -226,9 +231,11 @@ class TestStateMachine:
         for i in range(20):
             controller.compute_command(target_center, feedback, timestamp=1.0 + i * 0.1)
 
-        # Now introduce large error
+        # Sustained large error for > exit hysteresis (lock_hold_time_s * 0.5 = 0.15s)
         target_far = create_target((800, 360, 900, 460))
-        cmd = controller.compute_command(target_far, feedback, timestamp=3.0)
+        cmd = None
+        for i in range(5):
+            cmd = controller.compute_command(target_far, feedback, timestamp=3.0 + i * 0.05)
 
         assert cmd.metadata["state"] == 1.0
 

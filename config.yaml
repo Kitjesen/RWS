@@ -25,60 +25,63 @@ detector:
   model_path: "yolo11n-seg.pt"        # 实例分割模型（Kalman平滑 + mask质心）
   # --- 仅检测模型 (轻量备选) ---
   # model_path: "yolo11n.pt"
+  # --- 中等模型（精度更高，速度更慢） ---
+  # model_path: "yolo11s-seg.pt"
   # --- 使用微调后的自定义模型（训练完后取消注释） ---
   # model_path: "runs/rws_finetune/weights/best.pt"
-  confidence_threshold: 0.40
-  nms_iou_threshold: 0.45
+  confidence_threshold: 0.35          # 稍降阈值（更敏感，避免漏检；selector 负责筛选稳定目标）
+  nms_iou_threshold: 0.40             # 更严格的 NMS（减少重叠框）
   img_size: 640
-  device: ""                    # "" = auto, "cpu", "cuda:0"
-  tracker: "botsort.yaml"      # BoT-SORT (Kalman+ReID); 备选: "bytetrack.yaml"
-  class_whitelist:              # 微调后改成你的类别名，如 ["target"]
+  device: ""                          # "" = auto, "cpu", "cuda:0"
+  tracker: "botsort.yaml"            # BoT-SORT (Kalman+ReID); 备选: "bytetrack.yaml"
+  class_whitelist:                    # 微调后改成你的类别名，如 ["target"]
     - person
 
 selector:
   weights:
-    confidence: 0.35
-    size: 0.20
-    center_proximity: 0.20
-    track_age: 0.15
-    class_weight: 0.10
-    switch_penalty: 0.30
-  min_hold_time_s: 0.4
-  delta_threshold: 0.12
+    confidence: 0.35             # 检测置信度权重（最重要的稳定性指标）
+    size: 0.18                   # 目标面积（近目标优先）
+    center_proximity: 0.20       # 画面中心接近度
+    track_age: 0.15              # 跟踪年龄（越久越可靠）
+    class_weight: 0.10           # 目标类别权重
+    switch_penalty: 0.35         # 切换惩罚（提高，减少无效切换）
+    velocity_approach: 0.12      # 目标向画面中心接近的速度奖励（逼近目标优先）
+  min_hold_time_s: 0.5           # 最小保持时间 0.5s（提升稳定性）
+  delta_threshold: 0.15          # 需要分数差 >15% 才切换（防抖）
   preferred_classes:
     person: 1.0
     car: 0.6
 
 controller:
   yaw_pid:
-    kp: 5.0                      # 提高比例增益，加快响应
-    ki: 0.4                       # 提高积分增益，消除稳态误差
-    kd: 0.35                      # 微分增益，抑制超调
+    kp: 6.0                      # 提高比例增益，加快响应
+    ki: 0.5                      # 积分增益，消除稳态误差
+    kd: 0.40                     # 微分增益，抑制超调
     integral_limit: 40.0
     output_limit: 180.0
-    derivative_lpf_alpha: 0.4     # 微分低通滤波（抗高频噪声）
-    feedforward_kv: 0.75          # 速度前馈增益：补偿 75% 目标角速度
+    derivative_lpf_alpha: 0.35   # 微分低通滤波（平衡噪声与响应）
+    feedforward_kv: 0.80         # 速度前馈增益：补偿 80% 目标角速度
   pitch_pid:
-    kp: 5.5
-    ki: 0.35
-    kd: 0.35
+    kp: 6.5
+    ki: 0.45
+    kd: 0.40
     integral_limit: 40.0
     output_limit: 180.0
-    derivative_lpf_alpha: 0.4
-    feedforward_kv: 0.70
+    derivative_lpf_alpha: 0.35
+    feedforward_kv: 0.75
   max_rate_dps: 180.0
-  command_lpf_alpha: 0.75         # 减少平滑，提高响应速度
-  lock_error_threshold_deg: 0.8
-  lock_hold_time_s: 0.4
-  predict_timeout_s: 0.25
+  command_lpf_alpha: 0.80         # 适度平滑，兼顾响应速度与稳定性
+  lock_error_threshold_deg: 1.2   # 锁定阈值（宽松一点方便锁定，LOCK 状态后精度更高）
+  lock_hold_time_s: 0.3           # 连续满足锁定条件 0.3s 才进入 LOCK
+  predict_timeout_s: 0.50         # CA模型预测超时从 0.25s 延长到 0.5s（加速度项提高精度）
   lost_timeout_s: 1.5
   max_track_error_timeout_s: 5.0  # 持续高误差超时后回退 SEARCH (s)
   high_error_multiplier: 5.0      # "误差过大"判断倍数 (× lock_error_threshold_deg)
-  scan_pattern: [40.0, 20.0]      # [yaw_amplitude_dps, pitch_amplitude_dps]
-  scan_freq_hz: 0.15              # 扫描正弦波频率 (Hz, ~6.7s 周期)
+  scan_pattern: [45.0, 18.0]      # [yaw_amplitude_dps, pitch_amplitude_dps]
+  scan_freq_hz: 0.18              # 扫描频率 (Hz, ~5.6s 周期，比之前快)
   scan_yaw_scale: 1.0             # yaw 幅度系数
-  scan_pitch_scale: 0.3           # pitch 幅度系数
-  scan_pitch_freq_ratio: 0.7      # pitch 频率 / yaw 频率
+  scan_pitch_scale: 0.35          # pitch 幅度系数
+  scan_pitch_freq_ratio: 0.65     # pitch 频率 / yaw 频率（利沙如扫描，覆盖更密）
   latency_compensation_s: 0.033   # 补偿约 1 帧延迟 (30Hz)
 
 # 弹道补偿（controller 内置）
@@ -98,12 +101,12 @@ controller:
 
   # 自适应 PID 增益调度
   adaptive_pid:
-    enabled: false
+    enabled: true                  # 启用误差自适应增益调度
     scheduler_type: "error_based"
-    low_error_threshold_deg: 1.0
-    high_error_threshold_deg: 5.0
-    low_error_kp_scale: 0.6
-    high_error_kp_scale: 1.5
+    low_error_threshold_deg: 1.2   # 误差 < 1.2° 时使用低增益（精密跟踪）
+    high_error_threshold_deg: 8.0  # 误差 > 8° 时使用高增益（快速追赶）
+    low_error_multiplier: 0.55     # 低误差区增益倍数（抑制抖动）
+    high_error_multiplier: 1.6     # 高误差区增益倍数（快速追赶）
 
 # 云台驱动限位与动力学参数
 driver_limits:
@@ -141,7 +144,7 @@ environment:
 
 # 射击提前量
 lead_angle:
-  enabled: false
+  enabled: true
   use_acceleration: true          # 使用加速度项 (二阶预测)
   max_lead_deg: 5.0               # 提前量角度上限 (°)
   min_confidence: 0.3             # 最低置信度阈值
@@ -161,7 +164,7 @@ trajectory:
 
 # 多目标交战
 engagement:
-  enabled: false
+  enabled: true
   strategy: "threat_first"        # "threat_first" | "nearest_first" | "sector_sweep"
   max_engagement_range_m: 500.0
   min_threat_threshold: 0.1
@@ -178,7 +181,7 @@ engagement:
 
 # 安全系统
 safety:
-  enabled: false
+  enabled: true
   nfz_slow_down_margin_deg: 5.0   # 禁射区缓冲带宽度 (°)
   interlock:
     require_operator_auth: true
@@ -202,7 +205,7 @@ safety:
 
 # 激光测距仪
 rangefinder:
-  enabled: false
+  enabled: true
   type: "simulated"               # "simulated" | "serial"
   max_range_m: 1500.0
   min_range_m: 1.0
@@ -215,7 +218,7 @@ rangefinder:
 
 # 视频流
 video_stream:
-  enabled: false
+  enabled: true
   jpeg_quality: 70
   max_fps: 30.0
   scale_factor: 1.0
@@ -223,4 +226,4 @@ video_stream:
   annotate_detections: true
   annotate_tracks: true
   annotate_crosshair: true
-  annotate_safety_zones: false
+  annotate_safety_zones: true

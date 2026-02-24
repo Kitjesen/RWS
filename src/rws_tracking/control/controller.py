@@ -194,6 +194,7 @@ class TwoAxisGimbalController:
         feedback: GimbalFeedback,
         timestamp: float,
         body_state: BodyState | None = None,
+        fire_authorized: bool = True,
     ) -> ControlCommand:
         """Compute gimbal rate command.
 
@@ -207,6 +208,10 @@ class TwoAxisGimbalController:
             body (base platform) angular velocity.  When ``None`` the
             controller behaves identically to the legacy (stationary base)
             mode — zero regression.
+        fire_authorized : bool, optional
+            Whether fire is currently authorized (SafetyManager verdict).
+            When False (NFZ/IFF block), the PID integral is gently decayed
+            each frame (×0.95) to prevent wind-up while still tracking.
         """
         dt = max(timestamp - self._last_ts, 1e-3) if self._last_ts > 0.0 else 0.01
         self._last_ts = timestamp
@@ -221,6 +226,13 @@ class TwoAxisGimbalController:
             self._pitch_pid.state.d_lpf = 0.0
             logger.debug("PID partial reset: track %s -> %s", self._last_tracked_id, new_id)
         self._last_tracked_id = new_id
+
+        # Integral decay during safety block (NFZ / IFF): gently bleed the
+        # integral each frame so it doesn't wind up while we can't fire.
+        # At 30 Hz with α=0.95, the integral halves in ~0.45 s.
+        if not fire_authorized:
+            self._yaw_pid.state.integral *= 0.95
+            self._pitch_pid.state.integral *= 0.95
 
         error, vel_yaw_dps, vel_pitch_dps = self._estimate_error(target, timestamp)
         ballistic_comp = 0.0
@@ -301,7 +313,9 @@ class TwoAxisGimbalController:
             else:
                 self._yaw_pid.reset()
                 self._pitch_pid.reset()
-                cmd_yaw, cmd_pitch = self._scan_command(timestamp)
+                # Velocity-biased scan: start search in the direction the target
+                # was last moving, covering a wider area than a centered scan.
+                cmd_yaw, cmd_pitch = self._scan_command_biased(timestamp)
 
         else:  # SEARCH
             self._yaw_pid.reset()
@@ -394,21 +408,32 @@ class TwoAxisGimbalController:
     # ------------------------------------------------------------------
 
     def _predict_lost_error(self, timestamp: float) -> TargetError | None:
-        """Use constant-velocity model to predict target position during LOST."""
+        """Constant-acceleration model to predict target position during LOST.
+
+        Uses velocity + acceleration (from CA Kalman filter on the tracker)
+        for a parabolic position prediction.  More accurate than the old
+        constant-velocity (CV) model, especially for turning/accelerating targets.
+
+        After prediction_timeout_s the prediction expires; the caller falls back
+        to a velocity-biased scan pattern via _scan_command_biased().
+        """
         if self._last_error is None or self._last_target is None:
             return None
         dt_lost = timestamp - self._last_error.timestamp
         if dt_lost > self._cfg.predict_timeout_s:
-            return None  # too long, give up prediction
+            return None  # prediction expired, trigger velocity-biased scan
 
         vx, vy = self._last_target.velocity_px_per_s
+        # Use acceleration from the CA Kalman filter if available
+        ax, ay = self._last_target.acceleration_px_per_s2
         cx, cy = (
             self._last_target.mask_center
             if self._last_target.mask_center is not None
             else self._last_target.bbox.center
         )
-        pred_cx = cx + vx * dt_lost
-        pred_cy = cy + vy * dt_lost
+        # Parabolic prediction: x = x₀ + v·t + ½·a·t²
+        pred_cx = cx + vx * dt_lost + 0.5 * ax * dt_lost ** 2
+        pred_cy = cy + vy * dt_lost + 0.5 * ay * dt_lost ** 2
 
         yaw_err, pitch_err = self._transform.pixel_to_angle_error(pred_cx, pred_cy)
         return TargetError(
@@ -431,6 +456,44 @@ class TwoAxisGimbalController:
         p = max(-max_rate, min(max_rate, p))
         self._last_cmd = (y, p)
         return y, p
+
+    def _scan_command_biased(self, timestamp: float) -> tuple[float, float]:
+        """Velocity-biased re-acquisition scan.
+
+        After LOST-state prediction expires, start the scan oscillation from the
+        last predicted velocity direction rather than from the current gimbal
+        heading.  This covers the most likely region where the target reappears
+        first, before broadening to a standard sinusoidal sweep.
+
+        Implementation: plain sinusoidal scan with a decaying bias term
+        derived from the last known angular velocity of the target.
+        """
+        base_yaw, base_pitch = self._scan_command(timestamp)
+
+        if self._last_target is None:
+            return base_yaw, base_pitch
+
+        # Angular velocity of the target at the time of last observation
+        vx, vy = self._last_target.velocity_px_per_s
+        vel_yaw_bias, vel_pitch_bias = self._pixel_velocity_to_angular(vx, vy)
+
+        # Bias decays over time after prediction expires so the scan
+        # gradually broadens away from the initial velocity direction.
+        # Use a 1s time constant.
+        dt_since_last = (
+            timestamp - self._last_error.timestamp
+            if self._last_error is not None
+            else self._cfg.predict_timeout_s
+        )
+        extra_elapsed = max(0.0, dt_since_last - self._cfg.predict_timeout_s)
+        decay = math.exp(-extra_elapsed / 1.0)  # 1-second decay constant
+
+        # Clamp bias contribution to ±30% of max_rate
+        max_bias = self._cfg.max_rate_dps * 0.30
+        bias_yaw = max(-max_bias, min(max_bias, vel_yaw_bias * decay))
+        bias_pitch = max(-max_bias, min(max_bias, vel_pitch_bias * decay))
+
+        return base_yaw + bias_yaw, base_pitch + bias_pitch
 
     def _scan_command(self, timestamp: float) -> tuple[float, float]:
         if self._scan_start_ts is None:

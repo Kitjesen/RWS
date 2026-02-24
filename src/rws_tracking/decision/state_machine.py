@@ -22,6 +22,7 @@ class TrackStateMachine:
         self._state = TrackState.SEARCH
         self._last_seen_ts: float | None = None
         self._lock_start_ts: float | None = None
+        self._lock_exit_start_ts: float | None = None  # hysteresis for LOCK→TRACK
         self._high_error_start_ts: float | None = None
         self._last_error: TargetError | None = None
         # Set after a high-error timeout forces TRACK→SEARCH.  Prevents
@@ -52,6 +53,7 @@ class TrackStateMachine:
             self._last_error = error
             err_mag = max(abs(error.yaw_error_deg), abs(error.pitch_error_deg))
             if err_mag <= self._cfg.lock_error_threshold_deg:
+                self._lock_exit_start_ts = None  # back inside lock zone
                 self._high_error_start_ts = None
                 self._high_error_timeout_recovery = False
                 if self._lock_start_ts is None:
@@ -62,6 +64,18 @@ class TrackStateMachine:
                     self._transition(TrackState.TRACK)
             else:
                 self._lock_start_ts = None
+                # LOCK exit hysteresis: require the error to stay above the
+                # threshold for lock_hold_time_s * 0.5 before de-locking.
+                # This prevents noise-induced fire-authorization interruptions.
+                if self._state == TrackState.LOCK:
+                    if self._lock_exit_start_ts is None:
+                        self._lock_exit_start_ts = timestamp
+                    exit_hold = self._cfg.lock_hold_time_s * 0.5
+                    if timestamp - self._lock_exit_start_ts < exit_hold:
+                        return self._state  # stay locked through brief excursion
+                else:
+                    self._lock_exit_start_ts = None
+
                 # TRACK -> SEARCH on sustained high error
                 high_err_thresh = (
                     self._cfg.lock_error_threshold_deg * self._cfg.high_error_multiplier
@@ -86,6 +100,7 @@ class TrackStateMachine:
             return self._state
 
         self._lock_start_ts = None
+        self._lock_exit_start_ts = None
         self._high_error_start_ts = None
         self._high_error_timeout_recovery = False
         if self._last_seen_ts is None:

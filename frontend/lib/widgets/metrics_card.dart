@@ -46,7 +46,7 @@ class MetricsCard extends StatelessWidget {
                       Expanded(
                         child: _MetricTile(
                           label: '目标切换',
-                          value: '${s.switchesPerMin.toStringAsFixed(1)}/min',
+                          value: '${s.switchesPerMin.toStringAsFixed(1)}/分钟',
                           icon: Icons.swap_horiz,
                           color: s.switchesPerMin < 5
                               ? Colors.green

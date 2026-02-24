@@ -421,6 +421,514 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             logger.error(f"GetThreatAssessment error: {e}")
             return tracking_pb2.GetThreatAssessmentResponse()
 
+    # -------------------------------------------------------------------------
+    # Fire control
+    # -------------------------------------------------------------------------
+
+    def _get_shooting_chain(self):
+        """Return the ShootingChain from the live pipeline, or None."""
+        pipeline = getattr(self.api, "pipeline", None)
+        if pipeline is None:
+            return None
+        return getattr(pipeline, "_shooting_chain", None)
+
+    def ArmSystem(
+        self, request: tracking_pb2.ArmRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.FireControlResponse:
+        """Transition ShootingChain SAFE -> ARMED."""
+        chain = self._get_shooting_chain()
+        if chain is None:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Shooting chain not available")
+            return tracking_pb2.FireControlResponse(success=False, message="not_available")
+        operator_id = getattr(request, "operator_id", "") or "grpc_operator"
+        if not operator_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("operator_id required")
+            return tracking_pb2.FireControlResponse(success=False, message="operator_id required")
+        try:
+            ok = chain.arm(operator_id)
+            if not ok:
+                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+                msg = f"cannot arm from state {chain.state.value}"
+                context.set_details(msg)
+                return tracking_pb2.FireControlResponse(
+                    success=False, state=chain.state.value, message=msg
+                )
+            return tracking_pb2.FireControlResponse(
+                success=True,
+                state=chain.state.value,
+                can_fire=chain.can_fire,
+                operator_id=operator_id,
+            )
+        except Exception as e:
+            logger.error(f"ArmSystem error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.FireControlResponse(success=False, message=str(e))
+
+    def SafeSystem(
+        self, request: tracking_pb2.SafeRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.FireControlResponse:
+        """Return ShootingChain to SAFE state."""
+        chain = self._get_shooting_chain()
+        if chain is None:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Shooting chain not available")
+            return tracking_pb2.FireControlResponse(success=False, message="not_available")
+        try:
+            reason = getattr(request, "reason", "") or ""
+            chain.safe(reason)
+            return tracking_pb2.FireControlResponse(
+                success=True,
+                state=chain.state.value,
+                can_fire=chain.can_fire,
+            )
+        except Exception as e:
+            logger.error(f"SafeSystem error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.FireControlResponse(success=False, message=str(e))
+
+    def RequestFire(
+        self, request: tracking_pb2.RequestFireRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.FireControlResponse:
+        """Human fire request — transitions FIRE_AUTHORIZED -> FIRE_REQUESTED."""
+        chain = self._get_shooting_chain()
+        if chain is None:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Shooting chain not available")
+            return tracking_pb2.FireControlResponse(success=False, message="not_available")
+        operator_id = getattr(request, "operator_id", "") or ""
+        if not operator_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("operator_id required")
+            return tracking_pb2.FireControlResponse(success=False, message="operator_id required")
+        try:
+            ok = chain.request_fire(operator_id)
+            if not ok:
+                context.set_code(grpc.StatusCode.FAILED_PRECONDITION)
+                msg = f"cannot request fire from state {chain.state.value}"
+                context.set_details(msg)
+                return tracking_pb2.FireControlResponse(
+                    success=False, state=chain.state.value, message=msg
+                )
+            return tracking_pb2.FireControlResponse(
+                success=True,
+                state=chain.state.value,
+                can_fire=chain.can_fire,
+                operator_id=operator_id,
+            )
+        except Exception as e:
+            logger.error(f"RequestFire error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.FireControlResponse(success=False, message=str(e))
+
+    def GetFireStatus(
+        self, request: tracking_pb2.GetFireStatusRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.FireControlResponse:
+        """Return current fire chain state without making any transition."""
+        chain = self._get_shooting_chain()
+        if chain is None:
+            return tracking_pb2.FireControlResponse(
+                success=True, state="not_configured", can_fire=False
+            )
+        try:
+            return tracking_pb2.FireControlResponse(
+                success=True,
+                state=chain.state.value,
+                can_fire=chain.can_fire,
+                operator_id=getattr(chain, "operator_id", "") or "",
+            )
+        except Exception as e:
+            logger.error(f"GetFireStatus error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.FireControlResponse(success=False, message=str(e))
+
+    def OperatorHeartbeat(
+        self, request: tracking_pb2.OperatorHeartbeatRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.OperatorHeartbeatResponse:
+        """Refresh operator heartbeat to prevent watchdog timeout."""
+        operator_id = getattr(request, "operator_id", "") or ""
+        if not operator_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("operator_id required")
+            return tracking_pb2.OperatorHeartbeatResponse(ok=False, operator_id="")
+        try:
+            pipeline = getattr(self.api, "pipeline", None)
+            if pipeline is not None:
+                sm = getattr(pipeline, "_safety_manager", None)
+                if sm is not None and hasattr(sm, "interlock"):
+                    sm.interlock.operator_heartbeat()
+                watchdog = getattr(pipeline, "_operator_watchdog", None)
+                if watchdog is not None:
+                    watchdog.heartbeat(operator_id)
+            return tracking_pb2.OperatorHeartbeatResponse(ok=True, operator_id=operator_id)
+        except Exception as e:
+            logger.error(f"OperatorHeartbeat error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.OperatorHeartbeatResponse(ok=False, operator_id=operator_id)
+
+    def DesignateTarget(
+        self, request: tracking_pb2.DesignateTargetRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.DesignateTargetResponse:
+        """Operator-designate a specific track for engagement (C2 override)."""
+        pipeline = getattr(self.api, "pipeline", None)
+        if pipeline is None:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Pipeline not running")
+            return tracking_pb2.DesignateTargetResponse(ok=False)
+        track_id = getattr(request, "track_id", 0)
+        operator_id = getattr(request, "operator_id", "") or ""
+        try:
+            pipeline.designate_target(track_id, operator_id)
+            logger.info(f"gRPC designation: track={track_id} operator='{operator_id}'")
+            return tracking_pb2.DesignateTargetResponse(
+                ok=True, track_id=track_id, designated=True
+            )
+        except Exception as e:
+            logger.error(f"DesignateTarget error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.DesignateTargetResponse(ok=False)
+
+    def ClearDesignation(
+        self, request: tracking_pb2.ClearDesignationRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.DesignateTargetResponse:
+        """Clear operator designation, returning to auto-selection."""
+        pipeline = getattr(self.api, "pipeline", None)
+        if pipeline is None:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Pipeline not running")
+            return tracking_pb2.DesignateTargetResponse(ok=False)
+        try:
+            old_id = getattr(pipeline, "designated_track_id", None)
+            pipeline.clear_designation()
+            return tracking_pb2.DesignateTargetResponse(
+                ok=True,
+                track_id=0,
+                designated=False,
+                cleared_track_id=str(old_id) if old_id is not None else "",
+            )
+        except Exception as e:
+            logger.error(f"ClearDesignation error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.DesignateTargetResponse(ok=False)
+
+    def GetDesignation(
+        self, request: tracking_pb2.GetDesignationRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.DesignateTargetResponse:
+        """Return current operator designation status."""
+        pipeline = getattr(self.api, "pipeline", None)
+        if pipeline is None:
+            return tracking_pb2.DesignateTargetResponse(ok=True, track_id=0, designated=False)
+        try:
+            tid = getattr(pipeline, "designated_track_id", None)
+            return tracking_pb2.DesignateTargetResponse(
+                ok=True,
+                track_id=tid if tid is not None else 0,
+                designated=tid is not None,
+            )
+        except Exception as e:
+            logger.error(f"GetDesignation error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.DesignateTargetResponse(ok=False)
+
+    # -------------------------------------------------------------------------
+    # Mission management
+    # -------------------------------------------------------------------------
+
+    def StartMission(
+        self, request: tracking_pb2.StartMissionRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.MissionResponse:
+        """Start a new mission session."""
+        import datetime
+        pipeline = getattr(self.api, "pipeline", None)
+        profile_name = getattr(request, "profile", "") or ""
+        camera_source = getattr(request, "camera_source", 0)
+        mission_name = getattr(request, "mission_name", "") or (
+            f"Mission-{datetime.datetime.now():%Y%m%d-%H%M%S}"
+        )
+        try:
+            # Load profile if specified
+            if profile_name:
+                from ..config.profiles import ProfileManager
+                try:
+                    pm = ProfileManager()
+                    pm.load_profile(profile_name)
+                    logger.info(f"mission: loaded profile '{profile_name}'")
+                except (FileNotFoundError, ValueError) as exc:
+                    context.set_code(grpc.StatusCode.NOT_FOUND)
+                    context.set_details(str(exc))
+                    return tracking_pb2.MissionResponse(
+                        ok=False, error=f"Profile '{profile_name}' not found: {exc}"
+                    )
+
+            # Reset lifecycle + safe the chain for fresh session
+            if pipeline is not None:
+                lm = getattr(pipeline, "_lifecycle_manager", None)
+                if lm is not None:
+                    lm.reset()
+                chain = getattr(pipeline, "_shooting_chain", None)
+                if chain is not None:
+                    chain.safe("mission_start")
+
+            result = self.api.start_tracking(camera_source)
+            if not result.get("success"):
+                context.set_code(grpc.StatusCode.INTERNAL)
+                err = result.get("error", "Failed to start tracking")
+                context.set_details(err)
+                return tracking_pb2.MissionResponse(ok=False, error=err)
+
+            session_id = (
+                f"{mission_name.replace(' ', '_')}_"
+                f"{datetime.datetime.now():%Y%m%d_%H%M%S}"
+            )
+            logger.info(f"mission START (gRPC): session={session_id} profile={profile_name}")
+            return tracking_pb2.MissionResponse(
+                ok=True,
+                session_id=session_id,
+                message=f"Mission started: {session_id}",
+            )
+        except Exception as e:
+            logger.error(f"StartMission error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.MissionResponse(ok=False, error=str(e))
+
+    def EndMission(
+        self, request: tracking_pb2.EndMissionRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.MissionResponse:
+        """End the active mission and generate a debrief report."""
+        import time as _time
+        from pathlib import Path
+        pipeline = getattr(self.api, "pipeline", None)
+        try:
+            # Auto-safe the fire chain before stopping
+            if pipeline is not None:
+                chain = getattr(pipeline, "_shooting_chain", None)
+                if chain is not None:
+                    chain.safe("mission_end")
+
+            self.api.stop_tracking()
+
+            # Generate audit report if audit logger has records
+            report_path = None
+            report_url = None
+            if pipeline is not None:
+                audit = getattr(pipeline, "_audit_logger", None)
+                if audit is not None and getattr(audit, "_records", None):
+                    from ..telemetry.report import generate_report
+                    report_dir = Path("logs/reports")
+                    report_dir.mkdir(parents=True, exist_ok=True)
+                    ts_label = f"mission_{int(_time.time())}"
+                    report_file = report_dir / f"{ts_label}_report.html"
+                    generate_report(audit, mission_name=ts_label, output_path=str(report_file))
+                    report_path = str(report_file)
+                    report_url = f"/api/mission/report/{report_file.name}"
+                    logger.info(f"mission: report written to {report_path}")
+
+            logger.info("mission END (gRPC)")
+            return tracking_pb2.MissionResponse(
+                ok=True,
+                message="Mission ended",
+                report_path=report_path or "",
+                report_url=report_url or "",
+            )
+        except Exception as e:
+            logger.error(f"EndMission error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.MissionResponse(ok=False, error=str(e))
+
+    def GetMissionStatus(
+        self, request: tracking_pb2.GetMissionStatusRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.MissionStatusResponse:
+        """Return current mission status from the live pipeline."""
+        pipeline = getattr(self.api, "pipeline", None)
+        try:
+            status = self.api.get_status()
+            fire_chain_state = ""
+            if pipeline is not None:
+                chain = getattr(pipeline, "_shooting_chain", None)
+                if chain is not None:
+                    fire_chain_state = chain.state.value
+            return tracking_pb2.MissionStatusResponse(
+                active=status.get("running", False),
+                fire_chain_state=fire_chain_state,
+            )
+        except Exception as e:
+            logger.error(f"GetMissionStatus error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.MissionStatusResponse()
+
+    # -------------------------------------------------------------------------
+    # Safety zone CRUD (No-Fire Zones)
+    # -------------------------------------------------------------------------
+
+    def _get_safety_manager(self):
+        """Return the SafetyManager from the live pipeline, or None."""
+        pipeline = getattr(self.api, "pipeline", None)
+        if pipeline is None:
+            return None
+        return getattr(pipeline, "_safety_manager", None)
+
+    def ListZones(
+        self, request: tracking_pb2.ListZonesRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.ListZonesResponse:
+        """List all active no-fire zones."""
+        sm = self._get_safety_manager()
+        if sm is None:
+            return tracking_pb2.ListZonesResponse()
+        try:
+            zones = sm._nfz.zones
+            zone_msgs = [
+                tracking_pb2.SafetyZoneMsg(
+                    zone_id=z.zone_id,
+                    center_yaw_deg=z.center_yaw_deg,
+                    center_pitch_deg=z.center_pitch_deg,
+                    radius_deg=z.radius_deg,
+                    zone_type=z.zone_type,
+                    found=True,
+                )
+                for z in zones
+            ]
+            return tracking_pb2.ListZonesResponse(zones=zone_msgs)
+        except Exception as e:
+            logger.error(f"ListZones error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.ListZonesResponse()
+
+    def AddZone(
+        self, request: tracking_pb2.AddZoneRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.ZoneResponse:
+        """Add a new no-fire zone to the running pipeline."""
+        import uuid
+        sm = self._get_safety_manager()
+        if sm is None:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Safety manager not available")
+            return tracking_pb2.ZoneResponse(ok=False, error="safety manager not available")
+        try:
+            center_yaw = float(request.center_yaw_deg)
+            center_pitch = float(request.center_pitch_deg)
+            radius = float(request.radius_deg)
+        except (TypeError, ValueError) as exc:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(exc))
+            return tracking_pb2.ZoneResponse(ok=False, error=str(exc))
+
+        # Validate ranges (mirror safety_routes.py constraints)
+        if radius <= 0 or radius > 180:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("radius_deg must be in (0, 180]")
+            return tracking_pb2.ZoneResponse(ok=False, error="radius_deg must be in (0, 180]")
+        if not (-180.0 <= center_yaw <= 180.0):
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("center_yaw_deg must be in [-180, 180]")
+            return tracking_pb2.ZoneResponse(
+                ok=False, error="center_yaw_deg must be in [-180, 180]"
+            )
+        if not (-90.0 <= center_pitch <= 90.0):
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("center_pitch_deg must be in [-90, 90]")
+            return tracking_pb2.ZoneResponse(
+                ok=False, error="center_pitch_deg must be in [-90, 90]"
+            )
+
+        zone_id = str(request.zone_id) if request.zone_id else f"nfz_{uuid.uuid4().hex[:8]}"
+        zone_type = str(request.zone_type) if request.zone_type else "no_fire"
+
+        try:
+            from ..types import SafetyZone
+            zone = SafetyZone(
+                zone_id=zone_id,
+                center_yaw_deg=center_yaw,
+                center_pitch_deg=center_pitch,
+                radius_deg=radius,
+                zone_type=zone_type,
+            )
+            sm.add_no_fire_zone(zone)
+            logger.info(
+                f"NFZ added via gRPC: id={zone_id} yaw={center_yaw:.1f} "
+                f"pitch={center_pitch:.1f} r={radius:.1f}"
+            )
+            return tracking_pb2.ZoneResponse(ok=True, zone_id=zone_id)
+        except Exception as e:
+            logger.error(f"AddZone error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.ZoneResponse(ok=False, error=str(e))
+
+    def RemoveZone(
+        self, request: tracking_pb2.RemoveZoneRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.ZoneResponse:
+        """Remove a no-fire zone by ID."""
+        sm = self._get_safety_manager()
+        if sm is None:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Safety manager not available")
+            return tracking_pb2.ZoneResponse(ok=False, error="safety manager not available")
+        zone_id = getattr(request, "zone_id", "") or ""
+        if not zone_id:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details("zone_id required")
+            return tracking_pb2.ZoneResponse(ok=False, error="zone_id required")
+        try:
+            removed = sm.remove_no_fire_zone(zone_id)
+            if not removed:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(f"zone '{zone_id}' not found")
+                return tracking_pb2.ZoneResponse(
+                    ok=False, zone_id=zone_id, error=f"zone '{zone_id}' not found"
+                )
+            logger.info(f"NFZ removed via gRPC: id={zone_id}")
+            return tracking_pb2.ZoneResponse(ok=True, zone_id=zone_id)
+        except Exception as e:
+            logger.error(f"RemoveZone error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.ZoneResponse(ok=False, error=str(e))
+
+    def GetZone(
+        self, request: tracking_pb2.GetZoneRequest, context: grpc.ServicerContext
+    ) -> tracking_pb2.SafetyZoneMsg:
+        """Get a specific no-fire zone by ID."""
+        sm = self._get_safety_manager()
+        if sm is None:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Safety manager not available")
+            return tracking_pb2.SafetyZoneMsg(found=False, error="safety manager not available")
+        zone_id = getattr(request, "zone_id", "") or ""
+        try:
+            zone = sm._nfz._zones.get(zone_id)
+            if zone is None:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(f"zone '{zone_id}' not found")
+                return tracking_pb2.SafetyZoneMsg(
+                    found=False, error=f"zone '{zone_id}' not found"
+                )
+            return tracking_pb2.SafetyZoneMsg(
+                zone_id=zone.zone_id,
+                center_yaw_deg=zone.center_yaw_deg,
+                center_pitch_deg=zone.center_pitch_deg,
+                radius_deg=zone.radius_deg,
+                zone_type=zone.zone_type,
+                found=True,
+            )
+        except Exception as e:
+            logger.error(f"GetZone error: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(str(e))
+            return tracking_pb2.SafetyZoneMsg(found=False, error=str(e))
+
 
 # Backward-compat alias
 TrackingGrpcServer = TrackingServicer
@@ -471,15 +979,40 @@ Max Workers:    {max_workers}
 Config:         {config_path}
 
 gRPC Methods:
-  HealthCheck          - Health check
-  StartTracking        - Start tracking
-  StopTracking         - Stop tracking
-  GetStatus            - Get status
-  SetGimbalPosition    - Set gimbal position
-  SetGimbalRate        - Set gimbal rate
-  GetTelemetry         - Get telemetry
-  UpdateConfig         - Update config
-  StreamStatus         - Stream status updates
+  Core:
+    HealthCheck          - Health check
+    StartTracking        - Start tracking
+    StopTracking         - Stop tracking
+    GetStatus            - Get status
+    SetGimbalPosition    - Set gimbal position
+    SetGimbalRate        - Set gimbal rate
+    GetTelemetry         - Get telemetry
+    UpdateConfig         - Update config
+    StreamStatus         - Stream status updates
+    StreamFrames         - Stream annotated video frames
+  Safety:
+    GetSafetyStatus      - Get safety/NFZ status
+    SetOperatorAuth      - Set operator authorization
+    EmergencyStop        - Emergency stop control
+    GetThreatAssessment  - Get ranked threat queue
+  Fire Control:
+    ArmSystem            - Arm shooting chain (SAFE -> ARMED)
+    SafeSystem           - Return to SAFE state
+    RequestFire          - Human fire request
+    GetFireStatus        - Get current fire chain state
+    OperatorHeartbeat    - Refresh operator heartbeat
+    DesignateTarget      - Designate specific target (C2 override)
+    ClearDesignation     - Clear designation (return to auto)
+    GetDesignation       - Get current designation status
+  Mission:
+    StartMission         - Start a new mission session
+    EndMission           - End mission and generate report
+    GetMissionStatus     - Get current mission status
+  Safety Zones (NFZ CRUD):
+    ListZones            - List all active no-fire zones
+    AddZone              - Add a new no-fire zone
+    RemoveZone           - Remove a zone by ID
+    GetZone              - Get one zone by ID
 
 Server is running. Press Ctrl+C to stop.
 """)

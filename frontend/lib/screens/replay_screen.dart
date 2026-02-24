@@ -1,3 +1,5 @@
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/api_client.dart';
@@ -16,6 +18,10 @@ class _ReplayScreenState extends State<ReplayScreen> {
   List<Map<String, dynamic>> _selectedEvents = [];
   Set<String> _activeFilters = {};
   bool _loading = false;
+
+  List<Map<String, dynamic>> _clips = [];
+  bool _clipsLoading = false;
+  bool _clipsExpanded = false;
 
   @override
   void initState() {
@@ -96,6 +102,16 @@ class _ReplayScreenState extends State<ReplayScreen> {
     });
   }
 
+  Future<void> _loadClips() async {
+    setState(() => _clipsLoading = true);
+    final clips = await _api.getClips();
+    setState(() {
+      _clips = clips;
+      _clipsLoading = false;
+      _clipsExpanded = true;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_selectedSession != null) {
@@ -111,11 +127,11 @@ class _ReplayScreenState extends State<ReplayScreen> {
   Widget _buildSessionListView() {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Session Replay'),
+        title: const Text('任务回放'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh sessions',
+            tooltip: '刷新列表',
             onPressed: _loadSessions,
           ),
         ],
@@ -126,13 +142,75 @@ class _ReplayScreenState extends State<ReplayScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Mission Sessions',
+              '历史任务',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const Divider(),
-            Expanded(child: _buildSessionListBody()),
+            Flexible(flex: 3, child: _buildSessionListBody()),
+            _buildClipsSection(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildClipsSection() {
+    final baseUrl = _api.baseUrl;
+    return Card(
+      margin: const EdgeInsets.only(top: 12),
+      child: ExpansionTile(
+        initiallyExpanded: _clipsExpanded,
+        leading: const Icon(Icons.videocam, color: Colors.red),
+        title: Row(
+          children: [
+            const Text('火控视频片段'),
+            const SizedBox(width: 8),
+            if (_clips.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${_clips.length}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        onExpansionChanged: (open) {
+          if (open && _clips.isEmpty) _loadClips();
+          setState(() => _clipsExpanded = open);
+        },
+        children: [
+          if (_clipsLoading)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_clips.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                '暂无视频片段',
+                style: TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _clips.length,
+              itemBuilder: (context, index) {
+                return _ClipTile(clip: _clips[index], baseUrl: baseUrl);
+              },
+            ),
+        ],
       ),
     );
   }
@@ -144,7 +222,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
     if (_sessions.isEmpty) {
       return const Center(
         child: Text(
-          'No sessions found',
+          '暂无历史任务',
           style: TextStyle(color: Colors.grey),
         ),
       );
@@ -190,10 +268,10 @@ class _ReplayScreenState extends State<ReplayScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Session Replay'),
+        title: const Text('任务回放'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          tooltip: 'Back to sessions',
+          tooltip: '返回列表',
           onPressed: _clearSelection,
         ),
       ),
@@ -228,7 +306,7 @@ class _ReplayScreenState extends State<ReplayScreen> {
                   child: events.isEmpty
                       ? const Center(
                           child: Text(
-                            'No events match the selected filters',
+                            '暂无符合筛选条件的事件',
                             style: TextStyle(color: Colors.grey),
                           ),
                         )
@@ -353,6 +431,51 @@ class _EventTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Clip tile
+// ---------------------------------------------------------------------------
+
+class _ClipTile extends StatelessWidget {
+  final Map<String, dynamic> clip;
+  final String baseUrl;
+
+  const _ClipTile({required this.clip, required this.baseUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final filename = clip['filename'] as String? ?? '';
+    final sizeBytes = (clip['size_bytes'] as num?)?.toInt() ?? 0;
+    final timestamp = (clip['timestamp'] as num?)?.toDouble() ?? 0.0;
+    final sizeKb = (sizeBytes / 1024).round();
+
+    final dt = timestamp > 0
+        ? DateTime.fromMillisecondsSinceEpoch((timestamp * 1000).toInt())
+        : null;
+    final timeStr = dt != null
+        ? '${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+            '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}'
+        : filename;
+
+    return ListTile(
+      dense: true,
+      leading: const Icon(Icons.movie_outlined, color: Colors.red),
+      title: Text(timeStr, style: const TextStyle(fontSize: 13)),
+      subtitle: Text(
+        '$sizeKb KB · $filename',
+        style: const TextStyle(fontSize: 11, color: Colors.grey),
+      ),
+      trailing: IconButton(
+        icon: const Icon(Icons.download, size: 20),
+        tooltip: '下载片段',
+        onPressed: () {
+          final url = '$baseUrl/api/fire/clips/${Uri.encodeComponent(filename)}';
+          html.window.open(url, '_blank');
+        },
       ),
     );
   }

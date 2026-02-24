@@ -8,7 +8,9 @@ including video streaming (MJPEG), safety management, and threat assessment.
 
 from __future__ import annotations
 
+import hmac
 import logging
+import os
 import threading
 import time
 from dataclasses import asdict
@@ -30,6 +32,53 @@ from .video_stream import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class _RateLimiter:
+    """Simple per-key token-bucket rate limiter backed by a threading.Lock.
+
+    Each key (e.g. a client IP address) gets its own bucket.  The bucket is
+    refilled on every call based on elapsed wall time, so no background thread
+    is required.
+
+    Parameters
+    ----------
+    max_requests:
+        Maximum number of requests allowed within *window_s* seconds.
+    window_s:
+        Rolling window duration in seconds.
+    """
+
+    def __init__(self, max_requests: int, window_s: float) -> None:
+        self._max = max_requests
+        self._window = window_s
+        self._lock = threading.Lock()
+        # key → (tokens_remaining: float, last_refill_time: float)
+        self._buckets: dict[str, tuple[float, float]] = {}
+
+    def is_allowed(self, key: str) -> bool:
+        """Return True if the request is within the rate limit, False if exceeded."""
+        now = time.monotonic()
+        with self._lock:
+            tokens, last_refill = self._buckets.get(key, (float(self._max), now))
+
+            # Refill tokens proportionally to elapsed time.
+            elapsed = now - last_refill
+            refill = elapsed * (self._max / self._window)
+            tokens = min(float(self._max), tokens + refill)
+
+            if tokens >= 1.0:
+                tokens -= 1.0
+                self._buckets[key] = (tokens, now)
+                return True
+
+            # Not enough tokens — record the attempt without consuming.
+            self._buckets[key] = (tokens, now)
+            return False
+
+
+# Rate limiter for fire-control endpoints: 30 requests/minute per IP.
+_fire_rate_limiter = _RateLimiter(max_requests=30, window_s=60.0)
 
 
 class TrackingAPI:
@@ -348,10 +397,19 @@ class TrackingAPI:
                 # Push annotated frame to video buffer
                 if self._video_cfg.enabled:
                     state_text = f"FPS:{1.0 / max(ts - self.last_frame_time, 0.001):.0f} F:{self.frame_count}"
+                    # Collect active safety zones for NFZ visualization.
+                    safety_zones = None
+                    try:
+                        sm = getattr(self.pipeline, "_safety_manager", None)
+                        if sm is not None:
+                            safety_zones = list(sm._nfz.zones)
+                    except Exception:
+                        pass
                     annotated = self._annotator.annotate(
                         frame,
                         tracks=self._last_tracks,
                         selected_id=self._selected_target_id,
+                        safety_zones=safety_zones,
                         status_text=state_text,
                     )
                     self._frame_buffer.push(annotated, ts)
@@ -364,10 +422,85 @@ class TrackingAPI:
         logger.info("Tracking loop stopped")
 
 
+def _wire_pipeline_extensions(app: Flask, api: "TrackingAPI") -> None:
+    """Wire pipeline sub-components into app.extensions so Blueprint routes can access them.
+
+    Called both at app creation (if pipeline is already running) and after
+    each successful start_tracking() call so that fire/safety routes work
+    immediately without requiring a server restart.
+    """
+    pipeline = api.pipeline
+    if pipeline is None:
+        return
+
+    for attr, key in [
+        ("_shooting_chain", "shooting_chain"),
+        ("_audit_logger", "audit_logger"),
+        ("_health_monitor", "health_monitor"),
+        ("_safety_manager", "safety_manager"),
+        ("_iff_checker", "iff_checker"),
+    ]:
+        obj = getattr(pipeline, attr, None)
+        if obj is not None:
+            app.extensions[key] = obj
+
+    # Start operator watchdog once when shooting_chain becomes available.
+    if "shooting_chain" in app.extensions and "operator_watchdog" not in app.extensions:
+        try:
+            from ..safety.watchdog import OperatorWatchdog
+            watchdog = OperatorWatchdog(
+                app.extensions["shooting_chain"],
+                timeout_s=getattr(api, "_operator_timeout_s", 10.0),
+            )
+            watchdog.start()
+            app.extensions["operator_watchdog"] = watchdog
+        except Exception as exc:
+            logger.warning("Could not start operator watchdog: %s", exc)
+
+    # Load persisted NFZ zones into the live safety manager (if available).
+    if "safety_manager" in app.extensions:
+        try:
+            from .safety_routes import load_persisted_zones
+            load_persisted_zones(app.extensions["safety_manager"])
+        except Exception as exc:
+            logger.warning("Could not load persisted NFZ zones: %s", exc)
+
+
 def create_flask_app(api: TrackingAPI) -> Flask:
     """Create Flask application with API endpoints."""
     app = Flask(__name__)
     CORS(app)  # Enable CORS for cross-origin requests
+
+    # ------------------------------------------------------------------
+    # Optional Bearer token authentication middleware
+    # ------------------------------------------------------------------
+    _api_key: str | None = os.environ.get("RWS_API_KEY") or None
+
+    # Paths that are always accessible without a token (monitoring/streaming).
+    _AUTH_EXEMPT_EXACT = frozenset(["/api/health", "/api/events", "/metrics"])
+    _AUTH_EXEMPT_PREFIX = "/api/video/"
+
+    if _api_key is not None:
+        logger.info("RWS API: Bearer token authentication is ENABLED.")
+
+        @app.before_request
+        def _check_auth():
+            path = request.path
+            # Exempt monitoring, streaming, and video paths.
+            if path in _AUTH_EXEMPT_EXACT or path.startswith(_AUTH_EXEMPT_PREFIX):
+                return None
+
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[len("Bearer "):]
+                if hmac.compare_digest(token, _api_key):
+                    return None
+
+            return jsonify({"error": "Unauthorized"}), 401
+
+    # Expose the module-level fire rate limiter via app.extensions so blueprints
+    # can access it without a circular import.
+    app.extensions["fire_rate_limiter"] = _fire_rate_limiter
 
     @app.route("/api/health", methods=["GET"])
     def health():
@@ -380,6 +513,8 @@ def create_flask_app(api: TrackingAPI) -> Flask:
         data = request.get_json() or {}
         camera_source = data.get("camera_source", 0)
         result = api.start_tracking(camera_source)
+        if result.get("success"):
+            _wire_pipeline_extensions(app, api)
         return jsonify(result)
 
     @app.route("/api/stop", methods=["POST"])
@@ -387,6 +522,17 @@ def create_flask_app(api: TrackingAPI) -> Flask:
         """Stop tracking."""
         result = api.stop_tracking()
         return jsonify(result)
+
+    # Flutter dashboard uses /api/tracking/start and /api/tracking/stop.
+    @app.route("/api/tracking/start", methods=["POST"])
+    def tracking_start():
+        """Alias for /api/start — used by Flutter dashboard."""
+        return start()
+
+    @app.route("/api/tracking/stop", methods=["POST"])
+    def tracking_stop():
+        """Alias for /api/stop — used by Flutter dashboard."""
+        return stop()
 
     @app.route("/api/status", methods=["GET"])
     def status():
@@ -549,28 +695,9 @@ def create_flask_app(api: TrackingAPI) -> Flask:
         })
 
     # Wire pipeline components into Flask extensions so Blueprint routes can access them.
-    pipeline = api.pipeline if hasattr(api, "pipeline") else None
-    if pipeline is not None:
-        if hasattr(pipeline, "_shooting_chain") and pipeline._shooting_chain is not None:
-            app.extensions["shooting_chain"] = pipeline._shooting_chain
-        if hasattr(pipeline, "_audit_logger") and pipeline._audit_logger is not None:
-            app.extensions["audit_logger"] = pipeline._audit_logger
-        if hasattr(pipeline, "_health_monitor") and pipeline._health_monitor is not None:
-            app.extensions["health_monitor"] = pipeline._health_monitor
-        if hasattr(pipeline, "_safety_manager") and pipeline._safety_manager is not None:
-            app.extensions["safety_manager"] = pipeline._safety_manager
-        if hasattr(pipeline, "_iff_checker") and pipeline._iff_checker is not None:
-            app.extensions["iff_checker"] = pipeline._iff_checker
-
-    # Start operator watchdog if shooting chain is present.
-    if "shooting_chain" in app.extensions:
-        from ..safety.watchdog import OperatorWatchdog
-        watchdog = OperatorWatchdog(
-            app.extensions["shooting_chain"],
-            timeout_s=getattr(api, "_operator_timeout_s", 10.0),
-        )
-        watchdog.start()
-        app.extensions["operator_watchdog"] = watchdog
+    # (pipeline may be None at startup; _wire_pipeline_extensions is also called after
+    # each successful start_tracking() so routes work immediately.)
+    _wire_pipeline_extensions(app, api)
 
     # Fire control routes
     from .fire_routes import fire_bp
@@ -604,6 +731,10 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     # No-fire zone CRUD
     from .safety_routes import safety_bp
     app.register_blueprint(safety_bp)
+
+    # Multi-gimbal pipeline status (stub — pipeline not yet wired to HTTP)
+    from .multi_routes import multi_bp
+    app.register_blueprint(multi_bp)
 
     # Config file watcher — hot-reload config.yaml into live PID/selector params.
     try:
