@@ -17,7 +17,7 @@ import numpy as np
 # ─────────────────────────────────────────────────────────
 WIDTH, HEIGHT = 1280, 720
 FPS           = 30
-TOTAL_FRAMES  = 600          # 20 seconds, dense action
+TOTAL_FRAMES  = 310          # ~10 seconds, hyper-dense action
 OUTPUT_PATH   = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "logs", "tracking_demo.mp4",
@@ -112,7 +112,7 @@ class GimbalAim:
     def __init__(self, x: float, y: float):
         self.x, self.y = float(x), float(y)
 
-    def update(self, tx: float, ty: float, tau: float = 0.18) -> Tuple[int,int]:
+    def update(self, tx: float, ty: float, tau: float = 0.45) -> Tuple[int,int]:
         self.x += tau*(tx-self.x);  self.y += tau*(ty-self.y)
         return int(self.x), int(self.y)
 
@@ -143,22 +143,22 @@ class Target:
         return x, y, self.w, self.h, self.vx, self.vy
 
 
-# ── Wave 1 (frames 15–250): 3 fast targets, G0 handles T1+T3, G1 handles T2
+# ── Wave 1 (frames 15–90): 3 fast targets, G0 handles T1+T3, G1 handles T2
 W1 = [
     # Person A — diagonal upper-left → lower-right, zigzag
-    Target(1,"Person", 0.91, 15,195,  80,120,  5.2, 3.2,  12,8, 22,  76,116),
+    Target(1,"Person", 0.91, 15, 90,  80,120,  5.2, 3.2,  12,8, 22,  76,116),
     # Vehicle — right edge → left, fast, slight weave
-    Target(2,"Vehicle",0.78, 15,210, 1180,340, -6.5, 0.8,   0,14,40, 130, 78),
+    Target(2,"Vehicle",0.78, 15, 95, 1180,340, -6.5, 0.8,   0,14,40, 130, 78),
     # Person B — bottom → up-right, jinking
-    Target(3,"Person", 0.85, 15,230,  600,620,  2.8,-5.0,  16,0, 18,  72,112),
+    Target(3,"Person", 0.85, 15,100,  600,620,  2.8,-5.0,  16,0, 18,  72,112),
 ]
 
-# ── Wave 2 (frames 290–520): 4 targets, all fast, two gimbals
+# ── Wave 2 (frames 120–240): 4 targets simultaneously, two gimbals
 W2 = [
-    Target(4,"Person", 0.89, 290,480,  50,200,  6.0, 2.5,  10,6, 28,  80,120),
-    Target(5,"Vehicle",0.72, 290,500,1220,420,  -7.5, 1.2,   0,10,35, 140, 82),
-    Target(6,"Person", 0.83, 310,490, 640, 50,  1.5, 5.8,  14,0, 24,  74,114),
-    Target(7,"Drone",  0.76, 310,510, 200,500,  5.0,-4.5,   8,8, 20,  60, 60),
+    Target(4,"Person", 0.89, 120,230,  50,200,  6.0, 2.5,  10,6, 28,  80,120),
+    Target(5,"Vehicle",0.72, 120,240,1220,420,  -7.5, 1.2,   0,10,35, 140, 82),
+    Target(6,"Person", 0.83, 130,245, 640, 50,  1.5, 5.8,  14,0, 24,  74,114),
+    Target(7,"Drone",  0.76, 130,250, 200,500,  5.0,-4.5,   8,8, 20,  60, 60),
 ]
 
 ALL_TARGETS = W1 + W2
@@ -169,16 +169,16 @@ ALL_TARGETS = W1 + W2
 # Tuple: (fire_frame, track_id, cx_at_fire, cy_at_fire)
 # ─────────────────────────────────────────────────────────
 
-# Wave 1 fires
+# Wave 1 fires — rapid sequential every ~20 frames
 FIRE_EVENTS: List[dict] = [
-    dict(f=95,  tid=1),
-    dict(f=145, tid=2),
-    dict(f=190, tid=3),
-    # Wave 2 — dual simultaneous
-    dict(f=390, tid=4),
-    dict(f=392, tid=5),
-    dict(f=440, tid=6),
-    dict(f=445, tid=7),
+    dict(f=38,  tid=1),
+    dict(f=58,  tid=2),
+    dict(f=78,  tid=3),
+    # Wave 2 — dual simultaneous kills
+    dict(f=148, tid=4),
+    dict(f=150, tid=5),
+    dict(f=193, tid=6),
+    dict(f=195, tid=7),
 ]
 _NEUTRALIZED: set = set()
 
@@ -207,7 +207,7 @@ def get_target_state(tid:int, f:int) -> str:
         if tgt.tid==tid:
             if tgt.enter <= f < tgt.exit:
                 appear = f - tgt.enter
-                if appear < 12: return "TRACK"
+                if appear < 5: return "TRACK"
                 return "LOCK"
     return "SEARCH"
 
@@ -217,17 +217,17 @@ def yaw_err_for(tid:int, f:int) -> float:
         if tgt.tid==tid:
             appear = f - tgt.enter
             if appear < 0: return 0.0
-            if appear < 12:
-                return 3.5*math.exp(-appear*0.15)+0.3
-            t2 = appear - 12
-            return 0.3*math.exp(-t2*0.25)+0.05
+            if appear < 5:
+                return 3.5*math.exp(-appear*0.55)+0.2
+            t2 = appear - 5
+            return 0.2*math.exp(-t2*0.55)+0.03
     return 0.0
 
 def chain_state_at(f:int) -> str:
     for ev in FIRE_EVENTS:
-        if ev['f']-4 <= f < ev['f']:    return "ARMED"
+        if ev['f']-3 <= f < ev['f']:    return "ARMED"
         if ev['f']   <= f < ev['f']+2:  return "FIRE_AUTH"
-        if ev['f']+2 <= f < ev['f']+6:  return "FIRED"
+        if ev['f']+2 <= f < ev['f']+5:  return "FIRED"
     return "SAFE"
 
 def fire_flash_intensity(f:int) -> Tuple[float,int,int,int]:
@@ -502,7 +502,7 @@ def draw_mission_summary(frame, f:int, start:int):
         ("═"*38,""),
         ("     MISSION DEBRIEF",""),
         ("═"*38,""),
-        ("  Duration","20.0s"),
+        ("  Duration","10.3s"),
         ("  Targets tracked","7"),
         ("  Shots fired","7"),
         ("  Lock rate","94%"),
@@ -562,7 +562,7 @@ def render_video(output_path:str):
             active_tgts.append((tgt,threat))
 
         # ── Search sweep when no targets
-        if f<15 or (not active_raw and f<300):
+        if f<15 or (not active_raw and f<130):
             draw_search_sweep(frame,f)
 
         # ── Draw targets
@@ -585,7 +585,7 @@ def render_video(output_path:str):
 
             # Gimbal convergence
             gid=0 if is_g0 else 1
-            tau=0.22 if state=="LOCK" else 0.14
+            tau=0.58 if state=="LOCK" else 0.42
             gx,gy=aim[gid].update(cx2,cy2,tau)
             draw_crosshair(frame,gx,gy,rc,0.50)
 
@@ -620,8 +620,8 @@ def render_video(output_path:str):
             draw_wave2_header(frame)
 
         # Mission summary
-        if f>=530:
-            draw_mission_summary(frame,f,530)
+        if f>=240:
+            draw_mission_summary(frame,f,240)
 
         # HUD
         chain=chain_state_at(f)
