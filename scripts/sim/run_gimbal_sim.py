@@ -252,8 +252,9 @@ def run_sim(
     if use_pybullet:
         try:
             from src.rws_tracking.hardware.pybullet_driver import PyBulletGimbalDriver
-            driver = PyBulletGimbalDriver(gui=True, limits=limits)
-            print("[SIM] Driver: PyBullet physics GUI")
+            gui = show_window   # headless when --no-window; GUI when window requested
+            driver = PyBulletGimbalDriver(gui=gui, limits=limits)
+            print(f"[SIM] Driver: PyBullet ({'GUI' if gui else 'headless DIRECT'})")
         except (ImportError, FileNotFoundError) as exc:
             print(f"[SIM] PyBullet unavailable ({exc}), falling back to Matplotlib")
             use_pybullet = False
@@ -302,6 +303,7 @@ def run_sim(
     n_lock   = 0
     n_track  = 0
     t_start  = time.monotonic()
+    last_fb  = None   # cached last feedback for summary
 
     prev_state = ""
 
@@ -314,6 +316,7 @@ def run_sim(
 
             # Get current gimbal feedback for scene projection
             fb = driver.get_feedback(t_now)
+            last_fb = fb
 
             # World-coordinate scene → detections visible in current gimbal frame
             detections = scene.step(dt=dt_s,
@@ -391,14 +394,18 @@ def run_sim(
     track_pct = 100.0 * n_track / max(n_frames, 1)
     fps_actual = n_frames / max(total_s, 0.001)
 
-    fb_final = driver.get_feedback(time.monotonic())
+    if last_fb is not None:
+        final_pos = f"yaw={last_fb.yaw_deg:+.1f}deg  pitch={last_fb.pitch_deg:+.1f}deg"
+    else:
+        final_pos = "(no frames processed)"
+
     print(f"\n{'='*55}")
     print(f" RWS Gimbal Simulation - Summary")
     print(f"{'='*55}")
     print(f"  Duration    : {total_s:.1f}s  ({n_frames} frames, {fps_actual:.1f} fps)")
     print(f"  LOCK  time  : {lock_pct:.1f}%  ({n_lock} frames)")
     print(f"  TRACK time  : {track_pct:.1f}%  ({n_track} frames)")
-    print(f"  Final gimbal: yaw={fb_final.yaw_deg:+.1f}deg  pitch={fb_final.pitch_deg:+.1f}deg")
+    print(f"  Final gimbal: {final_pos}")
     print(f"{'='*55}")
 
 

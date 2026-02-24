@@ -41,7 +41,9 @@ from ..types import GimbalFeedback
 logger = logging.getLogger(__name__)
 
 # Path to the URDF, relative to this file
-_URDF_PATH = Path(__file__).parent.parent.parent.parent.parent / \
+# __file__ = src/rws_tracking/hardware/pybullet_driver.py
+# 4× parent  → project root (RWS/)
+_URDF_PATH = Path(__file__).parent.parent.parent.parent / \
     "hardware" / "gimbal_model" / "rws_gimbal.urdf"
 
 # Joint names in the URDF
