@@ -115,15 +115,23 @@ class _AngleLabel extends StatelessWidget {
             ? Colors.orange
             : Colors.red;
 
+    // Compact single-line layout: "偏航  12.3°  误差 0.05°  30.0°/s"
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+        Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500)),
         Text('${valueDeg.toStringAsFixed(1)}°',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        Text('误差 ${errorDeg.toStringAsFixed(2)}°',
-            style: TextStyle(fontSize: 11, color: errColor)),
-        Text('速率 ${rateDps.toStringAsFixed(1)}°/s',
-            style: TextStyle(fontSize: 10, color: rateColor)),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        RichText(
+          text: TextSpan(
+            style: const TextStyle(fontSize: 10),
+            children: [
+              TextSpan(text: '误差 ${errorDeg.toStringAsFixed(1)}°', style: TextStyle(color: errColor)),
+              const TextSpan(text: '  '),
+              TextSpan(text: '${rateDps.toStringAsFixed(0)}°/s', style: TextStyle(color: rateColor)),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -150,6 +158,8 @@ class _GimbalPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Guard: skip painting when constraints haven't been resolved yet (0×0 on first frame)
+    if (size.width < 16 || size.height < 16) return;
     final center = Offset(size.width / 2, size.height / 2);
     final radius = math.min(size.width, size.height) / 2 - 8;
 
