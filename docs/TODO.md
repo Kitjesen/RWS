@@ -5,6 +5,27 @@
 
 ---
 
+## 已完成 (本会话)
+
+以下功能在本会话中确认实现并已合并，按模块汇总。
+
+| 功能 | 说明 |
+|------|-----|
+| **API wiring** | pipeline 扩展组件（shooting_chain、audit_logger、health_monitor、safety_manager、iff_checker）通过 `_wire_pipeline_extensions()` 注入 `app.extensions`；`/api/tracking/start` 和 `/api/tracking/stop` 作为 Flutter 兼容 URL 别名已注册 |
+| **NFZ zone persistence** | `safety_routes.py` 实现禁射区持久化：区域通过 POST /api/safety/zones 写入磁盘，服务重启后由 `load_persisted_zones()` 在 pipeline 启动时自动恢复 |
+| **SSE event wiring** | `pipeline.py` 直接调用 `event_bus.emit()` 发送 `threat_detected`（高威胁新目标入队）、`target_neutralized`（lifecycle 标记中和）、`health_degraded`（子系统降级）、`safety_triggered`（联锁阻断射击）四类事件；其余事件由对应路由和 watchdog 发送 |
+| **Prometheus gimbal metrics** | `metrics_routes.py` 在 Prometheus 文本格式中暴露云台位置（yaw_deg、pitch_deg）及跟踪误差（yaw_error_deg、pitch_error_deg）指标，供 GET /metrics 拉取 |
+| **Flutter polling backoff** | Flutter 仪表盘侧已实现指数退避轮询：连续错误后拉取间隔自动延长，避免后端过载 |
+| **Bearer token auth + rate limiting** | `server.py` 实现 `RWS_API_KEY` 环境变量驱动的 Bearer token 认证中间件（`hmac.compare_digest` 常数时间比较）；火控端点令牌桶限速 30 req/min/IP；`/api/health`、`/api/events`、`/metrics`、`/api/video/*` 豁免认证 |
+| **GimbalTrajectoryPlanner wiring** | `pipeline.step()` 第 8b 步：检测到 `track_id` 变更时调用 `set_target()` 触发梯形轨迹规划；轨迹激活期间以 `get_rate_command()` 完全覆盖 PID 输出；`metadata["trajectory_active"]` 标记激活帧 |
+| **MultiGimbalPipeline HTTP stub** | `multi_routes.py` 提供 `/api/multi/*` HTTP 存根端点；`docs/architecture/overview.md` 多云台协同流程图已更新 |
+| **Flutter PreflightWidget** | Flutter 前飞检查清单组件 `PreflightWidget` 已实现，调用 GET /api/selftest 展示 7 子系统 go/no-go 状态 |
+| **Flutter SSE handlers** | Flutter AlertBannerOverlay 已订阅并处理 `fire_executed`（射击执行）、`target_designated`（目标指定）、`config_reloaded`（配置热重载）事件 |
+| **gRPC parity** | gRPC 服务器从 14 个 RPC 扩展至 29 个，新增火控（arm/safe/request/heartbeat/designate）、任务管理（start/end）、NFZ CRUD（add/remove/list）等接口，与 REST API 对等 |
+| **config.yaml defaults** | `config.yaml` 中 `safety.enabled` 和 `engagement.enabled` 默认值改为 `true`，新部署无需手动开启 |
+
+---
+
 ## P2 — 架构 / 可维护性改进
 
 ### 硬件层 (hardware)
@@ -221,3 +242,15 @@
 | **Lazy Import** | 顶层/pipeline `__init__` 改为 `__getattr__` 惰性导入，避免 cv2/ultralytics 被意外拉入 |
 | **save_config 修复** | tuple→list 递归转换，修复 YAML roundtrip 失败 |
 | **集成测试** | test_shooting_chain.py — 18 用例覆盖全链路端到端 |
+| ✅ **API wiring** | pipeline 扩展组件注入 app.extensions；/api/tracking/* URL 别名 |
+| ✅ **NFZ zone persistence** | 禁射区磁盘持久化 + 启动时自动恢复 |
+| ✅ **SSE event wiring** | threat_detected / target_neutralized / health_degraded / safety_triggered 事件接入 pipeline |
+| ✅ **Prometheus gimbal metrics** | 云台位置与跟踪误差指标暴露至 /metrics |
+| ✅ **Flutter polling backoff** | 指数退避轮询，连续错误自动降频 |
+| ✅ **Bearer token auth + rate limiting** | RWS_API_KEY Bearer 认证 + 火控端点 30 req/min 限速 |
+| ✅ **GimbalTrajectoryPlanner wiring** | pipeline.step() 第 8b 步目标切换检测 + 梯形轨迹覆盖 PID |
+| ✅ **MultiGimbalPipeline HTTP stub** | /api/multi/* 端点 + 架构文档更新 |
+| ✅ **Flutter PreflightWidget** | 前飞检查清单组件，调用 /api/selftest |
+| ✅ **Flutter SSE handlers** | fire_executed / target_designated / config_reloaded 事件处理 |
+| ✅ **gRPC parity (14→29 RPCs)** | 火控、任务、NFZ 接口补全，REST/gRPC 对等 |
+| ✅ **config.yaml defaults** | safety/engagement 默认 enabled: true |

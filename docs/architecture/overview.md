@@ -281,7 +281,19 @@ lead_angle = angle(predicted_pos) - angle(current_pos)
 
 #### GimbalTrajectoryPlanner (轨迹规划)
 
-多目标切换时的平滑运动规划：
+多目标切换时的平滑运动规划。该组件在 `pipeline.step()` 的第 8b 步激活。
+
+**目标切换检测**：当 `selected.track_id != _last_target_id`（且 `_last_target_id` 非 None）时，判定发生了目标切换。切换时将新目标的像素坐标转换为云台角度目标，并触发梯形轨迹规划。
+
+**像素→角度转换公式**：
+```
+target_yaw_deg   = feedback.yaw_deg   + (px_cx - cam.cx) * degrees(1) / cam.fx
+target_pitch_deg = feedback.pitch_deg - (px_cy - cam.cy) * degrees(1) / cam.fy
+```
+其中 `cam.fx` / `cam.fy` 为相机焦距（像素），`cam.cx` / `cam.cy` 为主点坐标，`degrees(1)` 将 1 弧度换算为角度。
+
+**速率指令覆盖**：轨迹激活期间（`trajectory_planner.is_active == True`），`get_rate_command(timestamp)` 返回的梯形速率指令完全替换 PID 输出，实现从旧目标到新目标的平滑切换，消除突变跳变。轨迹结束后 PID 恢复主导。
+
 ```
 速率 ^
      |  /‾‾‾‾\          ← 梯形曲线 (长距离)
@@ -295,6 +307,7 @@ lead_angle = angle(predicted_pos) - angle(current_pos)
      +------→ 时间
 ```
 - 双轴同步、防抖切换
+- `metadata` 字段 `trajectory_active: True` 标记轨迹激活帧，供遥测使用
 
 ### 4. Hardware Layer (硬件层)
 
@@ -356,6 +369,24 @@ if status.fire_authorized:
     # 允许射击
 ```
 
+#### OperatorWatchdog (操作员死人开关)
+
+`OperatorWatchdog` 在独立的守护线程中运行。若操作员在 `timeout_s` 秒内
+（默认 10.0s，可由 `RWS_OPERATOR_TIMEOUT` 环境变量覆盖）没有发送心跳，
+watchdog 自动调用 `ShootingChain.safe("heartbeat_timeout_Xs")`，将射击链
+强制降回 SAFE 状态。恢复心跳后 `timed_out` 标志自动清除。
+
+```
+POST /api/fire/heartbeat  ──→  OperatorWatchdog.heartbeat()
+                               │  (resets timer, clears timed_out flag)
+                               ↓
+                         [timeout_s elapsed without heartbeat]
+                               ↓
+                    ShootingChain.safe("heartbeat_timeout")
+                               +
+                    event_bus.emit("operator_timeout", {...})
+```
+
 ### 5. Algebra Layer (数学层)
 
 #### PixelToGimbalTransform
@@ -395,6 +426,64 @@ class TelemetryLogger(Protocol):
 - `lock_rate`: 锁定率（LOCK 状态占比）
 - `avg_abs_error_deg`: 平均绝对误差
 - `switches_per_min`: 目标切换频率
+
+### 7. API Layer (API 层)
+
+REST API 运行在端口 5000，gRPC 运行在端口 50051，通过 `create_flask_app()` 创建 Flask 应用，注册所有 Blueprint。
+
+#### API Security (API 安全)
+
+**Bearer Token 认证**
+
+通过环境变量 `RWS_API_KEY` 启用 Bearer token 认证。设置后，所有受保护的 API 端点均须在请求头中携带 `Authorization: Bearer <token>`，服务端使用 `hmac.compare_digest()` 进行常数时间比较，防止时序攻击。
+
+以下路径**无需**认证（监控/流媒体始终可访问）：
+- `GET /api/health` — 健康检查
+- `GET /api/events` — SSE 实时推流
+- `GET /metrics` — Prometheus 指标
+- `GET /api/video/*` — MJPEG 视频流（前缀匹配）
+
+未提供或无效 token 时返回 `HTTP 401 {"error": "Unauthorized"}`。若 `RWS_API_KEY` 未设置，则认证中间件不激活，所有端点公开可访问。
+
+**Rate Limiting (速率限制)**
+
+火控端点（fire-control endpoints）采用令牌桶算法限速：**每 IP 每分钟最多 30 次请求**（`_fire_rate_limiter`，`max_requests=30, window_s=60.0`）。
+
+受限端点包括：`POST /api/fire/arm`、`POST /api/fire/safe`、`POST /api/fire/request`、`POST /api/fire/heartbeat`、`POST /api/fire/designate`、`DELETE /api/fire/designate` 等火控相关路由。超出限制时返回 `HTTP 429 {"error": "Rate limit exceeded"}`。速率限制器通过 `app.extensions["fire_rate_limiter"]` 在 Blueprint 间共享，无需循环导入。
+
+#### SSE EventBus (实时事件推送)
+
+`EventBus` 是模块级单例（`src/rws_tracking/api/events.py`），采用线程安全的扇出模式：任意模块调用 `event_bus.emit()` → 广播到所有已连接的 SSE 订阅者。客户端通过 `GET /api/events` 建立长连接，遵循 RFC 8895 SSE 格式。
+
+每个订阅者拥有独立的 `Queue(maxsize=256)`，慢速客户端填满队列后将被自动断开。后台心跳线程每 15 秒发送一次 `heartbeat` 事件保持连接活跃。
+
+**全部 13 种事件类型：**
+
+| 事件类型 | 触发时机 | 主要字段 |
+|---|---|---|
+| `fire_chain_state` | ShootingChain 状态机发生转换（SAFE/ARMED/FIRE_AUTHORIZED/FIRED/COOLDOWN） | `state`, `prev_state`, `reason`, `ts` |
+| `fire_executed` | 成功执行一次射击（execute_fire 调用完成） | `track_id`, `timestamp` |
+| `threat_detected` | 新 Track 的威胁评分首次超过阈值进入评估队列 | `track_id`, `threat_score`, `ts` |
+| `target_neutralized` | TargetLifecycleManager 将目标标记为已中和（neutralized） | `track_id`, `ts` |
+| `health_degraded` | 任一子系统健康状态下降到 degraded 或 failed | `subsystem`, `status`, `ts` |
+| `safety_triggered` | SafetyInterlock 或 NFZ 检查阻止了射击指令 | `reason`, `yaw_deg`, `pitch_deg`, `ts` |
+| `operator_timeout` | OperatorWatchdog 检测到心跳超时，强制链路进入 SAFE | `elapsed_s`, `timeout_s`, `ts` |
+| `mission_started` | POST /api/mission/start 成功执行 | `profile`, `session_id`, `ts` |
+| `mission_ended` | POST /api/mission/end 成功执行，含 HTML 报告路径 | `session_id`, `report_path`, `ts` |
+| `target_designated` | 操作员通过 POST /api/fire/designate 指定了目标 | `track_id`, `operator_id` |
+| `nfz_added` | POST /api/safety/zones 成功添加禁射区 | `zone_id`, `center_yaw_deg`, `center_pitch_deg`, `radius_deg` |
+| `nfz_removed` | DELETE /api/safety/zones/<id> 成功删除禁射区 | `zone_id` |
+| `config_reloaded` | config.yaml 热重载检测到变更并成功应用 | `changed_sections`, `ts` |
+| `heartbeat` | 后台线程每 15 秒自动发送，保持连接活跃 | `ts` |
+
+> 注意：`connected` 是连接建立后发送的欢迎事件（id=0），不属于业务事件类型。
+
+**Flutter 客户端用法示例：**
+```dart
+final es = EventSource('/api/events');
+es.addEventListener('fire_executed', (e) => handleFire(jsonDecode(e.data)));
+es.addEventListener('health_degraded', (e) => showAlert(jsonDecode(e.data)));
+```
 
 ## 配置系统
 
@@ -542,6 +631,7 @@ class MyGimbalDriver:
 ### 线程安全
 - `InMemoryTelemetryLogger`: 内置 `threading.Lock`
 - `FileTelemetryLogger`: 内置 `threading.Lock`
+- `EventBus`: 内置 `threading.Lock`，每订阅者独立 Queue
 - 其他组件：单线程使用（pipeline 主循环）
 
 ## 测试策略
