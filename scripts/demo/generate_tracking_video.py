@@ -8,7 +8,7 @@ Timeline (600 frames @ 30 fps = 20 s):
   Final        Mission debrief
 """
 
-import math, os, time
+import math, os, subprocess, tempfile, time
 from typing import Optional, Tuple, List
 
 import cv2
@@ -527,8 +527,17 @@ def draw_mission_summary(frame, f:int, start:int):
 
 def render_video(output_path:str):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    fourcc=cv2.VideoWriter_fourcc(*"mp4v")
-    writer=cv2.VideoWriter(output_path,fourcc,FPS,(WIDTH,HEIGHT))
+
+    # Write to a lossless AVI first (MJPG is reliable on all platforms),
+    # then re-encode with ffmpeg to H.264 MP4 so FPS is always correct.
+    tmp_avi = output_path.replace(".mp4", "_tmp.avi")
+    fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+    writer = cv2.VideoWriter(tmp_avi, fourcc, FPS, (WIDTH, HEIGHT))
+    if not writer.isOpened():
+        # Fallback: try direct mp4v
+        tmp_avi = output_path
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(output_path, fourcc, FPS, (WIDTH, HEIGHT))
     if not writer.isOpened():
         raise RuntimeError(f"Cannot open VideoWriter: {output_path}")
 
@@ -642,6 +651,26 @@ def render_video(output_path:str):
 
     writer.release()
     el=time.time()-t0
+
+    # If we used tmp AVI, re-encode with ffmpeg → guaranteed correct FPS
+    if tmp_avi != output_path:
+        print(f"\nRe-encoding with ffmpeg → H.264 @ {FPS}fps …")
+        ret = subprocess.run([
+            "ffmpeg", "-y",
+            "-r", str(FPS),          # input fps
+            "-i", tmp_avi,
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "18",
+            "-r", str(FPS),          # output fps (force)
+            "-movflags", "+faststart",
+            output_path,
+        ], capture_output=True, text=True)
+        if ret.returncode != 0:
+            print("ffmpeg error:", ret.stderr[-800:])
+            raise RuntimeError("ffmpeg failed")
+        os.remove(tmp_avi)
+
     sz=os.path.getsize(output_path)
     print(f"\nSaved: {output_path}  "
           f"({TOTAL_FRAMES} frames, {TOTAL_FRAMES/FPS:.1f}s, "
