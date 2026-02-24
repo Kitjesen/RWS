@@ -20,11 +20,11 @@ Sub-packages:
 from .algebra import CameraModel, DistortionCoeffs, MountExtrinsics, PixelToGimbalTransform
 from .config import SystemConfig, default_controller_config, load_config
 from .control import TwoAxisGimbalController
-from .types import TrackState
 from .hardware import SimulatedGimbalDriver
 from .perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
 from .pipeline import VisionGimbalPipeline, run_camera_demo, run_demo
 from .telemetry import InMemoryTelemetryLogger
+from .types import TrackState
 
 
 def __getattr__(name: str):

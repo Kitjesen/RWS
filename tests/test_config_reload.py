@@ -1,11 +1,8 @@
 """配置热更新模块单元测试。"""
 
-import tempfile
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 import yaml
 
 from src.rws_tracking.tools.config_reload import ConfigReloader

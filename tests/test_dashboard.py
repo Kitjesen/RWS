@@ -1,12 +1,11 @@
 """仪表盘单元测试 — mock cv2。"""
 
-from unittest.mock import MagicMock, patch
-from collections import deque
+from unittest.mock import patch
 
-import pytest
 import numpy as np
+import pytest
 
-from src.rws_tracking.telemetry.logger import EventRecord, InMemoryTelemetryLogger
+from src.rws_tracking.telemetry.logger import InMemoryTelemetryLogger
 
 
 @pytest.fixture

@@ -10,7 +10,6 @@ from src.rws_tracking.control.lead_angle import (
 )
 from src.rws_tracking.types import BoundingBox, TargetObservation
 
-
 CAM = CameraModel(width=1280, height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0)
 
 

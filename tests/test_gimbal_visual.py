@@ -1,11 +1,12 @@
 """改进的仿真演示 - 显示云台角度和跟踪效果"""
 import time
+
 import cv2
 import numpy as np
 
+from src.rws_tracking.algebra import CameraModel
 from src.rws_tracking.pipeline.app import build_sim_pipeline
 from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
-from src.rws_tracking.algebra import CameraModel
 
 
 def draw_gimbal_indicator(img, yaw_deg, pitch_deg, max_yaw=160, max_pitch=75):

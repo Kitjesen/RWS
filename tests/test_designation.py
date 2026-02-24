@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Pipeline designation tests
@@ -81,6 +78,7 @@ class TestPipelineDesignation:
 def _make_app_with_mock_pipeline(pipeline=None):
     """Create a Flask test app with fire_bp and a mock pipeline."""
     from flask import Flask
+
     from src.rws_tracking.api.fire_routes import fire_bp
 
     app = Flask(__name__)

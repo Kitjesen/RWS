@@ -25,6 +25,8 @@ from src.rws_tracking.control.trajectory import (
 )
 from src.rws_tracking.decision.engagement import (
     EngagementConfig as EConfig,
+)
+from src.rws_tracking.decision.engagement import (
     EngagementQueue,
     ThreatAssessor,
 )

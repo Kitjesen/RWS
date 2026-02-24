@@ -5,10 +5,6 @@ from __future__ import annotations
 import queue
 import threading
 import time
-from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -163,8 +159,9 @@ class TestFormatSSE:
         assert out.endswith("\n\n")
 
     def test_format_handles_non_serialisable_via_str(self):
-        from src.rws_tracking.api.events import _format_sse
         import datetime
+
+        from src.rws_tracking.api.events import _format_sse
         out = _format_sse("ts_event", {"ts": datetime.datetime(2025, 1, 1)}, 1)
         assert "2025" in out  # datetime serialised via str()
 
@@ -178,7 +175,8 @@ class TestSseBlueprintRoute:
     def test_sse_endpoint_returns_event_stream(self):
         """GET /api/events returns text/event-stream and opens cleanly."""
         from flask import Flask
-        from src.rws_tracking.api.events import events_bp, EventBus
+
+        from src.rws_tracking.api.events import EventBus, events_bp
 
         # Use a fresh isolated bus so the heartbeat thread doesn't interfere.
         fresh_bus = EventBus()

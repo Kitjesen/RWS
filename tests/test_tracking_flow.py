@@ -17,7 +17,6 @@ from src.rws_tracking.config import (
 )
 from src.rws_tracking.control import TwoAxisGimbalController
 from src.rws_tracking.decision.state_machine import TrackStateMachine
-from src.rws_tracking.types import TrackState
 from src.rws_tracking.hardware import SimulatedGimbalDriver
 from src.rws_tracking.perception import (
     PassthroughDetector,
@@ -27,7 +26,7 @@ from src.rws_tracking.perception import (
 from src.rws_tracking.pipeline import VisionGimbalPipeline, run_demo
 from src.rws_tracking.telemetry import InMemoryTelemetryLogger
 from src.rws_tracking.tools.replay import TelemetryReplay
-from src.rws_tracking.types import BoundingBox, TargetError, Track
+from src.rws_tracking.types import BoundingBox, TargetError, Track, TrackState
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -48,7 +48,7 @@ import logging
 import queue
 import threading
 import time
-from typing import Generator, Iterator
+from collections.abc import Generator, Iterator
 
 from flask import Blueprint, Response, stream_with_context
 

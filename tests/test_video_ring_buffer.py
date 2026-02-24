@@ -5,7 +5,6 @@ Uses synthetic 640x480x3 uint8 numpy arrays — no real camera or cv2 needed.
 
 from __future__ import annotations
 
-import os
 import time
 from pathlib import Path
 
@@ -16,10 +15,8 @@ from src.rws_tracking.telemetry.video_ring_buffer import (
     VideoRingBuffer,
     _clip_stem,
     _parse_timestamp_from_filename,
-    _try_write_mp4,
     _write_jpegs,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -337,7 +334,7 @@ class TestWriteJpegsFallback:
 
         monkeypatch.setattr(builtins, "__import__", mock_import)
 
-        from src.rws_tracking.telemetry.video_ring_buffer import _FrameEntry, _write_jpegs
+        from src.rws_tracking.telemetry.video_ring_buffer import _FrameEntry
 
         frames = [_FrameEntry(frame=_frame(i * 10), timestamp=float(i)) for i in range(5)]
         jpeg_dir = tmp_path / "clip_frames"

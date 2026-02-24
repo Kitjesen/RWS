@@ -1,8 +1,6 @@
 """遥测日志器完整测试 — InMemory + File。"""
 
 import json
-import tempfile
-from pathlib import Path
 
 import pytest
 

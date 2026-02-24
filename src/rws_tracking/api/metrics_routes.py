@@ -19,9 +19,10 @@ Blueprint is registered by create_flask_app() in server.py.
 
 from __future__ import annotations
 
-import time
 import logging
+import time
 from collections import deque
+
 from flask import Blueprint, Response, current_app
 
 logger = logging.getLogger(__name__)

@@ -26,8 +26,8 @@ gRPC API Usage:
     client.start_tracking()
 """
 
-from .server import TrackingAPI, run_api_server
 from .client import TrackingClient
+from .server import TrackingAPI, run_api_server
 
 # gRPC imports (optional, only if protobuf files are generated)
 try:

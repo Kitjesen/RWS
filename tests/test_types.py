@@ -1,9 +1,7 @@
 """类型定义单元测试。"""
 
-import pytest
 
 from src.rws_tracking.types import (
-    AxisFeedback,
     BallisticSolution,
     BodyState,
     BoundingBox,
@@ -12,7 +10,6 @@ from src.rws_tracking.types import (
     EnvironmentParams,
     GimbalFeedback,
     LeadAngle,
-    MountCalibration,
     ProjectileParams,
     RangefinderReading,
     SafetyStatus,

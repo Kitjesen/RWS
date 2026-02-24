@@ -238,3 +238,22 @@ video_stream:
   annotate_tracks: true
   annotate_crosshair: true
   annotate_safety_zones: true
+
+# 任务会话 / 审计
+session:
+  fire_cooldown_s: 3.0           # minimum seconds between successive shots
+  audit_log_path: "logs/audit.jsonl"
+  telemetry_log_path: "logs/telemetry.jsonl"
+
+# 目标生命周期管理
+lifecycle:
+  confirm_frames: 3              # frames a detection must persist before becoming DETECTED
+  archive_timeout_s: 10.0        # seconds after last seen before target is ARCHIVED
+
+# 事件片段录制（VideoRingBuffer）
+clip:
+  buffer_duration_s: 10.0        # ring-buffer window size
+  pre_event_s: 3.0               # seconds of pre-event footage to keep
+  post_event_s: 2.0              # seconds of post-event footage to save
+  output_dir: "logs/clips"
+  fps: 30.0

@@ -1,18 +1,20 @@
 """Pipeline 完整单元测试。"""
 
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.rws_tracking.algebra import CameraModel, PixelToGimbalTransform
-from src.rws_tracking.config import GimbalControllerConfig, PIDConfig, SelectorConfig
+from src.rws_tracking.config import GimbalControllerConfig, PIDConfig
 from src.rws_tracking.control import TwoAxisGimbalController
 from src.rws_tracking.hardware import SimulatedGimbalDriver
-from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
+from src.rws_tracking.perception import (
+    PassthroughDetector,
+    SimpleIoUTracker,
+    WeightedTargetSelector,
+)
 from src.rws_tracking.pipeline.pipeline import PipelineOutputs, VisionGimbalPipeline
 from src.rws_tracking.telemetry import InMemoryTelemetryLogger
 from src.rws_tracking.types import BoundingBox, Detection
-
 
 CAM = CameraModel(width=1280, height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0)
 

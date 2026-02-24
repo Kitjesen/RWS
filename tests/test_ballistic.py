@@ -1,6 +1,5 @@
 """弹道补偿模块完整单元测试。"""
 
-import math
 
 import pytest
 
@@ -13,7 +12,6 @@ from src.rws_tracking.control.ballistic import (
     estimate_distance_from_bbox,
 )
 from src.rws_tracking.types import (
-    BallisticSolution,
     BoundingBox,
     EnvironmentParams,
     ProjectileParams,

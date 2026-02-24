@@ -6,6 +6,7 @@ Compares three configurations:
   C: Re-ID with OSNet x1.0 (MSMT17 pretrained, person Re-ID specialist)
 """
 import sys
+
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent / "src"))
 
 import time
@@ -142,14 +143,14 @@ def main():
 
         results: dict[str, dict] = {}
 
-        print(f"\n--- A: Baseline (no Re-ID) ---")
+        print("\n--- A: Baseline (no Re-ID) ---")
         results["baseline"] = run_tracker(vpath, "Baseline", MAX_FRAMES)
 
-        print(f"\n--- B: MobileNet Re-ID (ImageNet) ---")
+        print("\n--- B: MobileNet Re-ID (ImageNet) ---")
         results["mobilenet"] = run_tracker(vpath, "MobileNet", MAX_FRAMES,
                                            enable_reid=True, backbone="mobilenet")
 
-        print(f"\n--- C: OSNet Re-ID (MSMT17 person Re-ID) ---")
+        print("\n--- C: OSNet Re-ID (MSMT17 person Re-ID) ---")
         results["osnet"] = run_tracker(vpath, "OSNet", MAX_FRAMES,
                                        enable_reid=True, backbone="osnet_x1_0")
 

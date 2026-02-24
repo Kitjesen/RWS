@@ -6,14 +6,12 @@ Uses a temporary directory for clip storage to avoid polluting the real logs/.
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 from flask import Flask
-
 
 # ---------------------------------------------------------------------------
 # Helpers

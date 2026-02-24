@@ -13,17 +13,15 @@ import logging
 import os
 import threading
 import time
-from dataclasses import asdict
 from typing import Any
 
 import numpy as np
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
-from ..config import SystemConfig, load_config
+from ..config import load_config
 from ..hardware.imu_interface import BodyMotionProvider
 from ..pipeline import VisionGimbalPipeline, build_pipeline_from_config
-from ..types import BodyState
 from .video_stream import (
     FrameAnnotator,
     FrameBuffer,
@@ -368,7 +366,6 @@ class TrackingAPI:
 
     def _tracking_loop(self):
         """Main tracking loop (runs in separate thread)."""
-        import cv2
 
         logger.info("Tracking loop started")
 
@@ -435,7 +432,7 @@ class TrackingAPI:
         logger.info("Tracking loop stopped")
 
 
-def _wire_pipeline_extensions(app: Flask, api: "TrackingAPI") -> None:
+def _wire_pipeline_extensions(app: Flask, api: TrackingAPI) -> None:
     """Wire pipeline sub-components into app.extensions so Blueprint routes can access them.
 
     Called both at app creation (if pipeline is already running) and after
@@ -785,7 +782,7 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     app.register_blueprint(selftest_bp)
 
     # Real-time SSE event stream
-    from .events import events_bp, event_bus
+    from .events import event_bus, events_bp
     app.register_blueprint(events_bp)
     event_bus.start()
 

@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import grpc
 
@@ -61,7 +62,7 @@ class TrackingGrpcClient:
         self.channel.close()
         logger.info("gRPC channel closed")
 
-    def __enter__(self) -> "TrackingGrpcClient":
+    def __enter__(self) -> TrackingGrpcClient:
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:

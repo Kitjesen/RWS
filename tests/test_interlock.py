@@ -1,7 +1,6 @@
 """安全联锁系统独立完整测试。"""
 
 import time
-from unittest.mock import patch
 
 import pytest
 

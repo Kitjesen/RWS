@@ -1,6 +1,5 @@
 """PassthroughDetector 单元测试。"""
 
-import pytest
 
 from src.rws_tracking.perception.passthrough_detector import PassthroughDetector
 from src.rws_tracking.types import BoundingBox, Detection

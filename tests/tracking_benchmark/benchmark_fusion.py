@@ -9,6 +9,7 @@ Four-way comparison:
 Lower unique IDs / higher avg_track_len / lower frag = better tracking stability.
 """
 import sys
+
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent / "src"))
 
 import time
@@ -16,12 +17,10 @@ from pathlib import Path
 
 import cv2
 
-from rws_tracking.algebra.kalman2d import KalmanCAConfig
 from rws_tracking.perception.appearance_gallery import GalleryConfig
-from rws_tracking.perception.reid_extractor import ReIDConfig
-from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker
-from rws_tracking.perception.fusion_seg_tracker import FusionSegTracker
 from rws_tracking.perception.fusion_mot import FusionMOTConfig
+from rws_tracking.perception.fusion_seg_tracker import FusionSegTracker
+from rws_tracking.perception.reid_extractor import ReIDConfig
 
 
 def run_test(tracker_obj, video_path: str, label: str, max_frames: int):

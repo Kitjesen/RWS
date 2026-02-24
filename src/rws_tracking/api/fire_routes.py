@@ -415,7 +415,6 @@ def download_clip(filename: str):
 
 from ..telemetry.video_ring_buffer import _parse_timestamp_from_filename
 
-
 # ---------------------------------------------------------------------------
 # Target designation (operator C2 override)
 # ---------------------------------------------------------------------------

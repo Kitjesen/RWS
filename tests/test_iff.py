@@ -20,7 +20,6 @@ from src.rws_tracking.safety.iff import IFFChecker, IFFResult
 from src.rws_tracking.types import SafetyStatus, Track
 from src.rws_tracking.types.common import BoundingBox
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -391,6 +390,7 @@ class TestIFFAPIRoutes:
     @pytest.fixture
     def app(self):
         from flask import Flask
+
         from src.rws_tracking.api.fire_routes import fire_bp
 
         flask_app = Flask(__name__)
@@ -469,6 +469,7 @@ class TestIFFAPIRoutes:
     def test_no_iff_checker_returns_503(self):
         """When iff_checker is not in app.extensions, routes return 503."""
         from flask import Flask
+
         from src.rws_tracking.api.fire_routes import fire_bp
 
         flask_app = Flask(__name__)

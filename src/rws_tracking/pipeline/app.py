@@ -426,13 +426,13 @@ def build_pipeline_from_config(
 
     # ---- v2 extension components ----
 
-    from ..safety.shooting_chain import ShootingChain
+    from ..decision.lifecycle import TargetLifecycleManager
+    from ..health.monitor import HealthMonitor
     from ..safety.iff import IFFChecker
     from ..safety.roe_profiles import RoeManager
+    from ..safety.shooting_chain import ShootingChain
     from ..telemetry.audit import AuditLogger
     from ..telemetry.video_ring_buffer import VideoRingBuffer
-    from ..health.monitor import HealthMonitor
-    from ..decision.lifecycle import TargetLifecycleManager
 
     shooting_chain = ShootingChain(
         cooldown_s=getattr(cfg, "fire_cooldown_s", 3.0)

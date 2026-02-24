@@ -23,8 +23,15 @@ from dataclasses import dataclass, replace
 
 from ..algebra import PixelToGimbalTransform
 from ..config import GimbalControllerConfig, PIDConfig
-from ..types import BodyState, ControlCommand, GimbalFeedback, TargetError, TargetObservation, TrackState
-from .interfaces import StateMachineProtocol
+from ..types import (
+    BodyState,
+    ControlCommand,
+    GimbalFeedback,
+    ProjectileParams,
+    TargetError,
+    TargetObservation,
+    TrackState,
+)
 from .adaptive import (
     DistanceBasedScheduler,
     DistanceBasedSchedulerConfig,
@@ -40,7 +47,7 @@ from .ballistic import (
     TableBallisticConfig,
     TableBallisticModel,
 )
-from ..types import ProjectileParams
+from .interfaces import StateMachineProtocol
 
 logger = logging.getLogger(__name__)
 

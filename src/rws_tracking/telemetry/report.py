@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import datetime
 import html as html_mod
-from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -72,7 +71,7 @@ def _state_badge(state: str) -> str:
 
 
 def generate_report(
-    audit_logger: "AuditLogger",
+    audit_logger: AuditLogger,
     mission_name: str = "Mission Debrief",
     output_path: str | None = None,
 ) -> str:
@@ -109,7 +108,7 @@ def generate_report(
 
 
 def _render(
-    records: "list[AuditRecord]",
+    records: list[AuditRecord],
     mission_name: str,
     chain_ok: bool,
     chain_err: str,
@@ -218,7 +217,7 @@ def _fire_events_section(rows: str) -> str:
   </table>"""
 
 
-def _build_timeline_rows(records: "list[AuditRecord]") -> str:
+def _build_timeline_rows(records: list[AuditRecord]) -> str:
     parts = []
     for r in records:
         icon = _EVENT_ICON.get(r.event_type, "•")
@@ -240,7 +239,7 @@ def _build_timeline_rows(records: "list[AuditRecord]") -> str:
     return "".join(parts)
 
 
-def _build_fire_table_rows(fire_events: "list[AuditRecord]") -> str:
+def _build_fire_table_rows(fire_events: list[AuditRecord]) -> str:
     parts = []
     for r in fire_events:
         target_cell = f"#{r.target_id}" if r.target_id is not None else "—"

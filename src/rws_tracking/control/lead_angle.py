@@ -23,7 +23,6 @@ from typing import Protocol
 
 from ..algebra import PixelToGimbalTransform
 from ..types import (
-    BallisticSolution,
     BoundingBox,
     EnvironmentParams,
     LeadAngle,

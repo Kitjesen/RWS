@@ -1,21 +1,18 @@
 """激进参数测试 - 力求达到 Lock"""
 import pytest
+
 pytestmark = pytest.mark.skip(reason="manual benchmark only, not a unit test")
 
-import time
-import cv2
-import numpy as np
 
-from src.rws_tracking.pipeline.app import build_sim_pipeline
-from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
 from src.rws_tracking.algebra import CameraModel
 from src.rws_tracking.config import GimbalControllerConfig, PIDConfig
+from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
 
 
 def test_aggressive(kp_yaw, kp_pitch, target_speed, lock_threshold, duration=20.0):
     """测试激进参数"""
     print(f"\n{'='*60}")
-    print(f"测试参数：")
+    print("测试参数：")
     print(f"  Yaw Kp: {kp_yaw}")
     print(f"  Pitch Kp: {kp_pitch}")
     print(f"  目标速度: {target_speed} px/s")
@@ -30,12 +27,16 @@ def test_aggressive(kp_yaw, kp_pitch, target_speed, lock_threshold, duration=20.
     )
 
     from src.rws_tracking.algebra import PixelToGimbalTransform
+    from src.rws_tracking.config import SelectorConfig
     from src.rws_tracking.control import TwoAxisGimbalController
     from src.rws_tracking.hardware import SimulatedGimbalDriver
-    from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
-    from src.rws_tracking.telemetry import InMemoryTelemetryLogger
+    from src.rws_tracking.perception import (
+        PassthroughDetector,
+        SimpleIoUTracker,
+        WeightedTargetSelector,
+    )
     from src.rws_tracking.pipeline import VisionGimbalPipeline
-    from src.rws_tracking.config import SelectorConfig
+    from src.rws_tracking.telemetry import InMemoryTelemetryLogger
 
     transform = PixelToGimbalTransform(cam)
 
@@ -94,7 +95,7 @@ def test_aggressive(kp_yaw, kp_pitch, target_speed, lock_threshold, duration=20.
 
     metrics = pipeline.telemetry.snapshot_metrics()
 
-    print(f"\n结果：")
+    print("\n结果：")
     print(f"  Lock Rate:  {metrics['lock_rate']*100:6.2f}%")
     print(f"  Avg Error:  {metrics['avg_abs_error_deg']:6.2f} deg")
     print(f"  Switches:   {metrics['switches_per_min']:6.2f} /min")

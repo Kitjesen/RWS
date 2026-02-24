@@ -18,10 +18,7 @@ from __future__ import annotations
 import math
 import sys
 import time
-from collections import Counter, defaultdict
 from pathlib import Path
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Path bootstrap for non-installed runs
@@ -40,7 +37,6 @@ from rws_tracking.perception import (
 )
 from rws_tracking.pipeline.multi_gimbal_pipeline import GimbalUnit, MultiGimbalPipeline
 from rws_tracking.types import BoundingBox, Detection, TargetObservation, Track
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -360,7 +356,10 @@ class TestMultiGimbalE2E:
     def test_sequential_engagement_queue(self):
         """EngagementQueue returns targets ordered by threat score (highest first)."""
         from rws_tracking.decision.engagement import (
-            EngagementConfig, EngagementQueue, ThreatAssessor, ThreatWeights,
+            EngagementConfig,
+            EngagementQueue,
+            ThreatAssessor,
+            ThreatWeights,
         )
 
         eng_cfg = EngagementConfig(

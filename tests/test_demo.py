@@ -1,12 +1,13 @@
 """快速测试脚本 - 仿真模式演示"""
 import time
+
 import cv2
 import numpy as np
 
-from src.rws_tracking.pipeline.app import build_sim_pipeline
-from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
-from src.rws_tracking.tools.dashboard import RealtimeDashboard
 from src.rws_tracking.algebra import CameraModel
+from src.rws_tracking.pipeline.app import build_sim_pipeline
+from src.rws_tracking.tools.dashboard import RealtimeDashboard
+from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
 
 
 def main():

@@ -1,6 +1,7 @@
 """验证坐标变换是否正确"""
 from src.rws_tracking.algebra import CameraModel, PixelToGimbalTransform
 
+
 def main():
     print("="*70)
     print("坐标变换验证测试")
@@ -15,7 +16,7 @@ def main():
 
     transform = PixelToGimbalTransform(cam)
 
-    print(f"\n相机参数：")
+    print("\n相机参数：")
     print(f"  分辨率: {cam.width} x {cam.height}")
     print(f"  中心: ({cam.cx}, {cam.cy})")
     print(f"  焦距: fx={cam.fx}, fy={cam.fy}")

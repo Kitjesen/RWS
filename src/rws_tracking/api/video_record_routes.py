@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, send_file
 
 logger = logging.getLogger(__name__)
 

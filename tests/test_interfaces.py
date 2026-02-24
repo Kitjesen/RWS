@@ -1,10 +1,13 @@
 """接口协议单元测试 — 验证各模块接口定义。"""
 
-import pytest
 
 from src.rws_tracking.control.interfaces import GimbalController
 from src.rws_tracking.decision.interfaces import EngagementQueueProtocol, ThreatAssessorProtocol
-from src.rws_tracking.hardware.interfaces import CompositeGimbalDriver, GimbalAxisDriver, GimbalDriver
+from src.rws_tracking.hardware.interfaces import (
+    CompositeGimbalDriver,
+    GimbalAxisDriver,
+    GimbalDriver,
+)
 from src.rws_tracking.perception.interfaces import Detector, TargetSelector, Tracker
 from src.rws_tracking.telemetry.interfaces import TelemetryLogger
 

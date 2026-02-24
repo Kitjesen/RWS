@@ -1,6 +1,5 @@
 """视频流模块单元测试。"""
 
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
-import pytest
 from flask import Flask
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -226,7 +224,8 @@ class TestFpsMetric:
 
     def test_record_frame_increments_fps(self):
         import time
-        from src.rws_tracking.api.metrics_routes import record_frame, _frame_times
+
+        from src.rws_tracking.api.metrics_routes import _frame_times, record_frame
 
         _frame_times.clear()
         now = time.monotonic()

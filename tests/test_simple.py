@@ -1,6 +1,7 @@
 """简单的命令行测试 - 无 GUI 窗口"""
 from src.rws_tracking.pipeline.app import run_demo
 
+
 def main():
     """运行 10 秒仿真测试，输出性能指标"""
     print("=" * 60)

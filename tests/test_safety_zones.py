@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 from flask import Flask
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -20,7 +17,6 @@ def _make_safety_manager():
 
 
 def _make_app(safety_manager=None):
-    from flask import Flask
     from src.rws_tracking.api.safety_routes import safety_bp
 
     app = Flask(__name__)

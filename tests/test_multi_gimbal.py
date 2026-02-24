@@ -1,18 +1,16 @@
 """Demo script for multi-gimbal coordinated tracking."""
-import time
-import numpy as np
+
+import math
 
 from src.rws_tracking.algebra import CameraModel, PixelToGimbalTransform
+from src.rws_tracking.config import GimbalControllerConfig, PIDConfig, SelectorConfig
 from src.rws_tracking.control import TwoAxisGimbalController
 from src.rws_tracking.hardware import SimulatedGimbalDriver
 from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker
-from src.rws_tracking.perception.multi_target_selector import WeightedMultiTargetSelector
 from src.rws_tracking.perception.multi_target import TargetAllocator
-from src.rws_tracking.pipeline.multi_gimbal_pipeline import MultiGimbalPipeline, GimbalUnit
+from src.rws_tracking.perception.multi_target_selector import WeightedMultiTargetSelector
+from src.rws_tracking.pipeline.multi_gimbal_pipeline import GimbalUnit, MultiGimbalPipeline
 from src.rws_tracking.telemetry import InMemoryTelemetryLogger
-from src.rws_tracking.config import GimbalControllerConfig, PIDConfig, SelectorConfig
-from src.rws_tracking.types import Detection, BoundingBox
-import math
 
 
 class MultiTargetSimulation:
@@ -149,10 +147,10 @@ def main():
     # Create simulation with 3 targets
     sim = MultiTargetSimulation(cam, num_targets=3)
 
-    print(f"\nSetup:")
+    print("\nSetup:")
     print(f"  Gimbals: {num_gimbals}")
-    print(f"  Targets: 3")
-    print(f"  Duration: 10s")
+    print("  Targets: 3")
+    print("  Duration: 10s")
     print()
 
     ts = 0.0

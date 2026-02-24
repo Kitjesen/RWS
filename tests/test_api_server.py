@@ -1,7 +1,7 @@
 """API Server 单元测试 — mock Flask。"""
 
-from unittest.mock import MagicMock, patch
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -82,6 +82,7 @@ class TestGetConfig:
 
     def _make_app_with_config(self, config_path="config.yaml", ctrl_cfg=None):
         from flask import Flask, jsonify
+
         from src.rws_tracking.api.server import TrackingAPI
 
         api = TrackingAPI.__new__(TrackingAPI)
@@ -176,6 +177,7 @@ class TestThreatsEndpoint:
 
     def _make_app(self, running=False, pipeline=None, tracks=None, assessments=None):
         from flask import Flask, jsonify
+
         from src.rws_tracking.api.server import TrackingAPI
 
         api = TrackingAPI.__new__(TrackingAPI)
@@ -268,7 +270,7 @@ class TestThreatsEndpoint:
 class TestFlaskApp:
     @pytest.fixture
     def client(self):
-        from src.rws_tracking.api.server import TrackingAPI, run_api_server
+        from src.rws_tracking.api.server import TrackingAPI
         api = TrackingAPI.__new__(TrackingAPI)
         api.config = MagicMock()
         api.pipeline = MagicMock()

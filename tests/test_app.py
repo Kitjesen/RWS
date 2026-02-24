@@ -3,10 +3,8 @@
 import dataclasses
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.rws_tracking.algebra import CameraModel
-from src.rws_tracking.config import SystemConfig, load_config
+from src.rws_tracking.config import SystemConfig
 from src.rws_tracking.pipeline.app import (
     build_sim_pipeline,
     camera_model_from_config,

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import logging
 import time
-import traceback
 
 from flask import Blueprint, current_app, jsonify
 
@@ -52,11 +51,11 @@ def run_selftest():
 
     # 1. pipeline_imports
     def check_imports():
+        from ..decision.engagement import ThreatAssessor  # noqa: F401
+        from ..decision.lifecycle import TargetLifecycleManager  # noqa: F401
+        from ..health.monitor import HealthMonitor  # noqa: F401
         from ..safety.shooting_chain import ShootingChain  # noqa: F401
         from ..telemetry.audit import AuditLogger  # noqa: F401
-        from ..health.monitor import HealthMonitor  # noqa: F401
-        from ..decision.lifecycle import TargetLifecycleManager  # noqa: F401
-        from ..decision.engagement import ThreatAssessor  # noqa: F401
         return "all critical imports OK"
 
     checks.append(_check("pipeline_imports", check_imports))
@@ -78,6 +77,7 @@ def run_selftest():
     def check_audit():
         import tempfile
         from pathlib import Path
+
         from ..telemetry.audit import AuditLogger
         with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as f:
             path = f.name

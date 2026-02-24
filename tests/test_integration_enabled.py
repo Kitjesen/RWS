@@ -9,22 +9,31 @@ from src.rws_tracking.algebra import CameraModel, PixelToGimbalTransform
 from src.rws_tracking.config import (
     GimbalControllerConfig,
     PIDConfig,
-    SelectorConfig,
     SystemConfig,
 )
 from src.rws_tracking.control import TwoAxisGimbalController
-from src.rws_tracking.control.ballistic import SimpleBallisticConfig, SimpleBallisticModel
-from src.rws_tracking.control.lead_angle import LeadAngleCalculator, LeadAngleConfig, SimpleFlightTimeProvider
+from src.rws_tracking.control.lead_angle import (
+    LeadAngleCalculator,
+    LeadAngleConfig,
+    SimpleFlightTimeProvider,
+)
 from src.rws_tracking.control.trajectory import GimbalTrajectoryPlanner, TrajectoryConfig
 from src.rws_tracking.decision.engagement import EngagementQueue, ThreatAssessor
 from src.rws_tracking.hardware import SimulatedGimbalDriver
-from src.rws_tracking.hardware.rangefinder import DistanceFusion, SimulatedRangefinder, SimulatedRangefinderConfig
-from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
+from src.rws_tracking.hardware.rangefinder import (
+    DistanceFusion,
+    SimulatedRangefinder,
+    SimulatedRangefinderConfig,
+)
+from src.rws_tracking.perception import (
+    PassthroughDetector,
+    SimpleIoUTracker,
+    WeightedTargetSelector,
+)
 from src.rws_tracking.pipeline.pipeline import VisionGimbalPipeline
 from src.rws_tracking.safety.manager import SafetyManager, SafetyManagerConfig
 from src.rws_tracking.telemetry import InMemoryTelemetryLogger
 from src.rws_tracking.types import BoundingBox, Detection, SafetyZone
-
 
 CAM = CameraModel(width=1280, height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0)
 

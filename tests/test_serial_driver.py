@@ -1,6 +1,6 @@
 """串口云台驱动单元测试。"""
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 

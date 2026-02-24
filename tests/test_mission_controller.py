@@ -5,8 +5,7 @@ from __future__ import annotations
 import pytest
 from flask import Flask
 
-from src.rws_tracking.api.mission_routes import mission_bp, _reset_state
-
+from src.rws_tracking.api.mission_routes import _reset_state, mission_bp
 
 # ---------------------------------------------------------------------------
 # Minimal mock API

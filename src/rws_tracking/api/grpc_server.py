@@ -10,8 +10,8 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Iterator
 from concurrent import futures
-from typing import Iterator
 
 import grpc
 
@@ -300,7 +300,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                 encoder = self.api._video_cfg
                 import cv2
                 encode_param = [cv2.IMWRITE_JPEG_QUALITY, request.jpeg_quality if request.jpeg_quality > 0 else encoder.jpeg_quality]
-                
+
                 # Handle scaling
                 scale = request.scale_factor if request.scale_factor > 0 else encoder.scale_factor
                 if 0 < scale < 1.0:
@@ -320,7 +320,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                         bbox = getattr(track, "bbox", None)
                         if bbox is None:
                             continue
-                            
+
                         targets.append(tracking_pb2.DetectedTarget(
                             track_id=track.track_id,
                             class_id=track.class_id,
@@ -354,19 +354,19 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
         try:
             if not self.api.pipeline or not self.api.pipeline._safety_manager:
                 return tracking_pb2.GetSafetyStatusResponse(fire_authorized=False, blocked_reason="Safety manager not enabled")
-            
+
             # Since SafetyManager is evaluated per-frame, we might not have a global state getter easily accessible,
             # but we can poll the Interlock and NFZ manager.
             sm = self.api.pipeline._safety_manager
             fb = self.api.pipeline.driver.get_feedback(time.monotonic())
             nfz_res = sm._nfz.check(fb.yaw_deg, fb.pitch_deg)
             inter_res = sm._interlock.check()
-            
+
             fire_authorized = inter_res.authorized and not nfz_res.fire_blocked
             reasons = []
             if nfz_res.fire_blocked: reasons.append(f"NFZ:{nfz_res.active_zone_id}")
             reasons.extend(inter_res.blocked_reasons)
-            
+
             return tracking_pb2.GetSafetyStatusResponse(
                 fire_authorized=fire_authorized,
                 blocked_reason="; ".join(reasons),

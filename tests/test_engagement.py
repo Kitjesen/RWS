@@ -6,9 +6,8 @@ from src.rws_tracking.decision.engagement import (
     EngagementConfig,
     EngagementQueue,
     ThreatAssessor,
-    ThreatWeights,
 )
-from src.rws_tracking.types import BoundingBox, Track, ThreatAssessment
+from src.rws_tracking.types import BoundingBox, ThreatAssessment, Track
 
 
 def _track(tid=1, x=600, y=340, w=80, h=150, cls="person", vx=5.0, vy=2.0):

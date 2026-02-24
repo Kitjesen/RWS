@@ -25,14 +25,14 @@ from ..control.interfaces import (
     TrajectoryPlannerProtocol,
 )
 from ..decision.interfaces import EngagementQueueProtocol, ThreatAssessorProtocol
+from ..decision.lifecycle import TargetLifecycleManager
 from ..hardware.imu_interface import BodyMotionProvider
 from ..hardware.interfaces import GimbalDriver
 from ..hardware.rangefinder import RangefinderProvider
-from ..perception.interfaces import Detector, TargetSelector, Tracker
-from ..safety.interfaces import SafetyEvaluatorProtocol
-from ..safety.iff import IFFChecker
-from ..decision.lifecycle import TargetLifecycleManager
 from ..health.monitor import HealthMonitor
+from ..perception.interfaces import Detector, TargetSelector, Tracker
+from ..safety.iff import IFFChecker
+from ..safety.interfaces import SafetyEvaluatorProtocol
 from ..safety.shooting_chain import ShootingChain
 from ..telemetry.audit import AuditLogger
 from ..telemetry.interfaces import TelemetryLogger

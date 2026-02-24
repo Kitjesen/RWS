@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
-
 import pytest
 
-from src.rws_tracking.telemetry.audit import AuditLogger, AuditRecord
+from src.rws_tracking.telemetry.audit import AuditLogger
 from src.rws_tracking.telemetry.report import generate_report
 
 

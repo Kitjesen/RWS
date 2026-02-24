@@ -1,13 +1,16 @@
 """诊断测试 - 详细输出运行状态"""
-import numpy as np
-from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
 from src.rws_tracking.algebra import CameraModel, PixelToGimbalTransform
+from src.rws_tracking.config import GimbalControllerConfig, PIDConfig, SelectorConfig
 from src.rws_tracking.control import TwoAxisGimbalController
 from src.rws_tracking.hardware import SimulatedGimbalDriver
-from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
-from src.rws_tracking.telemetry import InMemoryTelemetryLogger
+from src.rws_tracking.perception import (
+    PassthroughDetector,
+    SimpleIoUTracker,
+    WeightedTargetSelector,
+)
 from src.rws_tracking.pipeline import VisionGimbalPipeline
-from src.rws_tracking.config import GimbalControllerConfig, PIDConfig, SelectorConfig
+from src.rws_tracking.telemetry import InMemoryTelemetryLogger
+from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
 
 
 def main():
@@ -72,10 +75,10 @@ def main():
 
     print("\n初始设置：")
     print(f"  画面中心: ({cam.cx}, {cam.cy})")
-    print(f"  目标起点: (600, 340)")
-    print(f"  目标速度: (3, 2) px/s")
-    print(f"  LOCK 阈值: 2.0 deg")
-    print(f"  Kp: 15.0")
+    print("  目标起点: (600, 340)")
+    print("  目标速度: (3, 2) px/s")
+    print("  LOCK 阈值: 2.0 deg")
+    print("  Kp: 15.0")
     print()
 
     ts = 0.0

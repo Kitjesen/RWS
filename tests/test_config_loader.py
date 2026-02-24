@@ -1,9 +1,6 @@
 """配置加载器单元测试。"""
 
-import tempfile
-from pathlib import Path
 
-import pytest
 import yaml
 
 from src.rws_tracking.config.loader import (

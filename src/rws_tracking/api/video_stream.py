@@ -21,8 +21,8 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Generator
 from dataclasses import dataclass
-from typing import Generator
 
 import numpy as np
 

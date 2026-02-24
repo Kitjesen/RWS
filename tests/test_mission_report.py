@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from flask import Flask
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -86,7 +82,6 @@ class TestMissionReportDownload:
 class TestMissionEndReportUrl:
     def test_report_url_is_api_path(self):
         """When a report_path is set, report_url must start with /api/."""
-        from src.rws_tracking.api.mission_routes import _reset_state, _mission_state
 
         # Simulate: the function logic that builds report_url
         report_path = "logs/reports/test_session_report.html"

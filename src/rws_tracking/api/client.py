@@ -24,7 +24,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import requests
 
@@ -116,7 +117,7 @@ class TrackingClient:
     # Context manager
     # ------------------------------------------------------------------
 
-    def __enter__(self) -> "TrackingClient":
+    def __enter__(self) -> TrackingClient:
         """Support ``with TrackingClient(...) as c:`` usage."""
         return self
 

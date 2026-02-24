@@ -1,6 +1,5 @@
 """禁射区管理器单元测试。"""
 
-import math
 
 import pytest
 

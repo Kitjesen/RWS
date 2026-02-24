@@ -1,7 +1,6 @@
 """多目标选择器与分配器单元测试。"""
 
 import pytest
-import numpy as np
 
 from src.rws_tracking.perception.multi_target import TargetAllocator, TargetAssignment
 from src.rws_tracking.perception.multi_target_selector import WeightedMultiTargetSelector

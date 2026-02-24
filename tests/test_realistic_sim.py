@@ -1,14 +1,17 @@
 """真实仿真测试 - 考虑云台转动对目标位置的影响"""
-import numpy as np
+import math
+
 from src.rws_tracking.algebra import CameraModel, PixelToGimbalTransform
+from src.rws_tracking.config import GimbalControllerConfig, PIDConfig, SelectorConfig
 from src.rws_tracking.control import TwoAxisGimbalController
 from src.rws_tracking.hardware import SimulatedGimbalDriver
-from src.rws_tracking.perception import PassthroughDetector, SimpleIoUTracker, WeightedTargetSelector
-from src.rws_tracking.telemetry import InMemoryTelemetryLogger
+from src.rws_tracking.perception import (
+    PassthroughDetector,
+    SimpleIoUTracker,
+    WeightedTargetSelector,
+)
 from src.rws_tracking.pipeline import VisionGimbalPipeline
-from src.rws_tracking.config import GimbalControllerConfig, PIDConfig, SelectorConfig
-from src.rws_tracking.types import Detection, BoundingBox
-import math
+from src.rws_tracking.telemetry import InMemoryTelemetryLogger
 
 
 class RealisticSimulation:
@@ -118,10 +121,10 @@ def main():
     sim = RealisticSimulation(cam)
 
     print("\n初始设置：")
-    print(f"  目标初始位置: Yaw=0°, Pitch=0°（世界坐标系）")
-    print(f"  目标移动速度: Yaw=2°/s, Pitch=1°/s")
-    print(f"  LOCK 阈值: 1.5°")
-    print(f"  Kp: 10.0")
+    print("  目标初始位置: Yaw=0°, Pitch=0°（世界坐标系）")
+    print("  目标移动速度: Yaw=2°/s, Pitch=1°/s")
+    print("  LOCK 阈值: 1.5°")
+    print("  Kp: 10.0")
     print()
 
     ts = 0.0
