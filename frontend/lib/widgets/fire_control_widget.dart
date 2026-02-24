@@ -2,8 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/tracking_provider.dart';
 
-class FireControlWidget extends StatelessWidget {
+class FireControlWidget extends StatefulWidget {
   const FireControlWidget({super.key});
+
+  @override
+  State<FireControlWidget> createState() => _FireControlWidgetState();
+}
+
+class _FireControlWidgetState extends State<FireControlWidget> {
+  late TextEditingController _opIdCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = context.read<TrackingProvider>();
+    _opIdCtrl = TextEditingController(text: p.operatorId);
+  }
+
+  @override
+  void dispose() {
+    _opIdCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,6 +32,11 @@ class FireControlWidget extends StatelessWidget {
     return Consumer<TrackingProvider>(
       builder: (_, p, __) {
         final fire = p.fireStatus;
+
+        // Keep text field in sync if operatorId changed externally
+        if (_opIdCtrl.text != p.operatorId) {
+          _opIdCtrl.text = p.operatorId;
+        }
 
         return Card(
           child: Padding(
@@ -33,26 +58,56 @@ class FireControlWidget extends StatelessWidget {
                 const Divider(),
 
                 if (!fire.isConfigured) ...[
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('火控模块未启用',
-                          style: TextStyle(color: Colors.grey, fontSize: 14)),
+                  const Expanded(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text('火控模块未启用',
+                            style:
+                                TextStyle(color: Colors.grey, fontSize: 14)),
+                      ),
                     ),
                   ),
                 ] else ...[
-                  // 操作员信息
-                  if (fire.isArmed && fire.operatorId != null)
+                  // 操作员 ID 输入（仅 SAFE 状态下可编辑）
+                  if (fire.state == 'safe') ...[
+                    TextField(
+                      controller: _opIdCtrl,
+                      decoration: InputDecoration(
+                        labelText: '操作员 ID Operator ID',
+                        labelStyle: const TextStyle(fontSize: 12),
+                        prefixIcon: const Icon(Icons.badge, size: 18),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        isDense: true,
+                      ),
+                      style: const TextStyle(fontSize: 13),
+                      onChanged: p.setOperatorId,
+                    ),
+                    const SizedBox(height: 10),
+                  ] else if (fire.operatorId != null) ...[
+                    // Armed 状态下只读显示
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        '操作员 Operator: ${fire.operatorId}',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.7)),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.badge,
+                              size: 14, color: Colors.white54),
+                          const SizedBox(width: 6),
+                          Text(
+                            '操作员: ${fire.operatorId}',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.7)),
+                          ),
+                        ],
                       ),
                     ),
+                  ],
 
                   // 按钮行: SAFE / ARM
                   Row(
@@ -73,7 +128,9 @@ class FireControlWidget extends StatelessWidget {
                       if (fire.state == 'safe')
                         Expanded(
                           child: FilledButton.tonalIcon(
-                            onPressed: () => p.armSystem(),
+                            onPressed: p.operatorId.isEmpty
+                                ? null
+                                : () => p.armSystem(),
                             icon: const Icon(Icons.lock_open, size: 18),
                             label: const Text('武装 ARM'),
                             style: FilledButton.styleFrom(
@@ -148,8 +205,10 @@ class FireControlWidget extends StatelessWidget {
             Text('确认开火 Confirm Fire'),
           ],
         ),
-        content: const Text('确认发送开火请求？此操作不可撤销。\n'
-            'Confirm fire request? This action cannot be undone.'),
+        content: Text(
+          '操作员 ${provider.operatorId} 确认发送开火请求？此操作不可撤销。\n'
+          'Operator ${provider.operatorId}: confirm fire request?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),

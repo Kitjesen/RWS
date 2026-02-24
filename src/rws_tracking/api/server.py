@@ -543,7 +543,10 @@ def create_flask_app(api: TrackingAPI) -> Flask:
                 "class_id": track_class.get(ta.track_id, "unknown"),
                 "distance_m": round(dist_cache.get(ta.track_id, 0.0), 1),
             })
-        return jsonify({"threats": threats_out})
+        return jsonify({
+            "threats": threats_out,
+            "pipeline_active": api.running and api.pipeline is not None,
+        })
 
     # Wire pipeline components into Flask extensions so Blueprint routes can access them.
     pipeline = api.pipeline if hasattr(api, "pipeline") else None

@@ -14,8 +14,12 @@ class TrackingProvider extends ChangeNotifier {
   bool _connected = false;
   String _error = '';
 
+  // 操作员身份 — 用于 arm/fire/heartbeat/designate
+  String _operatorId = 'operator_1';
+
   // 新增: 威胁、健康、火控状态
   List<ThreatEntry> _threats = [];
+  bool _pipelineActive = false;
   Map<String, SubsystemHealth> _health = {};
   FireChainStatus _fireStatus =
       FireChainStatus(state: 'not_configured', canFire: false);
@@ -46,7 +50,9 @@ class TrackingProvider extends ChangeNotifier {
   String get error => _error;
   String get snapshotUrl => _api.snapshotUrl;
   RwsApiClient get api => _api;
+  String get operatorId => _operatorId;
   List<ThreatEntry> get threats => _threats;
+  bool get pipelineActive => _pipelineActive;
   Map<String, SubsystemHealth> get health => _health;
   FireChainStatus get fireStatus => _fireStatus;
   MissionStatus get missionStatus => _missionStatus;
@@ -67,12 +73,21 @@ class TrackingProvider extends ChangeNotifier {
 
   // --- 操作员心跳管理 ---
 
+  /// 设置操作员 ID（武装前调用）.
+  void setOperatorId(String id) {
+    final trimmed = id.trim();
+    if (trimmed.isNotEmpty && trimmed != _operatorId) {
+      _operatorId = trimmed;
+      notifyListeners();
+    }
+  }
+
   /// 当系统处于 armed 状态时, 每 5s 自动发送心跳, 防止 OperatorWatchdog 超时.
   void _updateHeartbeatTimer() {
     if (_fireStatus.isArmed) {
       _heartbeatTimer ??= Timer.periodic(
         const Duration(seconds: 5),
-        (_) => _api.sendHeartbeat(),
+        (_) => _api.sendHeartbeat(operatorId: _operatorId),
       );
     } else {
       _stopHeartbeat();
@@ -120,7 +135,9 @@ class TrackingProvider extends ChangeNotifier {
         _api.getFireStatus(),
         _api.getDesignatedTrackId(),
       ]);
-      _threats = results[0] as List<ThreatEntry>;
+      final threatResult = results[0] as ({List<ThreatEntry> threats, bool pipelineActive});
+      _threats = threatResult.threats;
+      _pipelineActive = threatResult.pipelineActive;
       _health = results[1] as Map<String, SubsystemHealth>;
       final newFireStatus = results[2] as FireChainStatus;
       _fireStatus = newFireStatus;
@@ -145,7 +162,7 @@ class TrackingProvider extends ChangeNotifier {
 
   Future<void> armSystem() async {
     try {
-      await _api.armSystem('operator_1');
+      await _api.armSystem(_operatorId);
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -154,7 +171,7 @@ class TrackingProvider extends ChangeNotifier {
 
   Future<void> safeSystem() async {
     try {
-      await _api.safeSystem('operator request');
+      await _api.safeSystem(_operatorId);
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -163,7 +180,7 @@ class TrackingProvider extends ChangeNotifier {
 
   Future<void> requestFire() async {
     try {
-      await _api.requestFire('operator_1');
+      await _api.requestFire(_operatorId);
     } catch (e) {
       _error = e.toString();
       notifyListeners();
@@ -283,7 +300,7 @@ class TrackingProvider extends ChangeNotifier {
 
   Future<bool> designateTarget(int trackId) async {
     try {
-      final ok = await _api.designateTarget(trackId);
+      final ok = await _api.designateTarget(trackId, operatorId: _operatorId);
       if (ok) {
         _designatedTrackId = trackId;
         notifyListeners();

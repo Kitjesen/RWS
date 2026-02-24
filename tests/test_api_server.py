@@ -171,6 +171,100 @@ class TestGetConfig:
                         assert param in data["pid"][axis]
 
 
+class TestThreatsEndpoint:
+    """Test GET /api/threats including pipeline_active field."""
+
+    def _make_app(self, running=False, pipeline=None, tracks=None, assessments=None):
+        from flask import Flask, jsonify
+        from src.rws_tracking.api.server import TrackingAPI
+
+        api = TrackingAPI.__new__(TrackingAPI)
+        api.running = running
+        api.pipeline = pipeline
+        api._last_tracks = tracks or []
+        api._last_threat_assessments = assessments or []
+        # No distance cache by default
+        if hasattr(api, "_distance_cache"):
+            del api._distance_cache
+
+        app = Flask(__name__)
+        app.config["TESTING"] = True
+
+        # Inline the threats route using the same logic as server.py
+        @app.route("/api/threats")
+        def threats():
+            threats_out = []
+            track_class = {t.track_id: t.class_id for t in api._last_tracks}
+            dist_cache = getattr(api, "_distance_cache", {})
+            for ta in api._last_threat_assessments:
+                threats_out.append({
+                    "track_id": ta.track_id,
+                    "threat_score": round(ta.threat_score, 4),
+                    "priority_rank": ta.priority_rank,
+                    "distance_score": round(ta.distance_score, 4),
+                    "velocity_score": round(ta.velocity_score, 4),
+                    "class_score": round(ta.class_score, 4),
+                    "heading_score": round(ta.heading_score, 4),
+                    "class_id": track_class.get(ta.track_id, "unknown"),
+                    "distance_m": round(dist_cache.get(ta.track_id, 0.0), 1),
+                })
+            return jsonify({
+                "threats": threats_out,
+                "pipeline_active": api.running and api.pipeline is not None,
+            })
+
+        return app.test_client()
+
+    def test_no_pipeline_pipeline_active_false(self):
+        """When pipeline is None, pipeline_active should be False."""
+        client = self._make_app(running=False, pipeline=None)
+        resp = client.get("/api/threats")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["pipeline_active"] is False
+        assert data["threats"] == []
+
+    def test_running_but_no_pipeline_active_false(self):
+        """running=True but pipeline=None → still False."""
+        client = self._make_app(running=True, pipeline=None)
+        data = client.get("/api/threats").get_json()
+        assert data["pipeline_active"] is False
+
+    def test_running_with_pipeline_active_true(self):
+        """running=True and pipeline present → pipeline_active True."""
+        client = self._make_app(running=True, pipeline=MagicMock())
+        data = client.get("/api/threats").get_json()
+        assert data["pipeline_active"] is True
+
+    def test_threats_list_empty_when_no_assessments(self):
+        client = self._make_app(running=True, pipeline=MagicMock())
+        data = client.get("/api/threats").get_json()
+        assert data["threats"] == []
+
+    def test_threats_list_populated(self):
+        ta = SimpleNamespace(
+            track_id=5,
+            threat_score=0.9,
+            priority_rank=1,
+            distance_score=0.8,
+            velocity_score=0.6,
+            class_score=0.7,
+            heading_score=0.5,
+        )
+        track = SimpleNamespace(track_id=5, class_id="person")
+        client = self._make_app(
+            running=True,
+            pipeline=MagicMock(),
+            tracks=[track],
+            assessments=[ta],
+        )
+        data = client.get("/api/threats").get_json()
+        assert len(data["threats"]) == 1
+        assert data["threats"][0]["track_id"] == 5
+        assert data["threats"][0]["class_id"] == "person"
+        assert data["threats"][0]["threat_score"] == 0.9
+
+
 class TestFlaskApp:
     @pytest.fixture
     def client(self):

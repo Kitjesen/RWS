@@ -108,18 +108,20 @@ class RwsApiClient {
 
   // --- 威胁队列 ---
 
-  Future<List<ThreatEntry>> getThreats() async {
+  Future<({List<ThreatEntry> threats, bool pipelineActive})> getThreats() async {
     try {
       final resp = await _client.get(Uri.parse('$baseUrl/api/threats'));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
         final list = data['threats'] as List<dynamic>? ?? [];
-        return list
+        final threats = list
             .map((j) => ThreatEntry.fromJson(j as Map<String, dynamic>))
             .toList();
+        final active = data['pipeline_active'] as bool? ?? true;
+        return (threats: threats, pipelineActive: active);
       }
     } catch (_) {}
-    return [];
+    return (threats: <ThreatEntry>[], pipelineActive: false);
   }
 
   // --- 子系统健康 ---

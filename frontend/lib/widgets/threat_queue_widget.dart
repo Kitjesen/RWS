@@ -14,6 +14,7 @@ class ThreatQueueWidget extends StatelessWidget {
       builder: (_, p, __) {
         final threats = p.threats;
         final designatedId = p.designatedTrackId;
+        final pipelineActive = p.pipelineActive;
 
         return Card(
           child: Padding(
@@ -66,10 +67,36 @@ class ThreatQueueWidget extends StatelessWidget {
                 const Divider(),
 
                 if (threats.isEmpty)
-                  const Expanded(
+                  Expanded(
                     child: Center(
-                      child: Text('未检测到威胁目标',
-                          style: TextStyle(color: Colors.grey, fontSize: 14)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            pipelineActive
+                                ? Icons.visibility
+                                : Icons.videocam_off,
+                            color: Colors.grey.shade700,
+                            size: 28,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            pipelineActive ? '未检测到威胁目标' : 'Pipeline 未运行',
+                            style: TextStyle(
+                                color: Colors.grey.shade600, fontSize: 14),
+                          ),
+                          if (!pipelineActive)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                '请先启动任务',
+                                style: TextStyle(
+                                    color: Colors.grey.shade700,
+                                    fontSize: 12),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   )
                 else
