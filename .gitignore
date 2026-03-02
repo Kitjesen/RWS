@@ -44,6 +44,14 @@ htmlcov/
 
 # Logs
 *.log
+logs/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Flutter build artifacts
+frontend/.dart_tool/
+frontend/.flutter-plugins-dependencies
 
 # Model files (except in models/ directory)
 /*.pt
