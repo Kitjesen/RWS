@@ -52,18 +52,18 @@ class CameraMotionCompensator:
         self._use_affine = use_affine
         self._prev_gray: np.ndarray | None = None
 
-        self._lk_params = dict(
-            winSize=(15, 15),
-            maxLevel=3,
-            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01),
-        )
+        self._lk_params = {
+            "winSize": (15, 15),
+            "maxLevel": 3,
+            "criteria": (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01),
+        }
 
-        self._feature_params = dict(
-            maxCorners=self._max_kp,
-            qualityLevel=0.01,
-            minDistance=10,
-            blockSize=7,
-        )
+        self._feature_params = {
+            "maxCorners": self._max_kp,
+            "qualityLevel": 0.01,
+            "minDistance": 10,
+            "blockSize": 7,
+        }
 
     def compute(self, frame: np.ndarray) -> np.ndarray:
         """Compute the camera motion warp matrix from previous to current frame.
@@ -137,3 +137,4 @@ class CameraMotionCompensator:
     def reset(self) -> None:
         """Reset internal state (e.g. on scene change)."""
         self._prev_gray = None
+

@@ -10,6 +10,7 @@ timestamped subdirectory.
 from __future__ import annotations
 
 import logging
+import re as _re
 import threading
 import time
 from collections import deque
@@ -285,8 +286,6 @@ def _write_ppm(frame: np.ndarray, path: Path) -> None:
         f.write(header)
         f.write(rgb.tobytes())
 
-
-import re as _re
 
 # Matches the last two numeric groups at end of a stem, e.g. _1708123456_789
 _TS_RE = _re.compile(r"_(\d+)_(\d{3})$")

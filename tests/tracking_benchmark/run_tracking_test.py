@@ -25,10 +25,10 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from rws_tracking.algebra.kalman2d import KalmanCAConfig
-from rws_tracking.perception.appearance_gallery import GalleryConfig
-from rws_tracking.perception.reid_extractor import ReIDConfig
-from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker
+from rws_tracking.algebra.kalman2d import KalmanCAConfig  # noqa: E402
+from rws_tracking.perception.appearance_gallery import GalleryConfig  # noqa: E402
+from rws_tracking.perception.reid_extractor import ReIDConfig  # noqa: E402
+from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker  # noqa: E402
 
 
 @dataclass
@@ -257,14 +257,14 @@ if __name__ == "__main__":
     if not download_test_video(video_path):
         sys.exit(1)
 
-    common_kwargs = dict(
-        model_path="yolo11n-seg.pt",
-        confidence_threshold=0.35,
-        tracker="botsort.yaml",
-        class_whitelist=["person"],
-        device="",
-        kalman_config=KalmanCAConfig(),
-    )
+    common_kwargs = {
+        "model_path": "yolo11n-seg.pt",
+        "confidence_threshold": 0.35,
+        "tracker": "botsort.yaml",
+        "class_whitelist": ["person"],
+        "device": "",
+        "kalman_config": KalmanCAConfig(),
+    }
 
     search_frames = 220  # fast tuning window
 
@@ -286,103 +286,103 @@ if __name__ == "__main__":
     candidate_cfgs: list[tuple[str, dict[str, Any]]] = [
         (
             "paper-balanced",
-            dict(
-                match_threshold=0.30,
-                match_threshold_relaxed=0.24,
-                cascade_recent_s=1.5,
-                second_best_margin=0.03,
-                spatial_gate_px=380.0,
-                spatial_gate_grow_rate=180.0,
-                appearance_weight=0.55,
-                motion_weight=0.30,
-                iou_weight=0.15,
-                min_fused_score=0.30,
-                da_alpha_fixed=0.95,
-                da_confidence_sigma=0.40,
-                aw_epsilon=0.5,
-                aw_base_weight=0.55,
-                ocm_window=5,
-            ),
+            {
+                "match_threshold": 0.30,
+                "match_threshold_relaxed": 0.24,
+                "cascade_recent_s": 1.5,
+                "second_best_margin": 0.03,
+                "spatial_gate_px": 380.0,
+                "spatial_gate_grow_rate": 180.0,
+                "appearance_weight": 0.55,
+                "motion_weight": 0.30,
+                "iou_weight": 0.15,
+                "min_fused_score": 0.30,
+                "da_alpha_fixed": 0.95,
+                "da_confidence_sigma": 0.40,
+                "aw_epsilon": 0.5,
+                "aw_base_weight": 0.55,
+                "ocm_window": 5,
+            },
         ),
         (
             "paper-strong-da",
-            dict(
-                match_threshold=0.30,
-                match_threshold_relaxed=0.24,
-                cascade_recent_s=1.5,
-                second_best_margin=0.03,
-                spatial_gate_px=380.0,
-                spatial_gate_grow_rate=180.0,
-                appearance_weight=0.55,
-                motion_weight=0.30,
-                iou_weight=0.15,
-                min_fused_score=0.30,
-                da_alpha_fixed=0.92,
-                da_confidence_sigma=0.45,
-                aw_epsilon=0.5,
-                aw_base_weight=0.55,
-                ocm_window=5,
-            ),
+            {
+                "match_threshold": 0.30,
+                "match_threshold_relaxed": 0.24,
+                "cascade_recent_s": 1.5,
+                "second_best_margin": 0.03,
+                "spatial_gate_px": 380.0,
+                "spatial_gate_grow_rate": 180.0,
+                "appearance_weight": 0.55,
+                "motion_weight": 0.30,
+                "iou_weight": 0.15,
+                "min_fused_score": 0.30,
+                "da_alpha_fixed": 0.92,
+                "da_confidence_sigma": 0.45,
+                "aw_epsilon": 0.5,
+                "aw_base_weight": 0.55,
+                "ocm_window": 5,
+            },
         ),
         (
             "paper-strong-aw",
-            dict(
-                match_threshold=0.28,
-                match_threshold_relaxed=0.22,
-                cascade_recent_s=1.8,
-                second_best_margin=0.03,
-                spatial_gate_px=400.0,
-                spatial_gate_grow_rate=200.0,
-                appearance_weight=0.55,
-                motion_weight=0.30,
-                iou_weight=0.15,
-                min_fused_score=0.28,
-                da_alpha_fixed=0.95,
-                da_confidence_sigma=0.40,
-                aw_epsilon=1.0,
-                aw_base_weight=0.75,
-                ocm_window=5,
-            ),
+            {
+                "match_threshold": 0.28,
+                "match_threshold_relaxed": 0.22,
+                "cascade_recent_s": 1.8,
+                "second_best_margin": 0.03,
+                "spatial_gate_px": 400.0,
+                "spatial_gate_grow_rate": 200.0,
+                "appearance_weight": 0.55,
+                "motion_weight": 0.30,
+                "iou_weight": 0.15,
+                "min_fused_score": 0.28,
+                "da_alpha_fixed": 0.95,
+                "da_confidence_sigma": 0.40,
+                "aw_epsilon": 1.0,
+                "aw_base_weight": 0.75,
+                "ocm_window": 5,
+            },
         ),
         (
             "paper-recall",
-            dict(
-                match_threshold=0.26,
-                match_threshold_relaxed=0.20,
-                cascade_recent_s=2.0,
-                second_best_margin=0.02,
-                spatial_gate_px=450.0,
-                spatial_gate_grow_rate=220.0,
-                appearance_weight=0.50,
-                motion_weight=0.35,
-                iou_weight=0.15,
-                min_fused_score=0.24,
-                da_alpha_fixed=0.95,
-                da_confidence_sigma=0.40,
-                aw_epsilon=0.5,
-                aw_base_weight=0.55,
-                ocm_window=7,
-            ),
+            {
+                "match_threshold": 0.26,
+                "match_threshold_relaxed": 0.20,
+                "cascade_recent_s": 2.0,
+                "second_best_margin": 0.02,
+                "spatial_gate_px": 450.0,
+                "spatial_gate_grow_rate": 220.0,
+                "appearance_weight": 0.50,
+                "motion_weight": 0.35,
+                "iou_weight": 0.15,
+                "min_fused_score": 0.24,
+                "da_alpha_fixed": 0.95,
+                "da_confidence_sigma": 0.40,
+                "aw_epsilon": 0.5,
+                "aw_base_weight": 0.55,
+                "ocm_window": 7,
+            },
         ),
         (
             "paper-precision",
-            dict(
-                match_threshold=0.34,
-                match_threshold_relaxed=0.28,
-                cascade_recent_s=1.2,
-                second_best_margin=0.04,
-                spatial_gate_px=320.0,
-                spatial_gate_grow_rate=140.0,
-                appearance_weight=0.62,
-                motion_weight=0.25,
-                iou_weight=0.13,
-                min_fused_score=0.34,
-                da_alpha_fixed=0.95,
-                da_confidence_sigma=0.40,
-                aw_epsilon=0.5,
-                aw_base_weight=0.55,
-                ocm_window=5,
-            ),
+            {
+                "match_threshold": 0.34,
+                "match_threshold_relaxed": 0.28,
+                "cascade_recent_s": 1.2,
+                "second_best_margin": 0.04,
+                "spatial_gate_px": 320.0,
+                "spatial_gate_grow_rate": 140.0,
+                "appearance_weight": 0.62,
+                "motion_weight": 0.25,
+                "iou_weight": 0.13,
+                "min_fused_score": 0.34,
+                "da_alpha_fixed": 0.95,
+                "da_confidence_sigma": 0.40,
+                "aw_epsilon": 0.5,
+                "aw_base_weight": 0.55,
+                "ocm_window": 5,
+            },
         ),
     ]
 

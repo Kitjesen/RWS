@@ -21,12 +21,12 @@ from .server import TrackingAPI
 # Import generated protobuf code
 try:
     from . import tracking_pb2, tracking_pb2_grpc
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "gRPC protobuf files not generated. Run: "
         "python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. "
         "src/rws_tracking/api/tracking.proto"
-    )
+    ) from err
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +364,8 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
 
             fire_authorized = inter_res.authorized and not nfz_res.fire_blocked
             reasons = []
-            if nfz_res.fire_blocked: reasons.append(f"NFZ:{nfz_res.active_zone_id}")
+            if nfz_res.fire_blocked:
+                reasons.append(f"NFZ:{nfz_res.active_zone_id}")
             reasons.extend(inter_res.blocked_reasons)
 
             return tracking_pb2.GetSafetyStatusResponse(

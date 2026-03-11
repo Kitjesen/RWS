@@ -48,7 +48,7 @@ class TestBasicOperation:
 
     def test_rate_clipping(self, driver):
         driver.set_yaw_pitch_rate(500.0, -500.0, 0.0)
-        fb = driver.get_feedback(0.001)
+        driver.get_feedback(0.001)
         # Rate should be clipped to max_rate_dps
         assert abs(driver._yaw_cmd) <= 240.0
         assert abs(driver._pitch_cmd) <= 240.0

@@ -32,11 +32,10 @@ from __future__ import annotations
 import logging
 import math
 import os
-import time
 from pathlib import Path
 
-from .driver import DriverLimits
 from ..types import GimbalFeedback
+from .driver import DriverLimits
 
 logger = logging.getLogger(__name__)
 
@@ -182,8 +181,10 @@ class PyBulletGimbalDriver:
 
         # Deadband
         db_rps = math.radians(self._limits.deadband_dps)
-        if abs(yaw_rps)   < db_rps: yaw_rps   = 0.0
-        if abs(pitch_rps) < db_rps: pitch_rps = 0.0
+        if abs(yaw_rps) < db_rps:
+            yaw_rps = 0.0
+        if abs(pitch_rps) < db_rps:
+            pitch_rps = 0.0
 
         self._yaw_cmd_rps   = yaw_rps
         self._pitch_cmd_rps = pitch_rps

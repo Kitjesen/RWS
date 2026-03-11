@@ -1,12 +1,11 @@
 """激进参数测试 - 力求达到 Lock"""
 import pytest
 
-pytestmark = pytest.mark.skip(reason="manual benchmark only, not a unit test")
-
-
 from src.rws_tracking.algebra import CameraModel
 from src.rws_tracking.config import GimbalControllerConfig, PIDConfig
 from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
+
+pytestmark = pytest.mark.skip(reason="manual benchmark only, not a unit test")
 
 
 def test_aggressive(kp_yaw, kp_pitch, target_speed, lock_threshold, duration=20.0):

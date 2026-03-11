@@ -26,12 +26,12 @@ import grpc
 # Import generated protobuf code
 try:
     from . import tracking_pb2, tracking_pb2_grpc
-except ImportError:
+except ImportError as err:
     raise ImportError(
         "gRPC protobuf files not generated. Run: "
         "python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. "
         "src/rws_tracking/api/tracking.proto"
-    )
+    ) from err
 
 logger = logging.getLogger(__name__)
 

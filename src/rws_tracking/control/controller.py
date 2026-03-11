@@ -134,6 +134,7 @@ class TwoAxisGimbalController:
         _controller_mode = getattr(cfg, 'controller_mode', 'pid')
         if _controller_mode == 'mpc':
             import dataclasses as _dc
+
             from .mpc_controller import MPCConfig as _MpcRtCfg
             from .mpc_controller import MPCController
             _mpc_src = getattr(cfg, 'mpc', None)

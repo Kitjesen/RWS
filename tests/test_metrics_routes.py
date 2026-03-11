@@ -17,7 +17,6 @@ from unittest.mock import MagicMock
 import pytest
 from flask import Flask
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -159,8 +158,8 @@ class TestThreatScore:
 
         app = _make_app({"tracking_api": api})
         body = _get_metrics(app)
-        data_lines = [l for l in body.splitlines()
-                      if l.startswith("rws_threat_score{")]
+        data_lines = [metric_line for metric_line in body.splitlines()
+                      if metric_line.startswith("rws_threat_score{")]
         assert len(data_lines) == 0
 
     def test_assessments_produce_labeled_lines(self):
@@ -174,8 +173,8 @@ class TestThreatScore:
 
         app = _make_app({"tracking_api": api})
         body = _get_metrics(app)
-        data_lines = [l for l in body.splitlines()
-                      if l.startswith("rws_threat_score{")]
+        data_lines = [metric_line for metric_line in body.splitlines()
+                      if metric_line.startswith("rws_threat_score{")]
         assert len(data_lines) == 2
 
     def test_assessment_value_formatted_correctly(self):
@@ -198,7 +197,7 @@ class TestThreatScore:
 
         app = _make_app({"tracking_api": api})
         body = _get_metrics(app)
-        line = next(l for l in body.splitlines() if 'track_id="3"' in l)
+        line = next(metric_line for metric_line in body.splitlines() if 'track_id="3"' in metric_line)
         value = float(line.split()[-1])
         assert abs(value - 0.1234) < 1e-4
 
@@ -307,8 +306,8 @@ class TestLifecycleByState:
     def test_no_pipeline_no_data_lines(self):
         app = _make_app()
         body = _get_metrics(app)
-        data_lines = [l for l in body.splitlines()
-                      if l.startswith("rws_lifecycle_by_state{")]
+        data_lines = [metric_line for metric_line in body.splitlines()
+                      if metric_line.startswith("rws_lifecycle_by_state{")]
         assert len(data_lines) == 0
 
     def test_with_lifecycle_manager(self):
@@ -368,8 +367,8 @@ class TestHealthSubsystem:
     def test_no_health_monitor_no_data_lines(self):
         app = _make_app()
         body = _get_metrics(app)
-        data_lines = [l for l in body.splitlines()
-                      if l.startswith("rws_health_subsystem{")]
+        data_lines = [metric_line for metric_line in body.splitlines()
+                      if metric_line.startswith("rws_health_subsystem{")]
         assert len(data_lines) == 0
 
     def test_ok_subsystem_returns_one(self):
@@ -379,8 +378,8 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        line = next(l for l in body.splitlines()
-                    if 'name="pipeline"' in l)
+        line = next(metric_line for metric_line in body.splitlines()
+                    if 'name="pipeline"' in metric_line)
         assert float(line.split()[-1]) == 1.0
 
     def test_degraded_subsystem_returns_two(self):
@@ -390,8 +389,8 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        line = next(l for l in body.splitlines()
-                    if 'name="imu"' in l)
+        line = next(metric_line for metric_line in body.splitlines()
+                    if 'name="imu"' in metric_line)
         assert float(line.split()[-1]) == 2.0
 
     def test_failed_subsystem_returns_three(self):
@@ -401,8 +400,8 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        line = next(l for l in body.splitlines()
-                    if 'name="camera"' in l)
+        line = next(metric_line for metric_line in body.splitlines()
+                    if 'name="camera"' in metric_line)
         assert float(line.split()[-1]) == 3.0
 
     def test_unknown_subsystem_returns_zero(self):
@@ -412,8 +411,8 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        line = next(l for l in body.splitlines()
-                    if 'name="radar"' in l)
+        line = next(metric_line for metric_line in body.splitlines()
+                    if 'name="radar"' in metric_line)
         assert float(line.split()[-1]) == 0.0
 
     def test_multiple_subsystems(self):
@@ -425,8 +424,8 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        data_lines = [l for l in body.splitlines()
-                      if l.startswith("rws_health_subsystem{")]
+        data_lines = [metric_line for metric_line in body.splitlines()
+                      if metric_line.startswith("rws_health_subsystem{")]
         assert len(data_lines) == 3
 
 
@@ -490,7 +489,7 @@ class TestPipelineFps:
         assert val == 0.0
 
     def test_fps_increases_after_recording_frames(self):
-        from src.rws_tracking.api.metrics_routes import record_frame, _frame_times
+        from src.rws_tracking.api.metrics_routes import _frame_times, record_frame
 
         now = time.monotonic()
         for _ in range(15):
@@ -631,7 +630,7 @@ class TestPrometheusFormat:
 
         app = _make_app({"tracking_api": api})
         body = _get_metrics(app)
-        labeled = [l for l in body.splitlines() if "{" in l and not l.startswith("#")]
+        labeled = [metric_line for metric_line in body.splitlines() if "{" in metric_line and not metric_line.startswith("#")]
         for line in labeled:
             m = re.search(r'\{([^}]*)\}', line)
             if m:
@@ -670,7 +669,7 @@ class TestRecordFrame:
     def test_deque_maxlen_enforced(self):
         from src.rws_tracking.api.metrics_routes import _frame_times, record_frame
         _frame_times.clear()
-        for i in range(150):
+        for _i in range(150):
             record_frame(time.monotonic())
         assert len(_frame_times) <= 100
 

@@ -105,8 +105,8 @@ class TestEventBusBroadcast:
         t.join(timeout=2.0)
 
         # IDs should increase.
-        id_lines = [l for chunk in received for l in chunk.split("\n") if l.startswith("id:")]
-        ids = [int(l.split(":")[1]) for l in id_lines]
+        id_lines = [id_line for chunk in received for id_line in chunk.split("\n") if id_line.startswith("id:")]
+        ids = [int(id_line.split(":")[1]) for id_line in id_lines]
         assert ids == sorted(ids), "event IDs must be monotonically increasing"
 
     def test_slow_subscriber_queue_full_does_not_block_others(self):

@@ -16,7 +16,6 @@ from __future__ import annotations
 import math
 import time
 
-import numpy as np
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -37,8 +36,8 @@ def _make_transform(fx=800.0, fy=800.0):
 
 
 def _make_track(track_id=1, confidence=0.8, class_id="person"):
-    from rws_tracking.types.perception import Track
     from rws_tracking.types import BoundingBox
+    from rws_tracking.types.perception import Track
     bbox = BoundingBox(x=100.0, y=100.0, w=60.0, h=80.0)
     return Track(
         track_id=track_id,
@@ -273,6 +272,7 @@ class TestORUBlendVelocity:
     def test_blend_velocity_used_in_fusion_mot(self):
         """FusionMOT ORU code must call blend_velocity() (no direct _x access)."""
         import inspect
+
         import rws_tracking.perception.fusion_mot as fm_mod
         src = inspect.getsource(fm_mod)
         # The ORU block should call blend_velocity, not access _x[2] directly
@@ -376,8 +376,7 @@ class TestMPCController:
 
     def test_axis_controller_protocol(self):
         """MPCController must satisfy the AxisController protocol (step + reset)."""
-        from rws_tracking.control.interfaces import AxisController
-        from rws_tracking.control.mpc_controller import MPCController, MPCConfig
+        from rws_tracking.control.mpc_controller import MPCConfig, MPCController
         mpc = MPCController(MPCConfig())
         # Protocol check: must have step() and reset()
         assert callable(getattr(mpc, "step", None))
@@ -414,7 +413,7 @@ class TestDOB:
         """After N frames with a persistent yaw disturbance, _dob_yaw must be non-zero."""
         ctrl = self._make_controller(dob_enabled=True, dob_alpha=0.5, dob_gain=1.0)
         ts = 1.0
-        for i in range(15):
+        for _i in range(15):
             ts += 0.033
             obs = _make_obs(ts=ts, cx=400.0, cy=240.0)
             fb = _make_feedback(yaw_rate=0.0, ts=ts)  # measured rate = 0, cmd will be nonzero
@@ -426,7 +425,7 @@ class TestDOB:
         """When dob_enabled=False, DOB state must remain zero after any call."""
         ctrl = self._make_controller(dob_enabled=False)
         ts = 1.0
-        for i in range(10):
+        for _i in range(10):
             ts += 0.033
             obs = _make_obs(ts=ts, cx=400.0, cy=240.0)
             fb = _make_feedback(yaw_rate=0.0, ts=ts)
@@ -450,7 +449,7 @@ class TestDOB:
         ctrl_no = self._make_controller(dob_enabled=False)
 
         ts = 1.0
-        for i in range(20):
+        for _i in range(20):
             ts += 0.033
             obs = _make_obs(ts=ts, cx=400.0, cy=240.0)
             # Measured rate persistently lower than commanded → DOB should detect this
@@ -612,8 +611,8 @@ class TestPIDMethods:
     """scale_integral and reset_derivative must work without .state attribute access."""
 
     def _make_pid(self, kp=3.0, ki=0.5, kd=0.1):
-        from rws_tracking.control.controller import PID
         from rws_tracking.config import PIDConfig
+        from rws_tracking.control.controller import PID
         cfg = PIDConfig(kp=kp, ki=ki, kd=kd)
         return PID(cfg)
 
@@ -657,6 +656,7 @@ class TestPIDMethods:
     def test_scale_integral_used_in_controller(self):
         """TwoAxisGimbalController must call scale_integral() not .state.integral *=."""
         import inspect
+
         # Inspect just the compute_command method to avoid matching docstring comments
         from rws_tracking.control.controller import TwoAxisGimbalController
         src = inspect.getsource(TwoAxisGimbalController.compute_command)

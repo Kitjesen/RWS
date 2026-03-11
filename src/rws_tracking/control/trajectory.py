@@ -184,7 +184,7 @@ def sample_trapezoid(seg: TrapezoidSegment, t: float) -> tuple[float, float]:
     amax = vmax / seg.t_accel if seg.t_accel > 0 else 0.0
 
     t = min(t, seg.t_total)
-    ta, tc, td = seg.t_accel, seg.t_cruise, seg.t_decel
+    ta, tc, _td = seg.t_accel, seg.t_cruise, seg.t_decel
 
     if t <= ta:
         # 加速段

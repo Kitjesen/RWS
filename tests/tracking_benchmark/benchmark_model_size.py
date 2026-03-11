@@ -87,7 +87,7 @@ def print_results(video_name: str, results: list[dict]):
     print()
 
     base = results[0]
-    for key, label, fmt, higher_better in [
+    for key, label, fmt, _higher_better in [
         ("unique_ids",    "Unique IDs (lower=better)",  "d",   False),
         ("avg_track_len", "Avg track len (higher=better)", ".1f", True),
         ("frag",          "Frag breaks (lower=better)", "d",   False),

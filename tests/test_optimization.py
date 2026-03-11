@@ -1,12 +1,11 @@
 """优化参数的测试 - 提高 Lock Rate"""
 import pytest
 
-pytestmark = pytest.mark.skip(reason="manual benchmark only, not a unit test")
-
-
 from src.rws_tracking.algebra import CameraModel
 from src.rws_tracking.config import GimbalControllerConfig, PIDConfig
 from src.rws_tracking.tools.simulation import SimTarget, SyntheticScene
+
+pytestmark = pytest.mark.skip(reason="manual benchmark only, not a unit test")
 
 
 def test_with_params(kp_yaw, kp_pitch, target_speed, duration=15.0):

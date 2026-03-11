@@ -32,15 +32,14 @@ from __future__ import annotations
 import math
 import threading
 import time
-from typing import TYPE_CHECKING
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from .driver import DriverLimits, SimulatedGimbalDriver
 from ..types import GimbalFeedback
+from .driver import DriverLimits, SimulatedGimbalDriver
 
 # Use a non-blocking backend; swap to Qt5Agg / TkAgg if Agg doesn't suit.
 matplotlib.use("TkAgg")
@@ -160,11 +159,10 @@ class _GimbalScene:
         ax.cla()
 
         # ── World / base frame ──────────────────────────────────────────
-        I = np.eye(3)
-        O = np.zeros(3)
+        identity = np.eye(3)
 
         # Base plate (150×150×50 mm)
-        _draw_box(ax, (0.150, 0.150, 0.050), I, np.array([0, 0, -0.025]),
+        _draw_box(ax, (0.150, 0.150, 0.050), identity, np.array([0, 0, -0.025]),
                   self.C_BASE, alpha=0.50)
 
         # ── Yaw stage ───────────────────────────────────────────────────
@@ -225,9 +223,12 @@ class _GimbalScene:
         _draw_frame(ax, Rp, T_cam, length=0.040)
 
         # ── Labels & axes ───────────────────────────────────────────────
-        ax.set_xlim([-0.20, 0.20]);  ax.set_xlabel('X (forward)', fontsize=8)
-        ax.set_ylim([-0.20, 0.20]);  ax.set_ylabel('Y', fontsize=8)
-        ax.set_zlim([-0.05, 0.22]);  ax.set_zlabel('Z (up)', fontsize=8)
+        ax.set_xlim([-0.20, 0.20])
+        ax.set_xlabel('X (forward)', fontsize=8)
+        ax.set_ylim([-0.20, 0.20])
+        ax.set_ylabel('Y', fontsize=8)
+        ax.set_zlim([-0.05, 0.22])
+        ax.set_zlabel('Z (up)', fontsize=8)
         ax.set_title(
             f'RWS 2-DOF Gimbal\n'
             f'Yaw={yaw_deg:+7.2f}°    Pitch={pitch_deg:+6.2f}°',
@@ -364,7 +365,6 @@ def standalone_demo() -> None:
     import time as _time
 
     driver = MatplotlibGimbalDriver(viz_fps=30.0)
-    sim    = driver._sim        # access underlying sim for direct feedback
 
     print("RWS Gimbal — standalone demo (close window to exit)")
     print("  Phase 1 : yaw sweep ±120°")

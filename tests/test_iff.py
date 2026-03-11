@@ -248,7 +248,7 @@ class TestIFFCheckerThreadSafety:
             try:
                 for i in range(100):
                     checker.is_friendly(i)
-                    checker.friendly_track_ids
+                    _ = checker.friendly_track_ids
             except Exception as exc:
                 errors.append(exc)
 

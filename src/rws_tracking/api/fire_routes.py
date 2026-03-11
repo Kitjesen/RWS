@@ -13,6 +13,8 @@ from pathlib import Path
 
 from flask import Blueprint, Response, current_app, jsonify, request, send_file
 
+from ..telemetry.video_ring_buffer import _parse_timestamp_from_filename
+
 
 def _check_fire_rate_limit():
     """Return a 429 response if the caller has exceeded the fire-endpoint rate limit.
@@ -412,8 +414,6 @@ def download_clip(filename: str):
         download_name=filename,
     )
 
-
-from ..telemetry.video_ring_buffer import _parse_timestamp_from_filename
 
 # ---------------------------------------------------------------------------
 # Target designation (operator C2 override)

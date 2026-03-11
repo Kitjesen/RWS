@@ -109,7 +109,7 @@ class TestFullIntegration:
                 confidence=0.9, class_id="person",
             )]
             pipeline.detector.inject(dets)
-            output = pipeline.step(None, t)
+            pipeline.step(None, t)
         metrics = pipeline.telemetry.snapshot_metrics()
         assert metrics["lock_rate"] > 0.0
 

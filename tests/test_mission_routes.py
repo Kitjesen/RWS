@@ -12,12 +12,10 @@ avoid cross-test pollution.
 from __future__ import annotations
 
 import time
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import Flask
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -621,7 +619,7 @@ class TestDownloadReport:
         report_file.write_text("<html>report</html>")
 
         app = _make_app()
-        with patch("src.rws_tracking.api.mission_routes.Path") as MockPath:
+        with patch("src.rws_tracking.api.mission_routes.Path"):
             # We need the route to resolve to tmp_path/logs/reports
             # Easier: just test the 404 path — the report dir is in the CWD
             pass
@@ -633,7 +631,6 @@ class TestDownloadReport:
 
     def test_report_response_is_html(self, tmp_path):
         """A real HTML file in logs/reports/ is served with text/html mimetype."""
-        import os
 
         report_dir = tmp_path / "reports"
         report_dir.mkdir()
@@ -700,7 +697,7 @@ class TestMissionCycle:
         api = _make_api()
         app = _make_app({"tracking_api": api})
         with app.test_client() as c:
-            for i in range(3):
+            for _i in range(3):
                 r = c.post("/api/mission/start?force=true", json={})
                 assert r.status_code == 200
                 r = c.post("/api/mission/end")

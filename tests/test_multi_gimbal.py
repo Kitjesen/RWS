@@ -172,7 +172,7 @@ def main():
         detections = sim.step(dt, gimbal_positions)
 
         # Run pipeline
-        outputs = pipeline.step(detections, ts)
+        pipeline.step(detections, ts)
 
         # Print status every 10 frames
         if step_count % 10 == 0:

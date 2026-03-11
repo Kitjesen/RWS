@@ -27,16 +27,19 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT / "src"))
 
-import numpy as np
+import numpy as np  # noqa: E402
 
-from rws_tracking.perception import (
+from rws_tracking.perception import (  # noqa: E402
     PassthroughDetector,
     SimpleIoUTracker,
     TargetAllocator,
     WeightedMultiTargetSelector,
 )
-from rws_tracking.pipeline.multi_gimbal_pipeline import GimbalUnit, MultiGimbalPipeline
-from rws_tracking.types import BoundingBox, Detection, TargetObservation, Track
+from rws_tracking.pipeline.multi_gimbal_pipeline import (  # noqa: E402
+    GimbalUnit,
+    MultiGimbalPipeline,
+)
+from rws_tracking.types import BoundingBox, Detection, TargetObservation, Track  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -300,7 +303,7 @@ class TestMultiGimbalE2E:
         track1_id = None
         track2_id = None
 
-        for step in range(10):
+        for _step in range(10):
             ts = time.monotonic()
             detector.inject([
                 _det(x=100,  y=300, conf=0.92),

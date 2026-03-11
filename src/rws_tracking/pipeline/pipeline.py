@@ -826,7 +826,6 @@ class VisionGimbalPipeline:
             if isinstance(frame, np.ndarray):
                 annotated = frame
                 if self._frame_annotator is not None and self._frame_buffer is not None:
-                    state_str = str(command.metadata.get("state", ""))
                     status_text = f"D:{distance_m:.0f}m" if distance_m > 0 else ""
                     if safety_status is not None and not safety_status.fire_authorized:
                         status_text += f" BLOCKED:{safety_status.blocked_reason[:30]}"

@@ -96,7 +96,7 @@ def print_results(video_name: str, results: list[dict]):
     print()
 
     base = results[0]
-    for key, label, fmt, higher_better in [
+    for key, label, fmt, _higher_better in [
         ("unique_ids",    "Unique IDs",      "d",   False),
         ("avg_track_len", "Avg track len",   ".1f", True),
         ("frag",          "Frag breaks",     "d",   False),
@@ -135,7 +135,7 @@ def main():
         return
 
     MAX = 300
-    GALLERY_CFG = GalleryConfig(
+    GalleryConfig(
         match_threshold=0.26, match_threshold_relaxed=0.20,
         cascade_recent_s=2.0, second_best_margin=0.02,
         spatial_gate_px=450.0, spatial_gate_grow_rate=220.0,

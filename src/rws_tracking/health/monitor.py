@@ -88,7 +88,6 @@ class HealthMonitor:
         timestamp: float | None = None,
     ) -> None:
         """Report an error for a subsystem."""
-        ts = timestamp if timestamp is not None else time.monotonic()
         if subsystem not in self._subsystems:
             self._subsystems[subsystem] = SubsystemStatus(
                 name=subsystem,

@@ -28,14 +28,14 @@ GALLERY_CFG = GalleryConfig(
     ema_alpha=0.85, max_lost_age=5.0, min_track_age_frames=3,
 )
 
-COMMON = dict(
-    model_path="yolo11n-seg.pt",
-    confidence_threshold=0.35,
-    tracker="botsort.yaml",
-    class_whitelist=["person"],
-    device="",
-    kalman_config=KalmanCAConfig(),
-)
+COMMON = {
+    "model_path": "yolo11n-seg.pt",
+    "confidence_threshold": 0.35,
+    "tracker": "botsort.yaml",
+    "class_whitelist": ["person"],
+    "device": "",
+    "kalman_config": KalmanCAConfig(),
+}
 
 
 def run_tracker(video_path: str, label: str, max_frames: int,
