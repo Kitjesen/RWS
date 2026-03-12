@@ -1,3 +1,5 @@
-"""Re-export from qp-perception."""
+"""Re-export from qp-perception with legacy helper compatibility."""
 
-from qp_perception.tracking.iou import *  # noqa: F401,F403
+from qp_perception.tracking.iou import SimpleIoUTracker, _iou
+
+__all__ = ["SimpleIoUTracker", "_iou"]
