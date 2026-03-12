@@ -17,6 +17,7 @@ import signal
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
+from ..algebra.coordinate_transform import CameraModel
 from ..control.interfaces import (
     BallisticSolverProtocol,
     DistanceFusionProtocol,
@@ -26,6 +27,7 @@ from ..control.interfaces import (
 )
 from ..decision.interfaces import EngagementQueueProtocol, ThreatAssessorProtocol
 from ..decision.lifecycle import TargetLifecycleManager
+from ..events import EventBusProtocol
 from ..hardware.imu_interface import BodyMotionProvider
 from ..hardware.interfaces import GimbalDriver
 from ..hardware.rangefinder import RangefinderProvider
@@ -37,14 +39,6 @@ from ..safety.shooting_chain import ShootingChain
 from ..telemetry.audit import AuditLogger
 from ..telemetry.interfaces import TelemetryLogger
 from ..telemetry.video_ring_buffer import VideoRingBuffer
-from .protocols import FrameAnnotatorProtocol, FrameBufferProtocol
-
-# Optional SSE event bus — imported lazily to avoid circular imports at module
-# load time.  If the events module is not available, we silently skip emission.
-try:
-    from ..api.events import event_bus as _event_bus
-except Exception:  # pragma: no cover
-    _event_bus = None  # type: ignore[assignment]
 from ..types import (
     BallisticSolution,
     ControlCommand,
@@ -55,6 +49,7 @@ from ..types import (
     Track,
     TrackState,
 )
+from .protocols import FrameAnnotatorProtocol, FrameBufferProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +128,12 @@ class VisionGimbalPipeline:
         # before the engagement queue auto-advances to the next target.
         # Set to 0.0 to disable auto-advance.
         engagement_dwell_time_s: float = 2.0,
+        event_bus: EventBusProtocol | None = None,
+        # Camera intrinsics injected at construction so pipeline never
+        # reaches into controller private attributes.
+        camera_model: CameraModel | None = None,
+        # Yaw Kp gain forwarded here for windage rate conversion.
+        windage_gain: float = 0.0,
     ) -> None:
         self.detector = detector
         self.tracker = tracker
@@ -163,6 +164,9 @@ class VisionGimbalPipeline:
         # ROE manager — injected by build_pipeline_from_config(); may also be
         # set directly on the pipeline instance after construction.
         self._roe_manager = None  # type: ignore[assignment]
+        self._event_bus = event_bus
+        self._camera_model = camera_model
+        self._windage_gain = windage_gain
 
         self._last_target_id: int | None = None
         self._last_chain_state: str = ""
@@ -314,12 +318,12 @@ class VisionGimbalPipeline:
             self._lifecycle_manager.update(tracks, threat_assessments, timestamp)
 
         # SSE: emit threat_detected for tracks newly entering the high-priority list.
-        if _event_bus is not None:
+        if self._event_bus is not None:
             current_high_ids = {ta.track_id for ta in threat_assessments if ta.threat_score >= 0.3}
             new_threat_ids = current_high_ids - self._last_threat_track_ids
             for ta in threat_assessments:
                 if ta.track_id in new_threat_ids:
-                    _event_bus.emit(
+                    self._event_bus.emit(
                         "threat_detected",
                         {
                             "track_id": ta.track_id,
@@ -435,9 +439,9 @@ class VisionGimbalPipeline:
                 )
 
         # SSE: emit safety_triggered on the first frame fire transitions to blocked.
-        if _event_bus is not None and safety_status is not None:
+        if self._event_bus is not None and safety_status is not None:
             if not safety_status.fire_authorized and self._last_fire_authorized is not False:
-                _event_bus.emit(
+                self._event_bus.emit(
                     "safety_triggered",
                     {
                         "reason": safety_status.blocked_reason or "interlock",
@@ -521,8 +525,8 @@ class VisionGimbalPipeline:
                         ),
                     )
                 # Push SSE event for real-time operator notification.
-                if _event_bus is not None:
-                    _event_bus.emit(
+                if self._event_bus is not None:
+                    self._event_bus.emit(
                         "fire_chain_state",
                         {
                             "state": new_state,
@@ -565,8 +569,8 @@ class VisionGimbalPipeline:
                             fire_authorized=True,
                         )
                     # SSE: notify operator of fire execution.
-                    if _event_bus is not None:
-                        _event_bus.emit(
+                    if self._event_bus is not None:
+                        self._event_bus.emit(
                             "fire_executed",
                             {
                                 "target_id": selected.track_id if selected else None,
@@ -582,8 +586,8 @@ class VisionGimbalPipeline:
                         )
                     if self._lifecycle_manager is not None and selected is not None:
                         self._lifecycle_manager.mark_neutralized(selected.track_id, timestamp)
-                        if _event_bus is not None:
-                            _event_bus.emit(
+                        if self._event_bus is not None:
+                            self._event_bus.emit(
                                 "target_neutralized",
                                 {
                                     "track_id": selected.track_id,
@@ -604,7 +608,7 @@ class VisionGimbalPipeline:
         if self._health_monitor is not None:
             self._health_monitor.heartbeat("pipeline", timestamp)
             # SSE: emit health_degraded when a subsystem transitions to degraded/failed.
-            if _event_bus is not None:
+            if self._event_bus is not None:
                 try:
                     for name, info in self._health_monitor.get_status().items():
                         status_str = (
@@ -614,7 +618,7 @@ class VisionGimbalPipeline:
                         )
                         prev = self._last_health_statuses.get(name, "ok")
                         if status_str in ("degraded", "failed") and status_str != prev:
-                            _event_bus.emit(
+                            self._event_bus.emit(
                                 "health_degraded",
                                 {
                                     "subsystem": name,
@@ -645,8 +649,13 @@ class VisionGimbalPipeline:
         # 转换公式: Δpx = Δangle_deg · fx / (180/π)
         #   其中 fx 来自已配置的相机内参。
         control_target = selected
-        if lead_angle is not None and lead_angle.confidence > 0 and selected is not None:
-            cam = self.controller._transform.camera
+        if (
+            lead_angle is not None
+            and lead_angle.confidence > 0
+            and selected is not None
+            and self._camera_model is not None
+        ):
+            cam = self._camera_model
             lead_px_yaw = lead_angle.yaw_lead_deg * cam.fx / math.degrees(1.0)
             lead_px_pitch = lead_angle.pitch_lead_deg * cam.fy / math.degrees(1.0)
             # Pixel convention: right = +x, down = +y; gimbal yaw right = +°, pitch up = -°
@@ -698,8 +707,8 @@ class VisionGimbalPipeline:
             target_switched = (
                 selected.track_id != self._last_target_id and self._last_target_id is not None
             )
-            if target_switched:
-                cam = self.controller._transform.camera
+            if target_switched and self._camera_model is not None:
+                cam = self._camera_model
                 cx, cy = (
                     control_target.mask_center
                     if control_target is not None and control_target.mask_center is not None
@@ -747,8 +756,7 @@ class VisionGimbalPipeline:
         # 风偏是外部环境因素，仍以速率形式叠加（短时平滑等效于位置偏移）
         if ballistic_solution is not None and ballistic_solution.windage_deg != 0:
             # 用 Kp 增益将角度补偿转化为等效速率 (°/s)
-            kp_yaw = self.controller._cfg.yaw_pid.kp
-            windage_rate = ballistic_solution.windage_deg * kp_yaw
+            windage_rate = ballistic_solution.windage_deg * self._windage_gain
             command = ControlCommand(
                 timestamp=command.timestamp,
                 yaw_rate_cmd_dps=command.yaw_rate_cmd_dps + windage_rate,
@@ -838,6 +846,7 @@ class VisionGimbalPipeline:
             if isinstance(frame, np.ndarray):
                 annotated = frame
                 if self._frame_annotator is not None and self._frame_buffer is not None:
+                    str(command.metadata.get("state", ""))
                     status_text = f"D:{distance_m:.0f}m" if distance_m > 0 else ""
                     if safety_status is not None and not safety_status.fire_authorized:
                         status_text += f" BLOCKED:{safety_status.blocked_reason[:30]}"

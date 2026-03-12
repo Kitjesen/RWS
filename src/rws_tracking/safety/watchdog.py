@@ -24,6 +24,8 @@ import logging
 import threading
 import time
 
+from ..events import EventBusProtocol
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,10 +48,12 @@ class OperatorWatchdog:
         shooting_chain,
         timeout_s: float = 5.0,
         check_interval_s: float = 1.0,
+        event_bus: EventBusProtocol | None = None,
     ) -> None:
         self._chain = shooting_chain
         self._timeout_s = timeout_s
         self._check_interval_s = check_interval_s
+        self._event_bus = event_bus
 
         self._last_heartbeat_ts: float = time.monotonic()
         self._lock = threading.Lock()
@@ -118,17 +122,16 @@ class OperatorWatchdog:
                 except Exception as exc:  # noqa: BLE001
                     logger.error("watchdog: failed to safe chain: %s", exc)
                 # Notify connected SSE subscribers of the operator timeout.
-                try:
-                    from ..api.events import event_bus
-
-                    event_bus.emit(
-                        "operator_timeout",
-                        {
-                            "elapsed_s": round(elapsed, 1),
-                            "timeout_s": self._timeout_s,
-                            "ts": round(time.time(), 3),
-                        },
-                    )
-                except Exception:  # noqa: BLE001
-                    pass
+                if self._event_bus is not None:
+                    try:
+                        self._event_bus.emit(
+                            "operator_timeout",
+                            {
+                                "elapsed_s": round(elapsed, 1),
+                                "timeout_s": self._timeout_s,
+                                "ts": round(time.time(), 3),
+                            },
+                        )
+                    except Exception:  # noqa: BLE001
+                        pass
             time.sleep(self._check_interval_s)

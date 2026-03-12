@@ -466,11 +466,14 @@ def _wire_pipeline_extensions(app: Flask, api: TrackingAPI) -> None:
     # Start operator watchdog once when shooting_chain becomes available.
     if "shooting_chain" in app.extensions and "operator_watchdog" not in app.extensions:
         try:
+            from ..events import EventBusProtocol as _EBP  # noqa: F401
             from ..safety.watchdog import OperatorWatchdog
+            from .events import event_bus as _sse_bus
 
             watchdog = OperatorWatchdog(
                 app.extensions["shooting_chain"],
                 timeout_s=getattr(api, "_operator_timeout_s", 10.0),
+                event_bus=_sse_bus,
             )
             watchdog.start()
             app.extensions["operator_watchdog"] = watchdog

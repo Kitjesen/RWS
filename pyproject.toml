@@ -8,6 +8,7 @@ version = "1.0.0"
 description = "RWS Vision-Gimbal Tracking System"
 requires-python = ">=3.9"
 dependencies = [
+    "qp-perception>=0.1.0",
     "ultralytics>=8.3.0",
     "opencv-python>=4.8.0",
     "numpy>=1.24.0",

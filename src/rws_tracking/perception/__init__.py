@@ -1,3 +1,5 @@
+"""Perception module -- re-exports from qp-perception standalone package."""
+
 from .appearance_gallery import AppearanceGallery, GalleryConfig
 from .cmc import CameraMotionCompensator
 from .fusion_mot import FusionMOT, FusionMOTConfig

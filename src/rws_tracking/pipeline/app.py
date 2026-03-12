@@ -420,6 +420,7 @@ def build_pipeline_from_config(
             annotate_detections=cfg.video_stream.annotate_detections,
             annotate_tracks=cfg.video_stream.annotate_tracks,
             annotate_crosshair=cfg.video_stream.annotate_crosshair,
+            annotate_safety_zones=cfg.video_stream.annotate_safety_zones,
         )
         frame_buffer = FrameBuffer(max_size=cfg.video_stream.buffer_size)
         frame_annotator = FrameAnnotator(config=vs_cfg)
@@ -434,39 +435,44 @@ def build_pipeline_from_config(
     from ..telemetry.audit import AuditLogger
     from ..telemetry.video_ring_buffer import VideoRingBuffer
 
-    shooting_chain = ShootingChain(cooldown_s=getattr(cfg, "fire_cooldown_s", 3.0))
+    shooting_chain = ShootingChain(
+        cooldown_s=cfg.session.fire_cooldown_s,
+        arm_confirmation_timeout_s=cfg.safety.arm_confirmation_timeout_s,
+    )
 
     # ---- ROE profile manager ----
     # Initial profile comes from config.yaml safety.roe_profile (defaults to
     # "training" — safest, dry-fire only).
-    _initial_roe = "training"
-    if cfg.safety is not None:
-        _initial_roe = getattr(cfg.safety, "roe_profile", "training") or "training"
+    _initial_roe = cfg.safety.roe_profile or "training"
     roe_manager = RoeManager(initial_profile=_initial_roe)
 
     # ---- Two-man rule configuration ----
     # Enabled via config.yaml safety.two_man_rule (bool, default False).
-    if cfg.safety is not None:
-        _two_man = getattr(cfg.safety, "two_man_rule", False)
-        _arm_timeout = getattr(cfg.safety, "arm_confirmation_timeout_s", 30.0)
-        if _two_man:
-            shooting_chain.enable_two_man_rule(True)
-            shooting_chain._arm_confirmation_timeout_s = float(_arm_timeout)
-    audit_logger = AuditLogger(log_path=getattr(cfg, "audit_log_path", "logs/audit.jsonl"))
+    if cfg.safety.two_man_rule:
+        shooting_chain.enable_two_man_rule(True)
+    audit_logger = AuditLogger(log_path=cfg.session.audit_log_path)
     health_monitor = HealthMonitor()
     lifecycle_manager = TargetLifecycleManager(
-        confirm_age_frames=getattr(cfg, "lifecycle_confirm_frames", 3),
-        archive_after_s=getattr(cfg, "lifecycle_archive_s", 10.0),
+        confirm_age_frames=cfg.lifecycle.confirm_frames,
+        archive_after_s=cfg.lifecycle.archive_timeout_s,
     )
     iff_checker = IFFChecker(friendly_classes={"civilian", "friendly"})
 
     video_ring_buffer = VideoRingBuffer(
-        duration_s=getattr(cfg, "clip_buffer_duration_s", 10.0),
-        pre_event_s=getattr(cfg, "clip_pre_event_s", 3.0),
-        post_event_s=getattr(cfg, "clip_post_event_s", 2.0),
-        output_dir=getattr(cfg, "clip_output_dir", "logs/clips"),
-        fps=getattr(cfg, "clip_fps", 30.0),
+        duration_s=cfg.clip.buffer_duration_s,
+        pre_event_s=cfg.clip.pre_event_s,
+        post_event_s=cfg.clip.post_event_s,
+        output_dir=cfg.clip.output_dir,
+        fps=cfg.clip.fps,
     )
+
+    # Inject the Flask SSE event bus so pipeline can push real-time events to
+    # connected operator clients.  Imported here (composition root) so that
+    # pipeline/safety layers stay free of Flask dependencies.
+    try:
+        from ..api.events import event_bus as _sse_bus
+    except Exception:  # pragma: no cover
+        _sse_bus = None  # type: ignore[assignment]
 
     pipeline = VisionGimbalPipeline(
         detector=PassthroughDetector(),
@@ -479,7 +485,7 @@ def build_pipeline_from_config(
         controller=TwoAxisGimbalController(transform=transform, cfg=cfg.controller),
         driver=SimulatedGimbalDriver(DriverLimits.from_config(cfg.driver_limits)),
         telemetry=FileTelemetryLogger(
-            file_path=getattr(cfg, "telemetry_log_path", "logs/telemetry.jsonl"),
+            file_path=cfg.session.telemetry_log_path,
             append=True,
         ),
         combined_tracker=seg_tracker,
@@ -500,6 +506,9 @@ def build_pipeline_from_config(
         lifecycle_manager=lifecycle_manager,
         iff_checker=iff_checker,
         video_ring_buffer=video_ring_buffer,
+        event_bus=_sse_bus,
+        camera_model=transform.camera,
+        windage_gain=cfg.controller.yaw_pid.kp if cfg.controller is not None else 0.0,
     )
     # Attach ROE manager as a named attribute so server.py can wire it into
     # app.extensions and fire_routes can access it via _get_roe().

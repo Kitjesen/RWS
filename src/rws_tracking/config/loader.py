@@ -24,6 +24,7 @@ from .environment import CameraConfig, EnvironmentConfig, ProjectileConfig
 from .hardware import DriverLimitsConfig, RangefinderConfig
 from .perception import DetectorConfig, SelectorConfig, SelectorWeights
 from .safety import SafetyConfig, SafetyInterlockCfg, SafetyZoneConfig
+from .session import ClipConfig, LifecycleConfig, SessionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,9 @@ class SystemConfig:
     safety: SafetyConfig = SafetyConfig()
     rangefinder: RangefinderConfig = RangefinderConfig()
     video_stream: VideoStreamCfg = VideoStreamCfg()
+    session: SessionConfig = SessionConfig()
+    lifecycle: LifecycleConfig = LifecycleConfig()
+    clip: ClipConfig = ClipConfig()
 
     def __post_init__(self) -> None:
         if self.controller is None:
@@ -278,6 +282,22 @@ def _nested_dict_to_config(data: dict[str, Any]) -> SystemConfig:
         **{k: v for k, v in vs_d.items() if k in VideoStreamCfg.__dataclass_fields__}
     )
 
+    sess_d = data.get("session", {})
+    _warn_unknown_keys("session", sess_d, SessionConfig)
+    session = SessionConfig(
+        **{k: v for k, v in sess_d.items() if k in SessionConfig.__dataclass_fields__}
+    )
+
+    lc_d = data.get("lifecycle", {})
+    _warn_unknown_keys("lifecycle", lc_d, LifecycleConfig)
+    lifecycle = LifecycleConfig(
+        **{k: v for k, v in lc_d.items() if k in LifecycleConfig.__dataclass_fields__}
+    )
+
+    clip_d = data.get("clip", {})
+    _warn_unknown_keys("clip", clip_d, ClipConfig)
+    clip = ClipConfig(**{k: v for k, v in clip_d.items() if k in ClipConfig.__dataclass_fields__})
+
     return SystemConfig(
         camera=camera,
         detector=detector,
@@ -292,6 +312,9 @@ def _nested_dict_to_config(data: dict[str, Any]) -> SystemConfig:
         safety=safety,
         rangefinder=rangefinder,
         video_stream=video_stream,
+        session=session,
+        lifecycle=lifecycle,
+        clip=clip,
     )
 
 

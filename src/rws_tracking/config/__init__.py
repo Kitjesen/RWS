@@ -20,9 +20,13 @@ from .hardware import DriverLimitsConfig, RangefinderConfig
 from .loader import SystemConfig, default_controller_config, load_config, save_config
 from .perception import DetectorConfig, SelectorConfig, SelectorWeights
 from .safety import SafetyConfig, SafetyInterlockCfg, SafetyInterlockConfig, SafetyZoneConfig
+from .session import ClipConfig, LifecycleConfig, SessionConfig
 
 __all__ = [
     "AdaptivePIDConfig",
+    "ClipConfig",
+    "LifecycleConfig",
+    "SessionConfig",
     "BallisticConfig",
     "CameraConfig",
     "DetectorConfig",

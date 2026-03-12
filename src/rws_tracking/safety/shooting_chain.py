@@ -52,7 +52,11 @@ class ShootingChain:
         to ARMED.
     """
 
-    def __init__(self, cooldown_s: float = 3.0) -> None:
+    def __init__(
+        self,
+        cooldown_s: float = 3.0,
+        arm_confirmation_timeout_s: float = 30.0,
+    ) -> None:
         self._state: FireChainState = FireChainState.SAFE
         self._cooldown_s = cooldown_s
         self._operator_id: str | None = None
@@ -62,7 +66,7 @@ class ShootingChain:
         self._two_man_rule_enabled: bool = False
         self._arm_initiator: str | None = None
         self._arm_initiated_at: float | None = None
-        self._arm_confirmation_timeout_s: float = 30.0
+        self._arm_confirmation_timeout_s: float = arm_confirmation_timeout_s
 
     # ------------------------------------------------------------------
     # Transitions
