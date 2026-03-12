@@ -53,10 +53,14 @@ class TestCustomProtocol:
         rate_yaw_int = 32768
         rate_pitch_int = 32768
         data = [
-            (yaw_int >> 8) & 0xFF, yaw_int & 0xFF,
-            (pitch_int >> 8) & 0xFF, pitch_int & 0xFF,
-            (rate_yaw_int >> 8) & 0xFF, rate_yaw_int & 0xFF,
-            (rate_pitch_int >> 8) & 0xFF, rate_pitch_int & 0xFF,
+            (yaw_int >> 8) & 0xFF,
+            yaw_int & 0xFF,
+            (pitch_int >> 8) & 0xFF,
+            pitch_int & 0xFF,
+            (rate_yaw_int >> 8) & 0xFF,
+            rate_yaw_int & 0xFF,
+            (rate_pitch_int >> 8) & 0xFF,
+            rate_pitch_int & 0xFF,
         ]
         checksum = 0
         for b in data:

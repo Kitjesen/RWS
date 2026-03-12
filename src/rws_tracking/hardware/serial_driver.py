@@ -293,9 +293,7 @@ class SerialGimbalDriver:
 
         self._serial.write(packet)
 
-    def _send_pwm_command(
-        self, yaw_rate: float, pitch_rate: float, timestamp: float = 0.0
-    ) -> None:
+    def _send_pwm_command(self, yaw_rate: float, pitch_rate: float, timestamp: float = 0.0) -> None:
         """Send PWM servo command.
 
         Note: This requires a PWM controller (e.g., Arduino, PCA9685).

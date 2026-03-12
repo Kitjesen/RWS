@@ -131,20 +131,23 @@ class TwoAxisGimbalController:
         # Axis controllers: PID by default, MPC when controller_mode == 'mpc'.
         # Both implement AxisController protocol (step / reset / scale_integral /
         # reset_derivative).
-        _controller_mode = getattr(cfg, 'controller_mode', 'pid')
-        if _controller_mode == 'mpc':
+        _controller_mode = getattr(cfg, "controller_mode", "pid")
+        if _controller_mode == "mpc":
             import dataclasses as _dc
 
             from .mpc_controller import MPCConfig as _MpcRtCfg
             from .mpc_controller import MPCController
-            _mpc_src = getattr(cfg, 'mpc', None)
+
+            _mpc_src = getattr(cfg, "mpc", None)
             if _mpc_src is not None:
                 _mpc_rt = _MpcRtCfg(**_dc.asdict(_mpc_src))
             else:
                 _mpc_rt = _MpcRtCfg()
             self._yaw_pid = MPCController(_mpc_rt)  # type: ignore[assignment]
             self._pitch_pid = MPCController(_mpc_rt)  # type: ignore[assignment]
-            logger.info("TwoAxisGimbalController: using MPC axis controllers (K=%.4f)", self._yaw_pid._K)
+            logger.info(
+                "TwoAxisGimbalController: using MPC axis controllers (K=%.4f)", self._yaw_pid._K
+            )
         else:
             self._yaw_pid = PID(cfg.yaw_pid)
             self._pitch_pid = PID(cfg.pitch_pid)
@@ -166,6 +169,7 @@ class TwoAxisGimbalController:
             self._state_machine = state_machine
         else:
             from ..decision.state_machine import TrackStateMachine
+
             self._state_machine = TrackStateMachine(cfg)
 
         # 弹道补偿模型：外部注入优先，否则按配置创建
@@ -498,8 +502,8 @@ class TwoAxisGimbalController:
             else self._last_target.bbox.center
         )
         # Parabolic prediction: x = x₀ + v·t + ½·a·t²
-        pred_cx = cx + vx * dt_lost + 0.5 * ax * dt_lost ** 2
-        pred_cy = cy + vy * dt_lost + 0.5 * ay * dt_lost ** 2
+        pred_cx = cx + vx * dt_lost + 0.5 * ax * dt_lost**2
+        pred_cy = cy + vy * dt_lost + 0.5 * ay * dt_lost**2
 
         yaw_err, pitch_err = self._transform.pixel_to_angle_error(pred_cx, pred_cy)
         return TargetError(

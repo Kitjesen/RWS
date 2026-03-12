@@ -192,11 +192,7 @@ class LeadAngleCalculator:
         self._prev_obs_ts = now
 
         # 目标当前中心
-        cx, cy = (
-            target.mask_center
-            if target.mask_center is not None
-            else target.bbox.center
-        )
+        cx, cy = target.mask_center if target.mask_center is not None else target.bbox.center
 
         # 估算距离
         cam_fy = self._transform.camera.fy
@@ -234,8 +230,7 @@ class LeadAngleCalculator:
         lead_pitch = max(-max_lead, min(max_lead, lead_pitch))
 
         # 置信度评估
-        confidence = self._assess_confidence(target, vx, vy, ax, ay, t_flight,
-                                             jerk_x, jerk_y)
+        confidence = self._assess_confidence(target, vx, vy, ax, ay, t_flight, jerk_x, jerk_y)
 
         if confidence < self._cfg.min_confidence:
             lead_yaw *= confidence / self._cfg.min_confidence
@@ -243,7 +238,11 @@ class LeadAngleCalculator:
 
         logger.debug(
             "lead angle: yaw=%.3f° pitch=%.3f° t_flight=%.4fs conf=%.2f d=%.1fm",
-            lead_yaw, lead_pitch, t_flight, confidence, distance_m,
+            lead_yaw,
+            lead_pitch,
+            t_flight,
+            confidence,
+            distance_m,
         )
 
         return LeadAngle(
@@ -297,7 +296,7 @@ class LeadAngleCalculator:
 
         # 机动检测: 抖动 (jerk = da/dt) 越大，加速度预测越不可靠
         # 参考值 2000 px/s³；超过此值时置信度降至 0.2
-        jerk_mag = math.sqrt(jerk_x ** 2 + jerk_y ** 2)
+        jerk_mag = math.sqrt(jerk_x**2 + jerk_y**2)
         jerk_penalty = max(1.0 - jerk_mag / 2000.0, 0.2)
 
         confidence = speed_score * accel_penalty * time_penalty * det_score * jerk_penalty

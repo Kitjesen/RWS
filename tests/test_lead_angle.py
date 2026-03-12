@@ -15,9 +15,11 @@ CAM = CameraModel(width=1280, height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0
 
 def _obs(tid=1, x=600, y=340, w=80, h=150, vx=50.0, vy=10.0, ax=0.0, ay=0.0, conf=0.9):
     return TargetObservation(
-        timestamp=0.0, track_id=tid,
+        timestamp=0.0,
+        track_id=tid,
         bbox=BoundingBox(x=x, y=y, w=w, h=h),
-        confidence=conf, class_id="person",
+        confidence=conf,
+        class_id="person",
         velocity_px_per_s=(vx, vy),
         acceleration_px_per_s2=(ax, ay),
     )

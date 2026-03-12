@@ -158,8 +158,11 @@ class TestThreatScore:
 
         app = _make_app({"tracking_api": api})
         body = _get_metrics(app)
-        data_lines = [metric_line for metric_line in body.splitlines()
-                      if metric_line.startswith("rws_threat_score{")]
+        data_lines = [
+            metric_line
+            for metric_line in body.splitlines()
+            if metric_line.startswith("rws_threat_score{")
+        ]
         assert len(data_lines) == 0
 
     def test_assessments_produce_labeled_lines(self):
@@ -173,8 +176,11 @@ class TestThreatScore:
 
         app = _make_app({"tracking_api": api})
         body = _get_metrics(app)
-        data_lines = [metric_line for metric_line in body.splitlines()
-                      if metric_line.startswith("rws_threat_score{")]
+        data_lines = [
+            metric_line
+            for metric_line in body.splitlines()
+            if metric_line.startswith("rws_threat_score{")
+        ]
         assert len(data_lines) == 2
 
     def test_assessment_value_formatted_correctly(self):
@@ -197,7 +203,9 @@ class TestThreatScore:
 
         app = _make_app({"tracking_api": api})
         body = _get_metrics(app)
-        line = next(metric_line for metric_line in body.splitlines() if 'track_id="3"' in metric_line)
+        line = next(
+            metric_line for metric_line in body.splitlines() if 'track_id="3"' in metric_line
+        )
         value = float(line.split()[-1])
         assert abs(value - 0.1234) < 1e-4
 
@@ -222,6 +230,7 @@ class TestFireChainState:
 
     def test_safe_state_returns_zero(self):
         from src.rws_tracking.safety.shooting_chain import ShootingChain
+
         chain = ShootingChain()
         app = _make_app({"shooting_chain": chain})
         body = _get_metrics(app)
@@ -230,6 +239,7 @@ class TestFireChainState:
 
     def test_armed_state_returns_one(self):
         from src.rws_tracking.safety.shooting_chain import ShootingChain
+
         chain = ShootingChain()
         chain.arm("test_op")
         app = _make_app({"shooting_chain": chain})
@@ -239,6 +249,7 @@ class TestFireChainState:
 
     def test_fire_authorized_state_returns_two(self):
         from src.rws_tracking.safety.shooting_chain import ShootingChain
+
         chain = ShootingChain()
         chain.arm("test_op")
         chain.update_authorization(True, timestamp=0.0)
@@ -306,8 +317,11 @@ class TestLifecycleByState:
     def test_no_pipeline_no_data_lines(self):
         app = _make_app()
         body = _get_metrics(app)
-        data_lines = [metric_line for metric_line in body.splitlines()
-                      if metric_line.startswith("rws_lifecycle_by_state{")]
+        data_lines = [
+            metric_line
+            for metric_line in body.splitlines()
+            if metric_line.startswith("rws_lifecycle_by_state{")
+        ]
         assert len(data_lines) == 0
 
     def test_with_lifecycle_manager(self):
@@ -367,8 +381,11 @@ class TestHealthSubsystem:
     def test_no_health_monitor_no_data_lines(self):
         app = _make_app()
         body = _get_metrics(app)
-        data_lines = [metric_line for metric_line in body.splitlines()
-                      if metric_line.startswith("rws_health_subsystem{")]
+        data_lines = [
+            metric_line
+            for metric_line in body.splitlines()
+            if metric_line.startswith("rws_health_subsystem{")
+        ]
         assert len(data_lines) == 0
 
     def test_ok_subsystem_returns_one(self):
@@ -378,8 +395,9 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        line = next(metric_line for metric_line in body.splitlines()
-                    if 'name="pipeline"' in metric_line)
+        line = next(
+            metric_line for metric_line in body.splitlines() if 'name="pipeline"' in metric_line
+        )
         assert float(line.split()[-1]) == 1.0
 
     def test_degraded_subsystem_returns_two(self):
@@ -389,8 +407,7 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        line = next(metric_line for metric_line in body.splitlines()
-                    if 'name="imu"' in metric_line)
+        line = next(metric_line for metric_line in body.splitlines() if 'name="imu"' in metric_line)
         assert float(line.split()[-1]) == 2.0
 
     def test_failed_subsystem_returns_three(self):
@@ -400,8 +417,9 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        line = next(metric_line for metric_line in body.splitlines()
-                    if 'name="camera"' in metric_line)
+        line = next(
+            metric_line for metric_line in body.splitlines() if 'name="camera"' in metric_line
+        )
         assert float(line.split()[-1]) == 3.0
 
     def test_unknown_subsystem_returns_zero(self):
@@ -411,8 +429,9 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        line = next(metric_line for metric_line in body.splitlines()
-                    if 'name="radar"' in metric_line)
+        line = next(
+            metric_line for metric_line in body.splitlines() if 'name="radar"' in metric_line
+        )
         assert float(line.split()[-1]) == 0.0
 
     def test_multiple_subsystems(self):
@@ -424,8 +443,11 @@ class TestHealthSubsystem:
         }
         app = _make_app({"health_monitor": hm})
         body = _get_metrics(app)
-        data_lines = [metric_line for metric_line in body.splitlines()
-                      if metric_line.startswith("rws_health_subsystem{")]
+        data_lines = [
+            metric_line
+            for metric_line in body.splitlines()
+            if metric_line.startswith("rws_health_subsystem{")
+        ]
         assert len(data_lines) == 3
 
 
@@ -473,6 +495,7 @@ class TestPipelineFps:
     def _clear_frame_times(self):
         """Isolate module-level _frame_times deque before and after every test."""
         from src.rws_tracking.api.metrics_routes import _frame_times
+
         _frame_times.clear()
         yield
         _frame_times.clear()
@@ -603,9 +626,7 @@ class TestPrometheusFormat:
                 type_positions[name] = i
         for name, h_pos in help_positions.items():
             if name in type_positions:
-                assert h_pos < type_positions[name], (
-                    f"# HELP for {name} must precede # TYPE"
-                )
+                assert h_pos < type_positions[name], f"# HELP for {name} must precede # TYPE"
 
     def test_all_data_lines_have_numeric_value(self):
         """Every non-comment, non-empty line must end with a numeric value."""
@@ -630,9 +651,13 @@ class TestPrometheusFormat:
 
         app = _make_app({"tracking_api": api})
         body = _get_metrics(app)
-        labeled = [metric_line for metric_line in body.splitlines() if "{" in metric_line and not metric_line.startswith("#")]
+        labeled = [
+            metric_line
+            for metric_line in body.splitlines()
+            if "{" in metric_line and not metric_line.startswith("#")
+        ]
         for line in labeled:
-            m = re.search(r'\{([^}]*)\}', line)
+            m = re.search(r"\{([^}]*)\}", line)
             if m:
                 label_str = m.group(1)
                 # Each label value should be quoted
@@ -647,6 +672,7 @@ class TestPrometheusFormat:
         because the introduced backslash is itself escaped in the second pass.
         """
         from src.rws_tracking.api.metrics_routes import _escape
+
         # '"' -> '\"' (pass 1) -> '\\"' (pass 2 doubles the backslash)
         assert _escape('"hello"') == '\\\\"hello\\\\"'
         # A literal backslash is doubled: '\\' -> '\\\\'
@@ -663,11 +689,13 @@ class TestPrometheusFormat:
 class TestRecordFrame:
     def test_record_frame_callable(self):
         from src.rws_tracking.api.metrics_routes import record_frame
+
         # Should not raise
         record_frame(time.monotonic())
 
     def test_deque_maxlen_enforced(self):
         from src.rws_tracking.api.metrics_routes import _frame_times, record_frame
+
         _frame_times.clear()
         for _i in range(150):
             record_frame(time.monotonic())
@@ -681,6 +709,7 @@ class TestRecordFrame:
 
 class SimpleNamespaceTA:
     """Minimal ThreatAssessment-like object with track_id and threat_score."""
+
     def __init__(self, track_id: int, threat_score: float):
         self.track_id = track_id
         self.threat_score = threat_score

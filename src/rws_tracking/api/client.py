@@ -92,9 +92,7 @@ class TrackingClient:
         headers = self._headers()
         try:
             if method == "GET":
-                response = requests.get(
-                    url, headers=headers, params=params, timeout=self.timeout
-                )
+                response = requests.get(url, headers=headers, params=params, timeout=self.timeout)
             elif method == "POST":
                 response = requests.post(
                     url, headers=headers, json=json, params=params, timeout=self.timeout
@@ -196,9 +194,7 @@ class TrackingClient:
             "POST", "/api/gimbal/position", {"yaw_deg": yaw_deg, "pitch_deg": pitch_deg}
         )
 
-    def set_gimbal_rate(
-        self, yaw_rate_dps: float, pitch_rate_dps: float
-    ) -> dict[str, Any]:
+    def set_gimbal_rate(self, yaw_rate_dps: float, pitch_rate_dps: float) -> dict[str, Any]:
         """Set gimbal velocity (rate control).
 
         Parameters
@@ -270,7 +266,7 @@ class TrackingClient:
                     if not line:
                         continue
                     if line.startswith("data:"):
-                        raw = line[len("data:"):].strip()
+                        raw = line[len("data:") :].strip()
                         try:
                             yield json.loads(raw)
                         except json.JSONDecodeError as exc:
@@ -326,9 +322,7 @@ class TrackingClient:
         dict
             Fire chain state and ``can_fire`` flag.
         """
-        return self._request(
-            "POST", "/api/fire/request", {"operator_id": operator_id}
-        )
+        return self._request("POST", "/api/fire/request", {"operator_id": operator_id})
 
     def get_fire_status(self) -> dict[str, Any]:
         """Get the current fire chain state.
@@ -356,9 +350,7 @@ class TrackingClient:
         dict
             ``{"ok": true, "operator_id": str}``.
         """
-        return self._request(
-            "POST", "/api/fire/heartbeat", {"operator_id": operator_id}
-        )
+        return self._request("POST", "/api/fire/heartbeat", {"operator_id": operator_id})
 
     def get_arm_pending(self) -> dict[str, Any]:
         """Poll two-man rule arm-pending status.
@@ -383,9 +375,7 @@ class TrackingClient:
         dict
             Fire chain state after the confirmation.
         """
-        return self._request(
-            "POST", "/api/fire/arm/confirm", {"operator_id": operator_id}
-        )
+        return self._request("POST", "/api/fire/arm/confirm", {"operator_id": operator_id})
 
     def get_roe(self) -> dict[str, Any]:
         """List all registered Rules of Engagement profiles.
@@ -416,9 +406,7 @@ class TrackingClient:
     # Target designation
     # ------------------------------------------------------------------
 
-    def designate_target(
-        self, track_id: int, operator_id: str = ""
-    ) -> dict[str, Any]:
+    def designate_target(self, track_id: int, operator_id: str = "") -> dict[str, Any]:
         """Operator-designate a specific track for engagement (C2 override).
 
         Overrides the auto-selector.  The designation is cleared automatically
@@ -553,9 +541,7 @@ class TrackingClient:
         dict
             Response with ``success`` flag.
         """
-        return self._request(
-            "POST", "/api/safety/operator-auth", {"authorized": authorized}
-        )
+        return self._request("POST", "/api/safety/operator-auth", {"authorized": authorized})
 
     def emergency_stop(self, activate: bool) -> dict[str, Any]:
         """Activate or release the hardware emergency stop.
@@ -570,9 +556,7 @@ class TrackingClient:
         dict
             Response with ``success`` and ``emergency_stop_active`` fields.
         """
-        return self._request(
-            "POST", "/api/safety/emergency-stop", {"activate": activate}
-        )
+        return self._request("POST", "/api/safety/emergency-stop", {"activate": activate})
 
     def list_zones(self) -> dict[str, Any]:
         """List all active no-fire zones.

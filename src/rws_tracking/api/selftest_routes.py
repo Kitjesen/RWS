@@ -34,9 +34,19 @@ def _check(name: str, fn) -> dict:
     t0 = time.monotonic()
     try:
         msg = fn()
-        return {"name": name, "status": "pass", "message": msg or "", "elapsed_ms": round((time.monotonic() - t0) * 1000, 1)}
+        return {
+            "name": name,
+            "status": "pass",
+            "message": msg or "",
+            "elapsed_ms": round((time.monotonic() - t0) * 1000, 1),
+        }
     except Exception as exc:  # noqa: BLE001
-        return {"name": name, "status": "fail", "message": str(exc), "elapsed_ms": round((time.monotonic() - t0) * 1000, 1)}
+        return {
+            "name": name,
+            "status": "fail",
+            "message": str(exc),
+            "elapsed_ms": round((time.monotonic() - t0) * 1000, 1),
+        }
 
 
 @selftest_bp.route("", methods=["GET"])
@@ -56,6 +66,7 @@ def run_selftest():
         from ..health.monitor import HealthMonitor  # noqa: F401
         from ..safety.shooting_chain import ShootingChain  # noqa: F401
         from ..telemetry.audit import AuditLogger  # noqa: F401
+
         return "all critical imports OK"
 
     checks.append(_check("pipeline_imports", check_imports))
@@ -79,6 +90,7 @@ def run_selftest():
         from pathlib import Path
 
         from ..telemetry.audit import AuditLogger
+
         with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as f:
             path = f.name
         try:
@@ -121,6 +133,7 @@ def run_selftest():
     # 6. logs_dir_writable
     def check_logs_dir():
         from pathlib import Path
+
         logs = Path("logs")
         logs.mkdir(exist_ok=True)
         test_file = logs / ".selftest_probe"
@@ -133,6 +146,7 @@ def run_selftest():
     # 7. config_valid
     def check_config():
         from ..config import load_config  # noqa: F401
+
         return "config module importable"
 
     checks.append(_check("config_valid", check_config))
@@ -157,5 +171,7 @@ def run_selftest():
 def selftest_summary():
     """Return the last self-test result without re-running."""
     if _last_result is None:
-        return jsonify({"error": "No self-test has been run yet. Call GET /api/selftest first."}), 404
+        return jsonify(
+            {"error": "No self-test has been run yet. Call GET /api/selftest first."}
+        ), 404
     return jsonify(_last_result)

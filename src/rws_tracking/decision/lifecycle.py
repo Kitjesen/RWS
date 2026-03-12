@@ -172,9 +172,11 @@ class TargetLifecycleManager:
         if rec is not None:
             rec.state = TargetState.NEUTRALIZED
             rec.neutralized_at_ts = timestamp
-            logger.info("lifecycle: %d → NEUTRALIZED (dwell %.1fs)",
-                        track_id,
-                        (timestamp - rec.engaged_at_ts) if rec.engaged_at_ts else 0.0)
+            logger.info(
+                "lifecycle: %d → NEUTRALIZED (dwell %.1fs)",
+                track_id,
+                (timestamp - rec.engaged_at_ts) if rec.engaged_at_ts else 0.0,
+            )
 
     # ------------------------------------------------------------------
     # 过滤接口
@@ -189,7 +191,8 @@ class TargetLifecycleManager:
         """
         excluded = {TargetState.NEUTRALIZED, TargetState.ARCHIVED}
         filtered = [
-            t for t in tracks
+            t
+            for t in tracks
             if self._records.get(t.track_id, TargetRecord(t.track_id)).state not in excluded
         ]
         dropped = len(tracks) - len(filtered)
@@ -220,8 +223,7 @@ class TargetLifecycleManager:
             "total_seen": len(self._records),
             "by_state": counts,
             "neutralized_ids": [
-                tid for tid, r in self._records.items()
-                if r.state == TargetState.NEUTRALIZED
+                tid for tid, r in self._records.items() if r.state == TargetState.NEUTRALIZED
             ],
         }
 

@@ -38,9 +38,7 @@ class ProfileManager:
 
         path = self.get_profile_path(name)
         if not path.exists():
-            raise FileNotFoundError(
-                f"Profile '{name}' not found at {path}"
-            )
+            raise FileNotFoundError(f"Profile '{name}' not found at {path}")
         cfg = load_config(str(path))
         self._current = name
         logger.info("loaded mission profile: %s", name)

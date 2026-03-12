@@ -108,9 +108,7 @@ class SimpleBallisticModel:
         self._cfg = config
 
     def compute(self, bbox: BoundingBox, camera_fy: float) -> float:
-        distance_m = estimate_distance_from_bbox(
-            bbox, camera_fy, self._cfg.target_height_m
-        )
+        distance_m = estimate_distance_from_bbox(bbox, camera_fy, self._cfg.target_height_m)
         if distance_m <= 0.0:
             return 0.0
         return (
@@ -140,14 +138,10 @@ class TableBallisticModel:
     def __init__(self, config: TableBallisticConfig) -> None:
         self._cfg = config
         if len(config.distance_table) != len(config.compensation_table):
-            raise ValueError(
-                "distance_table and compensation_table must have same length"
-            )
+            raise ValueError("distance_table and compensation_table must have same length")
 
     def compute(self, bbox: BoundingBox, camera_fy: float) -> float:
-        distance_m = estimate_distance_from_bbox(
-            bbox, camera_fy, self._cfg.target_height_m
-        )
+        distance_m = estimate_distance_from_bbox(bbox, camera_fy, self._cfg.target_height_m)
         if distance_m <= 0.0:
             return 0.0
         return float(
@@ -166,17 +160,37 @@ class TableBallisticModel:
 
 # 标准 G1 阻力曲线 (马赫数 → 阻力系数), 简化近似
 _G1_MACH_CD: list[tuple[float, float]] = [
-    (0.0, 0.230), (0.5, 0.230), (0.7, 0.250), (0.8, 0.280),
-    (0.9, 0.350), (0.95, 0.450), (1.0, 0.520), (1.05, 0.490),
-    (1.1, 0.460), (1.2, 0.420), (1.5, 0.380), (2.0, 0.340),
-    (2.5, 0.320), (3.0, 0.310),
+    (0.0, 0.230),
+    (0.5, 0.230),
+    (0.7, 0.250),
+    (0.8, 0.280),
+    (0.9, 0.350),
+    (0.95, 0.450),
+    (1.0, 0.520),
+    (1.05, 0.490),
+    (1.1, 0.460),
+    (1.2, 0.420),
+    (1.5, 0.380),
+    (2.0, 0.340),
+    (2.5, 0.320),
+    (3.0, 0.310),
 ]
 
 _G7_MACH_CD: list[tuple[float, float]] = [
-    (0.0, 0.120), (0.5, 0.120), (0.7, 0.125), (0.8, 0.135),
-    (0.9, 0.165), (0.95, 0.230), (1.0, 0.285), (1.05, 0.265),
-    (1.1, 0.250), (1.2, 0.230), (1.5, 0.200), (2.0, 0.180),
-    (2.5, 0.170), (3.0, 0.165),
+    (0.0, 0.120),
+    (0.5, 0.120),
+    (0.7, 0.125),
+    (0.8, 0.135),
+    (0.9, 0.165),
+    (0.95, 0.230),
+    (1.0, 0.285),
+    (1.05, 0.265),
+    (1.1, 0.250),
+    (1.2, 0.230),
+    (1.5, 0.200),
+    (2.0, 0.180),
+    (2.5, 0.170),
+    (3.0, 0.165),
 ]
 
 
@@ -248,9 +262,7 @@ class PhysicsBallisticModel:
 
     def compute(self, bbox: BoundingBox, camera_fy: float) -> float:
         """兼容旧接口: 仅返回俯仰补偿角。"""
-        distance_m = estimate_distance_from_bbox(
-            bbox, camera_fy, self._target_height_m
-        )
+        distance_m = estimate_distance_from_bbox(bbox, camera_fy, self._target_height_m)
         if distance_m <= 0.0:
             return 0.0
         sol = self.solve(distance_m)
@@ -286,7 +298,7 @@ class PhysicsBallisticModel:
         # 风分量 (射击坐标系: X=前方, Y=右方, Z=上方)
         wind_rad = math.radians(env.wind_direction_deg)
         wind_x = -env.wind_speed_mps * math.cos(wind_rad)  # 纵风 (逆风为负)
-        wind_y = env.wind_speed_mps * math.sin(wind_rad)    # 横风
+        wind_y = env.wind_speed_mps * math.sin(wind_rad)  # 横风
 
         # 初始状态: [x, y, z, vx, vy, vz]
         # x = 前方, y = 右方, z = 上方
@@ -367,7 +379,11 @@ class PhysicsBallisticModel:
 
         logger.debug(
             "ballistic solve: d=%.1fm, t=%.4fs, drop=%.3f°, windage=%.3f°, v_imp=%.1fm/s",
-            distance_m, t, drop_deg, windage_deg, v_impact,
+            distance_m,
+            t,
+            drop_deg,
+            windage_deg,
+            v_impact,
         )
         return solution
 

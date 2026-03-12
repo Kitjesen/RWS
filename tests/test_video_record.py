@@ -102,8 +102,10 @@ class TestVideoRecord:
         mock_writer = MagicMock()
         mock_writer.isOpened.return_value = True
 
-        with patch("cv2.VideoWriter", return_value=mock_writer), \
-             patch("cv2.VideoWriter_fourcc", return_value=0x7634706D):
+        with (
+            patch("cv2.VideoWriter", return_value=mock_writer),
+            patch("cv2.VideoWriter_fourcc", return_value=0x7634706D),
+        ):
             resp = client.post("/api/video/record/start")
 
         assert resp.status_code == 200
@@ -127,8 +129,10 @@ class TestVideoRecord:
         mock_writer = MagicMock()
         mock_writer.isOpened.return_value = True
 
-        with patch("cv2.VideoWriter", return_value=mock_writer), \
-             patch("cv2.VideoWriter_fourcc", return_value=0x7634706D):
+        with (
+            patch("cv2.VideoWriter", return_value=mock_writer),
+            patch("cv2.VideoWriter_fourcc", return_value=0x7634706D),
+        ):
             start_resp = client.post("/api/video/record/start")
 
         assert start_resp.get_json()["ok"] is True
@@ -218,8 +222,10 @@ class TestVideoRecord:
         mock_writer = MagicMock()
         mock_writer.isOpened.return_value = True
 
-        with patch("cv2.VideoWriter", return_value=mock_writer), \
-             patch("cv2.VideoWriter_fourcc", return_value=0x7634706D):
+        with (
+            patch("cv2.VideoWriter", return_value=mock_writer),
+            patch("cv2.VideoWriter_fourcc", return_value=0x7634706D),
+        ):
             resp1 = client.post("/api/video/record/start")
             resp2 = client.post("/api/video/record/start")
 
@@ -242,6 +248,7 @@ class TestDeleteClipNotFound:
     @pytest.fixture(autouse=True)
     def _reset(self, tmp_path):
         import src.rws_tracking.api.video_record_routes as vrr
+
         clips_dir = tmp_path / "clips"
         with vrr._lock:
             vrr._recording = False
@@ -254,6 +261,7 @@ class TestDeleteClipNotFound:
     @pytest.fixture
     def client(self, tmp_path):
         from src.rws_tracking.api.video_record_routes import record_bp
+
         app = Flask(__name__)
         app.config["TESTING"] = True
         app.register_blueprint(record_bp)

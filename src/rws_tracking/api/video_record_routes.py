@@ -172,11 +172,13 @@ def recording_status():
         started = _started_at
 
     elapsed = (time.monotonic() - started) if (recording and started is not None) else 0.0
-    return jsonify({
-        "recording": recording,
-        "filename": filename,
-        "elapsed_s": round(elapsed, 2),
-    })
+    return jsonify(
+        {
+            "recording": recording,
+            "filename": filename,
+            "elapsed_s": round(elapsed, 2),
+        }
+    )
 
 
 @record_bp.route("/clips", methods=["GET"])
@@ -199,11 +201,13 @@ def list_clips():
     clips = []
     for f in sorted(_clips_dir.glob("*.mp4"), key=lambda x: x.stat().st_mtime, reverse=True):
         size_mb = f.stat().st_size / 1e6
-        clips.append({
-            "filename": f.name,
-            "size_mb": round(size_mb, 2),
-            "created_at": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
-        })
+        clips.append(
+            {
+                "filename": f.name,
+                "size_mb": round(size_mb, 2),
+                "created_at": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+            }
+        )
     return jsonify({"clips": clips})
 
 

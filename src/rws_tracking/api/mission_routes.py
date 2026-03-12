@@ -49,14 +49,14 @@ def _api():
 _mission_state: dict = {
     "active": False,
     "profile": None,
-    "roe_profile": None,       # ROE profile name (may differ from mission profile)
-    "started_at": None,        # epoch float
-    "started_at_str": None,    # ISO-8601 string
+    "roe_profile": None,  # ROE profile name (may differ from mission profile)
+    "started_at": None,  # epoch float
+    "started_at_str": None,  # ISO-8601 string
     "camera_source": 0,
     "session_id": None,
     "targets_engaged": 0,
-    "targets_detected": 0,     # cumulative detections this session
-    "shots_fired": 0,          # cumulative fire events this session
+    "targets_detected": 0,  # cumulative detections this session
+    "shots_fired": 0,  # cumulative fire events this session
     "last_report_path": None,
 }
 
@@ -248,17 +248,20 @@ def mission_start():
         failed_checks = _run_preflight(api)
         if failed_checks:
             logger.warning("mission: preflight FAILED — checks: %s", failed_checks)
-            return jsonify({
-                "success": False,
-                "error": "preflight_failed",
-                "failed_checks": failed_checks,
-                "hint": "Pass ?force=true to bypass",
-            }), 424
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "preflight_failed",
+                    "failed_checks": failed_checks,
+                    "hint": "Pass ?force=true to bypass",
+                }
+            ), 424
 
     try:
         # Load profile if specified
         if profile_name:
             from ..config.profiles import ProfileManager
+
             try:
                 pm = ProfileManager()
                 profile_cfg = pm.load_profile(profile_name)  # noqa: F841
@@ -301,29 +304,37 @@ def mission_start():
 
         try:
             from .events import event_bus
-            event_bus.emit("mission_started", {
-                "session_id": session_id,
-                "profile": profile_name,
-                "ts": round(time.time(), 3),
-            })
+
+            event_bus.emit(
+                "mission_started",
+                {
+                    "session_id": session_id,
+                    "profile": profile_name,
+                    "ts": round(time.time(), 3),
+                },
+            )
         except Exception:
             pass
 
-        return jsonify({
-            "ok": True,
-            "session_id": session_id,
-            "profile": profile_name,
-            "camera_source": camera_source,
-            "started_at": _mission_state["started_at_str"],
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "session_id": session_id,
+                "profile": profile_name,
+                "camera_source": camera_source,
+                "started_at": _mission_state["started_at_str"],
+            }
+        )
 
     except Exception as e:
         logger.exception("mission_start failed: %s", e)
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "error_type": type(e).__name__,
-        }), 500
+        return jsonify(
+            {
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            }
+        ), 500
 
 
 @mission_bp.route("/end", methods=["POST"])
@@ -361,6 +372,7 @@ def mission_end():
             audit = getattr(api.pipeline, "_audit_logger", None)
             if audit is not None and audit._records:  # noqa: SLF001
                 from ..telemetry.report import generate_report
+
                 mission_label = _mission_state.get("session_id") or "mission"
                 report_dir = Path("logs/reports")
                 report_dir.mkdir(parents=True, exist_ok=True)
@@ -370,49 +382,58 @@ def mission_end():
                 logger.info("mission: report written to %s", report_path)
 
         # Gather final stats
-        elapsed = round(time.time() - _mission_state["started_at"], 1) if _mission_state["started_at"] else 0
+        elapsed = (
+            round(time.time() - _mission_state["started_at"], 1)
+            if _mission_state["started_at"]
+            else 0
+        )
         session_id = _mission_state.get("session_id")
 
         _reset_state()
 
         try:
             from .events import event_bus
-            event_bus.emit("mission_ended", {
-                "session_id": session_id,
-                "elapsed_s": elapsed,
-                "report_path": report_path,
-                "ts": round(time.time(), 3),
-            })
+
+            event_bus.emit(
+                "mission_ended",
+                {
+                    "session_id": session_id,
+                    "elapsed_s": elapsed,
+                    "report_path": report_path,
+                    "ts": round(time.time(), 3),
+                },
+            )
         except Exception:
             pass
 
         # Build a URL the frontend can open directly.
-        report_url = (
-            f"/api/mission/report/{Path(report_path).name}"
-            if report_path
-            else None
-        )
+        report_url = f"/api/mission/report/{Path(report_path).name}" if report_path else None
 
-        return jsonify({
-            "ok": True,
-            "session_id": session_id,
-            "elapsed_s": elapsed,
-            "report_path": report_path,
-            "report_url": report_url,
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "session_id": session_id,
+                "elapsed_s": elapsed,
+                "report_path": report_path,
+                "report_url": report_url,
+            }
+        )
 
     except Exception as e:
         logger.exception("mission_end failed: %s", e)
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "error_type": type(e).__name__,
-        }), 500
+        return jsonify(
+            {
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+            }
+        ), 500
 
 
 # ---------------------------------------------------------------------------
 # Report file download
 # ---------------------------------------------------------------------------
+
 
 @mission_bp.route("/report/<path:filename>", methods=["GET"])
 def download_report(filename: str):

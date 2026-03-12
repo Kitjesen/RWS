@@ -74,12 +74,14 @@ class EngagementConfig:
 
     weights: ThreatWeights = ThreatWeights()
     strategy: str = "threat_first"
-    class_threat_levels: dict[str, float] = field(default_factory=lambda: {
-        "person": 0.8,
-        "car": 0.6,
-        "truck": 0.7,
-        "bus": 0.5,
-    })
+    class_threat_levels: dict[str, float] = field(
+        default_factory=lambda: {
+            "person": 0.8,
+            "car": 0.6,
+            "truck": 0.7,
+            "bus": 0.5,
+        }
+    )
     max_engagement_range_m: float = 500.0
     min_threat_threshold: float = 0.1
     distance_decay_m: float = 50.0
@@ -170,15 +172,17 @@ class ThreatAssessor:
             if threat < self._cfg.min_threat_threshold:
                 continue
 
-            assessments.append(ThreatAssessment(
-                track_id=track.track_id,
-                threat_score=threat,
-                distance_score=d_score,
-                velocity_score=v_score,
-                class_score=c_score,
-                heading_score=h_score,
-                priority_rank=0,
-            ))
+            assessments.append(
+                ThreatAssessment(
+                    track_id=track.track_id,
+                    threat_score=threat,
+                    distance_score=d_score,
+                    velocity_score=v_score,
+                    class_score=c_score,
+                    heading_score=h_score,
+                    priority_rank=0,
+                )
+            )
 
         # 排序
         assessments = self._sort_by_strategy(assessments, tracks, distance_map)
@@ -186,15 +190,17 @@ class ThreatAssessor:
         # 赋予排名
         ranked: list[ThreatAssessment] = []
         for i, a in enumerate(assessments):
-            ranked.append(ThreatAssessment(
-                track_id=a.track_id,
-                threat_score=a.threat_score,
-                distance_score=a.distance_score,
-                velocity_score=a.velocity_score,
-                class_score=a.class_score,
-                heading_score=a.heading_score,
-                priority_rank=i + 1,
-            ))
+            ranked.append(
+                ThreatAssessment(
+                    track_id=a.track_id,
+                    threat_score=a.threat_score,
+                    distance_score=a.distance_score,
+                    velocity_score=a.velocity_score,
+                    class_score=a.class_score,
+                    heading_score=a.heading_score,
+                    priority_rank=i + 1,
+                )
+            )
 
         if ranked:
             logger.debug(
@@ -286,9 +292,11 @@ class ThreatAssessor:
             track_map = {t.track_id: t for t in tracks}
             return sorted(
                 assessments,
-                key=lambda a: self._estimate_distance(track_map[a.track_id], distance_map)
-                if a.track_id in track_map
-                else float("inf"),
+                key=lambda a: (
+                    self._estimate_distance(track_map[a.track_id], distance_map)
+                    if a.track_id in track_map
+                    else float("inf")
+                ),
             )
 
         if self._cfg.strategy == "sector_sweep":
@@ -383,8 +391,12 @@ class EngagementQueue:
         target_id = self.current_target_id
 
         if target_id is not None:
-            logger.info("engagement advance: -> target %d (rank %d/%d)",
-                        target_id, self._current_idx + 1, len(self._queue))
+            logger.info(
+                "engagement advance: -> target %d (rank %d/%d)",
+                target_id,
+                self._current_idx + 1,
+                len(self._queue),
+            )
         else:
             logger.info("engagement advance: queue exhausted")
 

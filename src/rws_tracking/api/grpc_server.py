@@ -74,9 +74,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             )
         except Exception as e:
             logger.error(f"StartTracking error: {e}")
-            return tracking_pb2.StartTrackingResponse(
-                success=False, error=str(e)
-            )
+            return tracking_pb2.StartTrackingResponse(success=False, error=str(e))
 
     def StopTracking(
         self, request: tracking_pb2.StopTrackingRequest, context: grpc.ServicerContext
@@ -91,9 +89,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             )
         except Exception as e:
             logger.error(f"StopTracking error: {e}")
-            return tracking_pb2.StopTrackingResponse(
-                success=False, error=str(e)
-            )
+            return tracking_pb2.StopTrackingResponse(success=False, error=str(e))
 
     def GetStatus(
         self, request: tracking_pb2.GetStatusRequest, context: grpc.ServicerContext
@@ -158,9 +154,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             return response
         except Exception as e:
             logger.error(f"SetGimbalPosition error: {e}")
-            return tracking_pb2.SetGimbalPositionResponse(
-                success=False, error=str(e)
-            )
+            return tracking_pb2.SetGimbalPositionResponse(success=False, error=str(e))
 
     def SetGimbalRate(
         self, request: tracking_pb2.SetGimbalRateRequest, context: grpc.ServicerContext
@@ -185,9 +179,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             return response
         except Exception as e:
             logger.error(f"SetGimbalRate error: {e}")
-            return tracking_pb2.SetGimbalRateResponse(
-                success=False, error=str(e)
-            )
+            return tracking_pb2.SetGimbalRateResponse(success=False, error=str(e))
 
     def GetTelemetry(
         self, request: tracking_pb2.GetTelemetryRequest, context: grpc.ServicerContext
@@ -202,14 +194,10 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                 )
 
             metrics = result.get("metrics", {})
-            return tracking_pb2.GetTelemetryResponse(
-                success=True, metrics=metrics
-            )
+            return tracking_pb2.GetTelemetryResponse(success=True, metrics=metrics)
         except Exception as e:
             logger.error(f"GetTelemetry error: {e}")
-            return tracking_pb2.GetTelemetryResponse(
-                success=False, error=str(e)
-            )
+            return tracking_pb2.GetTelemetryResponse(success=False, error=str(e))
 
     def UpdateConfig(
         self, request: tracking_pb2.UpdateConfigRequest, context: grpc.ServicerContext
@@ -225,14 +213,10 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                 error=result.get("error", ""),
             )
         except json.JSONDecodeError as e:
-            return tracking_pb2.UpdateConfigResponse(
-                success=False, error=f"Invalid JSON: {e}"
-            )
+            return tracking_pb2.UpdateConfigResponse(success=False, error=f"Invalid JSON: {e}")
         except Exception as e:
             logger.error(f"UpdateConfig error: {e}")
-            return tracking_pb2.UpdateConfigResponse(
-                success=False, error=str(e)
-            )
+            return tracking_pb2.UpdateConfigResponse(success=False, error=str(e))
 
     def StreamStatus(
         self, request: tracking_pb2.StreamStatusRequest, context: grpc.ServicerContext
@@ -299,7 +283,11 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                 # Encode to JPEG
                 encoder = self.api._video_cfg
                 import cv2
-                encode_param = [cv2.IMWRITE_JPEG_QUALITY, request.jpeg_quality if request.jpeg_quality > 0 else encoder.jpeg_quality]
+
+                encode_param = [
+                    cv2.IMWRITE_JPEG_QUALITY,
+                    request.jpeg_quality if request.jpeg_quality > 0 else encoder.jpeg_quality,
+                ]
 
                 # Handle scaling
                 scale = request.scale_factor if request.scale_factor > 0 else encoder.scale_factor
@@ -321,17 +309,19 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                         if bbox is None:
                             continue
 
-                        targets.append(tracking_pb2.DetectedTarget(
-                            track_id=track.track_id,
-                            class_id=track.class_id,
-                            confidence=track.confidence,
-                            bbox=tracking_pb2.BoundingBoxMsg(
-                                x=bbox.x, y=bbox.y, w=bbox.w, h=bbox.h
-                            ),
-                            velocity_x=vx,
-                            velocity_y=vy,
-                            is_selected=(track.track_id == self.api._selected_target_id)
-                        ))
+                        targets.append(
+                            tracking_pb2.DetectedTarget(
+                                track_id=track.track_id,
+                                class_id=track.class_id,
+                                confidence=track.confidence,
+                                bbox=tracking_pb2.BoundingBoxMsg(
+                                    x=bbox.x, y=bbox.y, w=bbox.w, h=bbox.h
+                                ),
+                                velocity_x=vx,
+                                velocity_y=vy,
+                                is_selected=(track.track_id == self.api._selected_target_id),
+                            )
+                        )
 
                 yield tracking_pb2.VideoFrame(
                     timestamp=ts,
@@ -339,7 +329,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                     width=w,
                     height=h,
                     frame_number=self.api.frame_count,
-                    targets=targets
+                    targets=targets,
                 )
 
         except Exception as e:
@@ -353,7 +343,9 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
         """Get safety status."""
         try:
             if not self.api.pipeline or not self.api.pipeline._safety_manager:
-                return tracking_pb2.GetSafetyStatusResponse(fire_authorized=False, blocked_reason="Safety manager not enabled")
+                return tracking_pb2.GetSafetyStatusResponse(
+                    fire_authorized=False, blocked_reason="Safety manager not enabled"
+                )
 
             # Since SafetyManager is evaluated per-frame, we might not have a global state getter easily accessible,
             # but we can poll the Interlock and NFZ manager.
@@ -373,11 +365,13 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                 blocked_reason="; ".join(reasons),
                 active_zone=nfz_res.active_zone_id or "",
                 operator_override=inter_res.operator_auth,
-                emergency_stop=inter_res.emergency_stop
+                emergency_stop=inter_res.emergency_stop,
             )
         except Exception as e:
             logger.error(f"GetSafetyStatus error: {e}")
-            return tracking_pb2.GetSafetyStatusResponse(fire_authorized=False, blocked_reason=str(e))
+            return tracking_pb2.GetSafetyStatusResponse(
+                fire_authorized=False, blocked_reason=str(e)
+            )
 
     def SetOperatorAuth(
         self, request: tracking_pb2.SetOperatorAuthRequest, context: grpc.ServicerContext
@@ -396,8 +390,10 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             if self.api.pipeline and self.api.pipeline._safety_manager:
                 self.api.pipeline._safety_manager.set_emergency_stop(request.activate)
                 if request.activate:
-                    self.api.set_gimbal_rate(0.0, 0.0) # Stop movement
-            return tracking_pb2.EmergencyStopResponse(success=True, emergency_stop_active=request.activate)
+                    self.api.set_gimbal_rate(0.0, 0.0)  # Stop movement
+            return tracking_pb2.EmergencyStopResponse(
+                success=True, emergency_stop_active=request.activate
+            )
         except Exception as e:
             return tracking_pb2.EmergencyStopResponse(success=False, error=str(e))
 
@@ -408,15 +404,17 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             response = tracking_pb2.GetThreatAssessmentResponse()
             if self.api.pipeline and self.api.pipeline._engagement_queue:
                 for t in self.api.pipeline._engagement_queue.queue:
-                    response.threats.append(tracking_pb2.ThreatTarget(
-                        track_id=t.track_id,
-                        threat_score=t.threat_score,
-                        distance_score=t.distance_score,
-                        velocity_score=t.velocity_score,
-                        class_score=t.class_score,
-                        heading_score=t.heading_score,
-                        priority_rank=t.priority_rank
-                    ))
+                    response.threats.append(
+                        tracking_pb2.ThreatTarget(
+                            track_id=t.track_id,
+                            threat_score=t.threat_score,
+                            distance_score=t.distance_score,
+                            velocity_score=t.velocity_score,
+                            class_score=t.class_score,
+                            heading_score=t.heading_score,
+                            priority_rank=t.priority_rank,
+                        )
+                    )
             return response
         except Exception as e:
             logger.error(f"GetThreatAssessment error: {e}")
@@ -587,9 +585,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
         try:
             pipeline.designate_target(track_id, operator_id)
             logger.info(f"gRPC designation: track={track_id} operator='{operator_id}'")
-            return tracking_pb2.DesignateTargetResponse(
-                ok=True, track_id=track_id, designated=True
-            )
+            return tracking_pb2.DesignateTargetResponse(ok=True, track_id=track_id, designated=True)
         except Exception as e:
             logger.error(f"DesignateTarget error: {e}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -649,6 +645,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
     ) -> tracking_pb2.MissionResponse:
         """Start a new mission session."""
         import datetime
+
         pipeline = getattr(self.api, "pipeline", None)
         profile_name = getattr(request, "profile", "") or ""
         camera_source = getattr(request, "camera_source", 0)
@@ -659,6 +656,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             # Load profile if specified
             if profile_name:
                 from ..config.profiles import ProfileManager
+
                 try:
                     pm = ProfileManager()
                     pm.load_profile(profile_name)
@@ -686,10 +684,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                 context.set_details(err)
                 return tracking_pb2.MissionResponse(ok=False, error=err)
 
-            session_id = (
-                f"{mission_name.replace(' ', '_')}_"
-                f"{datetime.datetime.now():%Y%m%d_%H%M%S}"
-            )
+            session_id = f"{mission_name.replace(' ', '_')}_{datetime.datetime.now():%Y%m%d_%H%M%S}"
             logger.info(f"mission START (gRPC): session={session_id} profile={profile_name}")
             return tracking_pb2.MissionResponse(
                 ok=True,
@@ -708,6 +703,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
         """End the active mission and generate a debrief report."""
         import time as _time
         from pathlib import Path
+
         pipeline = getattr(self.api, "pipeline", None)
         try:
             # Auto-safe the fire chain before stopping
@@ -725,6 +721,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
                 audit = getattr(pipeline, "_audit_logger", None)
                 if audit is not None and getattr(audit, "_records", None):
                     from ..telemetry.report import generate_report
+
                     report_dir = Path("logs/reports")
                     report_dir.mkdir(parents=True, exist_ok=True)
                     ts_label = f"mission_{int(_time.time())}"
@@ -812,6 +809,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
     ) -> tracking_pb2.ZoneResponse:
         """Add a new no-fire zone to the running pipeline."""
         import uuid
+
         sm = self._get_safety_manager()
         if sm is None:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
@@ -849,6 +847,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
 
         try:
             from ..types import SafetyZone
+
             zone = SafetyZone(
                 zone_id=zone_id,
                 center_yaw_deg=center_yaw,
@@ -913,9 +912,7 @@ class TrackingServicer(tracking_pb2_grpc.TrackingServiceServicer):
             if zone is None:
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 context.set_details(f"zone '{zone_id}' not found")
-                return tracking_pb2.SafetyZoneMsg(
-                    found=False, error=f"zone '{zone_id}' not found"
-                )
+                return tracking_pb2.SafetyZoneMsg(found=False, error=f"zone '{zone_id}' not found")
             return tracking_pb2.SafetyZoneMsg(
                 zone_id=zone.zone_id,
                 center_yaw_deg=zone.center_yaw_deg,

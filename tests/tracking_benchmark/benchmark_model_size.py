@@ -6,6 +6,7 @@ Compares detection quality and tracking stability:
 
 Goal: Measure if larger model reduces miss-detections and improves ID stability.
 """
+
 import sys
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent / "src"))
@@ -46,16 +47,22 @@ def run_test(tracker_obj, video_path: str, label: str, max_frames: int):
             id_history.setdefault(t.track_id, []).append(i)
 
         if (i + 1) % 100 == 0:
-            print(f"  [{label}] frame {i+1}/{n}: {len(unique_ids)} IDs, "
-                  f"avg_det={sum(det_counts[-100:])/100:.1f}, "
-                  f"avg_lat={sum(latencies[-100:])/100:.0f}ms")
+            print(
+                f"  [{label}] frame {i + 1}/{n}: {len(unique_ids)} IDs, "
+                f"avg_det={sum(det_counts[-100:]) / 100:.1f}, "
+                f"avg_lat={sum(latencies[-100:]) / 100:.0f}ms"
+            )
 
     cap.release()
 
     track_lens = [len(f) for f in id_history.values()]
     avg_len = sum(track_lens) / max(len(track_lens), 1)
-    frag = sum(1 for frames in id_history.values()
-               for j in range(1, len(frames)) if frames[j] - frames[j-1] > 1)
+    frag = sum(
+        1
+        for frames in id_history.values()
+        for j in range(1, len(frames))
+        if frames[j] - frames[j - 1] > 1
+    )
     avg_lat = sum(latencies) / max(len(latencies), 1)
     p95_lat = sorted(latencies)[int(len(latencies) * 0.95)] if latencies else 0
     avg_det = sum(det_counts) / max(len(det_counts), 1)
@@ -81,19 +88,19 @@ def print_results(video_name: str, results: list[dict]):
     for r in results:
         print(f" {r['label']:>{col}}", end="")
     print()
-    print(f"  {'-'*22}", end="")
+    print(f"  {'-' * 22}", end="")
     for _ in results:
-        print(f" {'-'*col}", end="")
+        print(f" {'-' * col}", end="")
     print()
 
     base = results[0]
     for key, label, fmt, _higher_better in [
-        ("unique_ids",    "Unique IDs (lower=better)",  "d",   False),
+        ("unique_ids", "Unique IDs (lower=better)", "d", False),
         ("avg_track_len", "Avg track len (higher=better)", ".1f", True),
-        ("frag",          "Frag breaks (lower=better)", "d",   False),
-        ("avg_det",       "Avg detections/frame",       ".2f", True),
-        ("avg_lat",       "Avg latency (ms)",           ".0f", False),
-        ("p95_lat",       "P95 latency (ms)",           ".0f", False),
+        ("frag", "Frag breaks (lower=better)", "d", False),
+        ("avg_det", "Avg detections/frame", ".2f", True),
+        ("avg_lat", "Avg latency (ms)", ".0f", False),
+        ("p95_lat", "P95 latency (ms)", ".0f", False),
     ]:
         print(f"  {label:<22}", end="")
         for r in results:
@@ -144,9 +151,9 @@ def main():
         w, h = int(cap.get(3)), int(cap.get(4))
         total = int(cap.get(7))
         cap.release()
-        print(f"\n{'#'*70}")
+        print(f"\n{'#' * 70}")
         print(f"  VIDEO: {vname} ({w}x{h}, {total}f, testing {min(MAX, total)})")
-        print(f"{'#'*70}")
+        print(f"{'#' * 70}")
 
         results = []
         for model_path, label in models:

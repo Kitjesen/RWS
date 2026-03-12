@@ -67,6 +67,7 @@ def load_persisted_zones(safety_manager) -> int:
         with open(_NFZ_PERSIST_PATH, encoding="utf-8") as f:
             zones_data = json.load(f)
         from ..types import SafetyZone
+
         loaded = 0
         for z in zones_data:
             safety_manager.add_no_fire_zone(SafetyZone(**z))
@@ -118,16 +119,18 @@ def list_zones():
         return jsonify([])
 
     zones = sm._nfz.zones  # NoFireZoneManager.zones property
-    return jsonify([
-        {
-            "zone_id": z.zone_id,
-            "center_yaw_deg": z.center_yaw_deg,
-            "center_pitch_deg": z.center_pitch_deg,
-            "radius_deg": z.radius_deg,
-            "zone_type": z.zone_type,
-        }
-        for z in zones
-    ])
+    return jsonify(
+        [
+            {
+                "zone_id": z.zone_id,
+                "center_yaw_deg": z.center_yaw_deg,
+                "center_pitch_deg": z.center_pitch_deg,
+                "radius_deg": z.radius_deg,
+                "zone_type": z.zone_type,
+            }
+            for z in zones
+        ]
+    )
 
 
 @safety_bp.route("/zones/<zone_id>", methods=["GET"])
@@ -144,13 +147,15 @@ def get_zone(zone_id: str):
     if zone is None:
         return jsonify({"error": f"zone '{zone_id}' not found"}), 404
 
-    return jsonify({
-        "zone_id": zone.zone_id,
-        "center_yaw_deg": zone.center_yaw_deg,
-        "center_pitch_deg": zone.center_pitch_deg,
-        "radius_deg": zone.radius_deg,
-        "zone_type": zone.zone_type,
-    })
+    return jsonify(
+        {
+            "zone_id": zone.zone_id,
+            "center_yaw_deg": zone.center_yaw_deg,
+            "center_pitch_deg": zone.center_pitch_deg,
+            "radius_deg": zone.radius_deg,
+            "zone_type": zone.zone_type,
+        }
+    )
 
 
 @safety_bp.route("/zones", methods=["POST"])
@@ -183,10 +188,12 @@ def add_zone():
         center_pitch = float(data["center_pitch_deg"])
         radius = float(data["radius_deg"])
     except (KeyError, TypeError, ValueError) as exc:
-        return jsonify({
-            "error": f"Missing or invalid field: {exc}. "
-                     "Required: center_yaw_deg, center_pitch_deg, radius_deg"
-        }), 400
+        return jsonify(
+            {
+                "error": f"Missing or invalid field: {exc}. "
+                "Required: center_yaw_deg, center_pitch_deg, radius_deg"
+            }
+        ), 400
 
     if radius <= 0:
         return jsonify({"error": "radius_deg must be positive"}), 400
@@ -201,6 +208,7 @@ def add_zone():
     zone_type = str(data.get("zone_type", "no_fire"))
 
     from ..types import SafetyZone
+
     zone = SafetyZone(
         zone_id=zone_id,
         center_yaw_deg=center_yaw,
@@ -214,18 +222,25 @@ def add_zone():
     # Emit SSE notification.
     try:
         from .events import event_bus
-        event_bus.emit("nfz_added", {
-            "zone_id": zone_id,
-            "center_yaw_deg": center_yaw,
-            "center_pitch_deg": center_pitch,
-            "radius_deg": radius,
-        })
+
+        event_bus.emit(
+            "nfz_added",
+            {
+                "zone_id": zone_id,
+                "center_yaw_deg": center_yaw,
+                "center_pitch_deg": center_pitch,
+                "radius_deg": radius,
+            },
+        )
     except Exception:
         pass
 
     logger.info(
         "NFZ added: id=%s yaw=%.1f pitch=%.1f r=%.1f",
-        zone_id, center_yaw, center_pitch, radius,
+        zone_id,
+        center_yaw,
+        center_pitch,
+        radius,
     )
     return jsonify({"ok": True, "zone_id": zone_id}), 201
 
@@ -249,6 +264,7 @@ def remove_zone(zone_id: str):
     # Emit SSE notification.
     try:
         from .events import event_bus
+
         event_bus.emit("nfz_removed", {"zone_id": zone_id})
     except Exception:
         pass

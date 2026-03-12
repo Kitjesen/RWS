@@ -57,10 +57,19 @@ def _full_pipeline():
         config=LeadAngleConfig(enabled=True),
     )
 
-    safety_mgr = SafetyManager(SafetyManagerConfig(
-        zones=(SafetyZone(zone_id="nfz1", center_yaw_deg=90.0,
-                          center_pitch_deg=0.0, radius_deg=10.0, zone_type="no_fire"),),
-    ))
+    safety_mgr = SafetyManager(
+        SafetyManagerConfig(
+            zones=(
+                SafetyZone(
+                    zone_id="nfz1",
+                    center_yaw_deg=90.0,
+                    center_pitch_deg=0.0,
+                    radius_deg=10.0,
+                    zone_type="no_fire",
+                ),
+            ),
+        )
+    )
 
     trajectory_planner = GimbalTrajectoryPlanner(TrajectoryConfig())
 
@@ -92,10 +101,13 @@ class TestFullIntegration:
         assert output.command is not None
 
     def test_step_with_target(self, pipeline):
-        dets = [Detection(
-            bbox=BoundingBox(x=600, y=300, w=80, h=150),
-            confidence=0.9, class_id="person",
-        )]
+        dets = [
+            Detection(
+                bbox=BoundingBox(x=600, y=300, w=80, h=150),
+                confidence=0.9,
+                class_id="person",
+            )
+        ]
         pipeline.detector.inject(dets)
         output = pipeline.step(None, 0.0)
         assert output is not None
@@ -103,11 +115,14 @@ class TestFullIntegration:
     def test_tracking_loop(self, pipeline):
         for i in range(50):
             t = i * 0.033
-            dets = [Detection(
-                # y=285 centers the bbox at cy=360, giving pitch_err≈0 so lock is achievable
-                bbox=BoundingBox(x=600 + i, y=285, w=80, h=150),
-                confidence=0.9, class_id="person",
-            )]
+            dets = [
+                Detection(
+                    # y=285 centers the bbox at cy=360, giving pitch_err≈0 so lock is achievable
+                    bbox=BoundingBox(x=600 + i, y=285, w=80, h=150),
+                    confidence=0.9,
+                    class_id="person",
+                )
+            ]
             pipeline.detector.inject(dets)
             pipeline.step(None, t)
         metrics = pipeline.telemetry.snapshot_metrics()
@@ -118,10 +133,13 @@ class TestFullIntegration:
         for i in range(20):
             t = i * 0.033
             # Target at yaw ~90 deg (in NFZ)
-            dets = [Detection(
-                bbox=BoundingBox(x=1200, y=360, w=80, h=150),
-                confidence=0.9, class_id="person",
-            )]
+            dets = [
+                Detection(
+                    bbox=BoundingBox(x=1200, y=360, w=80, h=150),
+                    confidence=0.9,
+                    class_id="person",
+                )
+            ]
             pipeline.detector.inject(dets)
             output = pipeline.step(None, t)
         assert output is not None
@@ -129,18 +147,24 @@ class TestFullIntegration:
     def test_target_switch(self, pipeline):
         """Test switching between targets."""
         for i in range(10):
-            dets = [Detection(
-                bbox=BoundingBox(x=200, y=300, w=80, h=150),
-                confidence=0.9, class_id="person",
-            )]
+            dets = [
+                Detection(
+                    bbox=BoundingBox(x=200, y=300, w=80, h=150),
+                    confidence=0.9,
+                    class_id="person",
+                )
+            ]
             pipeline.detector.inject(dets)
             pipeline.step(None, i * 0.033)
 
         for i in range(10):
-            dets = [Detection(
-                bbox=BoundingBox(x=1000, y=400, w=80, h=150),
-                confidence=0.95, class_id="person",
-            )]
+            dets = [
+                Detection(
+                    bbox=BoundingBox(x=1000, y=400, w=80, h=150),
+                    confidence=0.95,
+                    class_id="person",
+                )
+            ]
             pipeline.detector.inject(dets)
             pipeline.step(None, (10 + i) * 0.033)
 
@@ -151,10 +175,13 @@ class TestFullIntegration:
         """Test target loss and recovery."""
         # Track target
         for i in range(10):
-            dets = [Detection(
-                bbox=BoundingBox(x=600, y=300, w=80, h=150),
-                confidence=0.9, class_id="person",
-            )]
+            dets = [
+                Detection(
+                    bbox=BoundingBox(x=600, y=300, w=80, h=150),
+                    confidence=0.9,
+                    class_id="person",
+                )
+            ]
             pipeline.detector.inject(dets)
             pipeline.step(None, i * 0.033)
 
@@ -164,10 +191,13 @@ class TestFullIntegration:
 
         # Recover target
         for i in range(10):
-            dets = [Detection(
-                bbox=BoundingBox(x=600, y=300, w=80, h=150),
-                confidence=0.9, class_id="person",
-            )]
+            dets = [
+                Detection(
+                    bbox=BoundingBox(x=600, y=300, w=80, h=150),
+                    confidence=0.9,
+                    class_id="person",
+                )
+            ]
             pipeline.detector.inject(dets)
             pipeline.step(None, (25 + i) * 0.033)
 
@@ -178,6 +208,7 @@ class TestFullIntegration:
 class TestConfigDrivenPipeline:
     def test_build_from_config_all_enabled(self):
         from src.rws_tracking.pipeline.app import build_pipeline_from_config
+
         cfg = SystemConfig()
         # Sub-configs are frozen dataclasses; use dataclasses.replace() to mutate
         cfg.safety = dataclasses.replace(cfg.safety, enabled=True)

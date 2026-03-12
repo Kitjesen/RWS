@@ -8,12 +8,14 @@ import pytest
 class TestGrpcServerImport:
     def test_import(self):
         from src.rws_tracking.api import grpc_server
+
         assert grpc_server is not None
 
 
 class TestGrpcClientImport:
     def test_import(self):
         from src.rws_tracking.api import grpc_client
+
         assert grpc_client is not None
 
 
@@ -21,6 +23,7 @@ class TestGrpcServer:
     @pytest.fixture
     def server_cls(self):
         from src.rws_tracking.api.grpc_server import TrackingGrpcServer
+
         return TrackingGrpcServer
 
     def test_init(self, server_cls):
@@ -36,6 +39,7 @@ class TestGrpcClient:
     @pytest.fixture
     def client_cls(self):
         from src.rws_tracking.api.grpc_client import TrackingGrpcClient
+
         return TrackingGrpcClient
 
     def test_init(self, client_cls):

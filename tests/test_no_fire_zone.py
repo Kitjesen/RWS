@@ -1,6 +1,5 @@
 """禁射区管理器单元测试。"""
 
-
 import pytest
 
 from src.rws_tracking.safety.no_fire_zone import NFZCheckResult, NoFireZoneManager
@@ -10,24 +9,31 @@ from src.rws_tracking.types import SafetyZone
 @pytest.fixture
 def nfz():
     mgr = NoFireZoneManager(slow_down_margin_deg=5.0)
-    mgr.add_zone(SafetyZone(
-        zone_id="nfz1", center_yaw_deg=90.0, center_pitch_deg=0.0,
-        radius_deg=10.0, zone_type="no_fire",
-    ))
+    mgr.add_zone(
+        SafetyZone(
+            zone_id="nfz1",
+            center_yaw_deg=90.0,
+            center_pitch_deg=0.0,
+            radius_deg=10.0,
+            zone_type="no_fire",
+        )
+    )
     return mgr
 
 
 class TestZoneManagement:
     def test_add_zone(self):
         mgr = NoFireZoneManager()
-        mgr.add_zone(SafetyZone(zone_id="z1", center_yaw_deg=0.0,
-                                center_pitch_deg=0.0, radius_deg=5.0))
+        mgr.add_zone(
+            SafetyZone(zone_id="z1", center_yaw_deg=0.0, center_pitch_deg=0.0, radius_deg=5.0)
+        )
         assert len(mgr.zones) == 1
 
     def test_remove_zone(self):
         mgr = NoFireZoneManager()
-        mgr.add_zone(SafetyZone(zone_id="z1", center_yaw_deg=0.0,
-                                center_pitch_deg=0.0, radius_deg=5.0))
+        mgr.add_zone(
+            SafetyZone(zone_id="z1", center_yaw_deg=0.0, center_pitch_deg=0.0, radius_deg=5.0)
+        )
         assert mgr.remove_zone("z1")
         assert len(mgr.zones) == 0
 
@@ -37,19 +43,23 @@ class TestZoneManagement:
 
     def test_clear(self):
         mgr = NoFireZoneManager()
-        mgr.add_zone(SafetyZone(zone_id="z1", center_yaw_deg=0.0,
-                                center_pitch_deg=0.0, radius_deg=5.0))
-        mgr.add_zone(SafetyZone(zone_id="z2", center_yaw_deg=10.0,
-                                center_pitch_deg=0.0, radius_deg=5.0))
+        mgr.add_zone(
+            SafetyZone(zone_id="z1", center_yaw_deg=0.0, center_pitch_deg=0.0, radius_deg=5.0)
+        )
+        mgr.add_zone(
+            SafetyZone(zone_id="z2", center_yaw_deg=10.0, center_pitch_deg=0.0, radius_deg=5.0)
+        )
         mgr.clear()
         assert len(mgr.zones) == 0
 
     def test_update_zone(self):
         mgr = NoFireZoneManager()
-        mgr.add_zone(SafetyZone(zone_id="z1", center_yaw_deg=0.0,
-                                center_pitch_deg=0.0, radius_deg=5.0))
-        mgr.add_zone(SafetyZone(zone_id="z1", center_yaw_deg=10.0,
-                                center_pitch_deg=0.0, radius_deg=5.0))
+        mgr.add_zone(
+            SafetyZone(zone_id="z1", center_yaw_deg=0.0, center_pitch_deg=0.0, radius_deg=5.0)
+        )
+        mgr.add_zone(
+            SafetyZone(zone_id="z1", center_yaw_deg=10.0, center_pitch_deg=0.0, radius_deg=5.0)
+        )
         assert len(mgr.zones) == 1
         assert mgr.zones[0].center_yaw_deg == 10.0
 
@@ -76,18 +86,30 @@ class TestNoFireCheck:
 class TestCautionZone:
     def test_caution_zone_no_block(self):
         mgr = NoFireZoneManager()
-        mgr.add_zone(SafetyZone(zone_id="caution1", center_yaw_deg=0.0,
-                                center_pitch_deg=0.0, radius_deg=10.0,
-                                zone_type="caution"))
+        mgr.add_zone(
+            SafetyZone(
+                zone_id="caution1",
+                center_yaw_deg=0.0,
+                center_pitch_deg=0.0,
+                radius_deg=10.0,
+                zone_type="caution",
+            )
+        )
         result = mgr.check(0.0, 0.0)
         assert not result.fire_blocked
         assert result.in_caution_zone
 
     def test_caution_speed_factor(self):
         mgr = NoFireZoneManager()
-        mgr.add_zone(SafetyZone(zone_id="caution1", center_yaw_deg=0.0,
-                                center_pitch_deg=0.0, radius_deg=10.0,
-                                zone_type="caution"))
+        mgr.add_zone(
+            SafetyZone(
+                zone_id="caution1",
+                center_yaw_deg=0.0,
+                center_pitch_deg=0.0,
+                radius_deg=10.0,
+                zone_type="caution",
+            )
+        )
         result = mgr.check(0.0, 0.0)
         assert result.speed_factor == pytest.approx(0.3)
 
@@ -115,12 +137,24 @@ class TestSpeedFactor:
 class TestMultipleZones:
     def test_multiple_nfz(self):
         mgr = NoFireZoneManager()
-        mgr.add_zone(SafetyZone(zone_id="z1", center_yaw_deg=0.0,
-                                center_pitch_deg=0.0, radius_deg=5.0,
-                                zone_type="no_fire"))
-        mgr.add_zone(SafetyZone(zone_id="z2", center_yaw_deg=90.0,
-                                center_pitch_deg=0.0, radius_deg=5.0,
-                                zone_type="no_fire"))
+        mgr.add_zone(
+            SafetyZone(
+                zone_id="z1",
+                center_yaw_deg=0.0,
+                center_pitch_deg=0.0,
+                radius_deg=5.0,
+                zone_type="no_fire",
+            )
+        )
+        mgr.add_zone(
+            SafetyZone(
+                zone_id="z2",
+                center_yaw_deg=90.0,
+                center_pitch_deg=0.0,
+                radius_deg=5.0,
+                zone_type="no_fire",
+            )
+        )
         assert nfz_check(mgr, 0.0, 0.0).fire_blocked
         assert nfz_check(mgr, 90.0, 0.0).fire_blocked
         assert not nfz_check(mgr, 45.0, 0.0).fire_blocked

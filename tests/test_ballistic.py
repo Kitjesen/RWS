@@ -1,6 +1,5 @@
 """弹道补偿模块完整单元测试。"""
 
-
 import pytest
 
 from src.rws_tracking.control.ballistic import (
@@ -36,12 +35,14 @@ class TestEstimateDistance:
 class TestSimpleBallisticModel:
     @pytest.fixture
     def model(self):
-        return SimpleBallisticModel(SimpleBallisticConfig(
-            target_height_m=1.8,
-            quadratic_a=0.001,
-            quadratic_b=0.01,
-            quadratic_c=0.0,
-        ))
+        return SimpleBallisticModel(
+            SimpleBallisticConfig(
+                target_height_m=1.8,
+                quadratic_a=0.001,
+                quadratic_b=0.01,
+                quadratic_c=0.0,
+            )
+        )
 
     def test_positive_compensation(self, model):
         bbox = BoundingBox(x=0, y=0, w=80, h=150)
@@ -54,18 +55,20 @@ class TestSimpleBallisticModel:
 
     def test_larger_distance_more_compensation(self, model):
         near = BoundingBox(x=0, y=0, w=80, h=300)  # close
-        far = BoundingBox(x=0, y=0, w=80, h=50)    # far
+        far = BoundingBox(x=0, y=0, w=80, h=50)  # far
         assert model.compute(far, 970.0) > model.compute(near, 970.0)
 
 
 class TestTableBallisticModel:
     @pytest.fixture
     def model(self):
-        return TableBallisticModel(TableBallisticConfig(
-            target_height_m=1.8,
-            distance_table=(5.0, 10.0, 20.0, 30.0),
-            compensation_table=(0.1, 0.4, 1.6, 3.6),
-        ))
+        return TableBallisticModel(
+            TableBallisticConfig(
+                target_height_m=1.8,
+                distance_table=(5.0, 10.0, 20.0, 30.0),
+                compensation_table=(0.1, 0.4, 1.6, 3.6),
+            )
+        )
 
     def test_interpolation(self, model):
         bbox = BoundingBox(x=0, y=0, w=80, h=int(1.8 * 970.0 / 15.0))
@@ -74,10 +77,12 @@ class TestTableBallisticModel:
 
     def test_mismatched_tables_raises(self):
         with pytest.raises(ValueError):
-            TableBallisticModel(TableBallisticConfig(
-                distance_table=(5.0, 10.0),
-                compensation_table=(0.1,),
-            ))
+            TableBallisticModel(
+                TableBallisticConfig(
+                    distance_table=(5.0, 10.0),
+                    compensation_table=(0.1,),
+                )
+            )
 
     def test_zero_height(self, model):
         bbox = BoundingBox(x=0, y=0, w=80, h=0)

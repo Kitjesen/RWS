@@ -59,9 +59,14 @@ CAM = CameraModel(width=1280, height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0
 
 
 def _track(
-    tid: int = 1, x: float = 600, y: float = 340,
-    w: float = 80, h: float = 150, cls: str = "person",
-    vx: float = 5.0, vy: float = 2.0,
+    tid: int = 1,
+    x: float = 600,
+    y: float = 340,
+    w: float = 80,
+    h: float = 150,
+    cls: str = "person",
+    vx: float = 5.0,
+    vy: float = 2.0,
 ) -> Track:
     return Track(
         track_id=tid,
@@ -76,23 +81,32 @@ def _track(
 
 
 def _det(
-    x: float = 600, y: float = 340,
-    w: float = 80, h: float = 150,
-    cls: str = "person", conf: float = 0.9,
+    x: float = 600,
+    y: float = 340,
+    w: float = 80,
+    h: float = 150,
+    cls: str = "person",
+    conf: float = 0.9,
 ) -> dict:
     """PassthroughDetector 需要的 dict 格式检测结果。"""
     return {"bbox": (x, y, w, h), "confidence": conf, "class_id": cls}
 
 
 def _obs(
-    tid: int = 1, x: float = 600, y: float = 340,
-    w: float = 80, h: float = 150,
-    vx: float = 50.0, vy: float = 10.0,
+    tid: int = 1,
+    x: float = 600,
+    y: float = 340,
+    w: float = 80,
+    h: float = 150,
+    vx: float = 50.0,
+    vy: float = 10.0,
 ) -> TargetObservation:
     return TargetObservation(
-        timestamp=0.0, track_id=tid,
+        timestamp=0.0,
+        track_id=tid,
         bbox=BoundingBox(x=x, y=y, w=w, h=h),
-        confidence=0.9, class_id="person",
+        confidence=0.9,
+        class_id="person",
         velocity_px_per_s=(vx, vy),
     )
 
@@ -104,8 +118,10 @@ def _full_pipeline() -> VisionGimbalPipeline:
     # 威胁评估
     eng_cfg = EConfig()
     assessor = ThreatAssessor(
-        frame_width=CAM.width, frame_height=CAM.height,
-        camera_fy=CAM.fy, config=eng_cfg,
+        frame_width=CAM.width,
+        frame_height=CAM.height,
+        camera_fy=CAM.fy,
+        config=eng_cfg,
     )
     queue = EngagementQueue(config=eng_cfg)
 
@@ -124,7 +140,8 @@ def _full_pipeline() -> VisionGimbalPipeline:
     # 提前量 — enabled=True
     ftp = SimpleFlightTimeProvider(muzzle_velocity_mps=900.0)
     lead_calc = LeadAngleCalculator(
-        transform=transform, flight_time_provider=ftp,
+        transform=transform,
+        flight_time_provider=ftp,
         config=LeadAngleConfig(enabled=True),
     )
 
@@ -143,7 +160,8 @@ def _full_pipeline() -> VisionGimbalPipeline:
         detector=PassthroughDetector(),
         tracker=SimpleIoUTracker(iou_threshold=0.18, max_misses=10),
         selector=WeightedTargetSelector(
-            frame_width=CAM.width, frame_height=CAM.height,
+            frame_width=CAM.width,
+            frame_height=CAM.height,
             config=SelectorConfig(
                 preferred_classes={"person": 1.0},
                 min_hold_time_s=0.35,
@@ -151,7 +169,8 @@ def _full_pipeline() -> VisionGimbalPipeline:
             ),
         ),
         controller=TwoAxisGimbalController(
-            transform=transform, cfg=default_controller_config(),
+            transform=transform,
+            cfg=default_controller_config(),
         ),
         driver=SimulatedGimbalDriver(),
         telemetry=InMemoryTelemetryLogger(),
@@ -172,7 +191,6 @@ def _full_pipeline() -> VisionGimbalPipeline:
 
 
 class TestThreatAssessor(unittest.TestCase):
-
     def test_single_target(self):
         a = ThreatAssessor(CAM.width, CAM.height, CAM.fy)
         r = a.assess([_track()])
@@ -186,10 +204,10 @@ class TestThreatAssessor(unittest.TestCase):
 
 
 class TestRangefinder(unittest.TestCase):
-
     def test_measure(self):
         rf = SimulatedRangefinder(
-            SimulatedRangefinderConfig(failure_rate=0.0), camera_fy=970.0,
+            SimulatedRangefinderConfig(failure_rate=0.0),
+            camera_fy=970.0,
         )
         rf.set_target_bbox(BoundingBox(x=600, y=340, w=80, h=150))
         r = rf.measure(0.0)
@@ -198,7 +216,8 @@ class TestRangefinder(unittest.TestCase):
 
     def test_fusion(self):
         rf = SimulatedRangefinder(
-            SimulatedRangefinderConfig(failure_rate=0.0), camera_fy=970.0,
+            SimulatedRangefinderConfig(failure_rate=0.0),
+            camera_fy=970.0,
         )
         bbox = BoundingBox(x=600, y=340, w=80, h=150)
         rf.set_target_bbox(bbox)
@@ -208,7 +227,6 @@ class TestRangefinder(unittest.TestCase):
 
 
 class TestBallistic(unittest.TestCase):
-
     def test_solve_100m(self):
         m = PhysicsBallisticModel(
             ProjectileParams(
@@ -230,11 +248,11 @@ class TestBallistic(unittest.TestCase):
 
 
 class TestLeadAngle(unittest.TestCase):
-
     def test_simple_ftp(self):
         self.assertAlmostEqual(
             SimpleFlightTimeProvider(1000.0).compute_flight_time(500.0),
-            0.5, places=3,
+            0.5,
+            places=3,
         )
 
     def test_nonzero_lead(self):
@@ -249,15 +267,16 @@ class TestLeadAngle(unittest.TestCase):
 
 
 class TestSafety(unittest.TestCase):
-
     def test_default_blocks(self):
         s = SafetyManager().evaluate(0, 0, True, 5.0, 100.0)
         self.assertFalse(s.fire_authorized)
 
     def test_authorized(self):
-        m = SafetyManager(SafetyManagerConfig(
-            interlock=SafetyInterlockConfig(require_operator_auth=True),
-        ))
+        m = SafetyManager(
+            SafetyManagerConfig(
+                interlock=SafetyInterlockConfig(require_operator_auth=True),
+            )
+        )
         m.set_operator_auth(True)
         m.update_system_status(comms_ok=True, sensors_ok=True)
         m.operator_heartbeat()
@@ -275,7 +294,6 @@ class TestSafety(unittest.TestCase):
 
 
 class TestTrajectory(unittest.TestCase):
-
     def test_nonzero_rate(self):
         p = GimbalTrajectoryPlanner(TrajectoryConfig(min_switch_interval_s=0.0))
         p.set_target(30, 10, 0, 0, 0.0)
@@ -289,7 +307,6 @@ class TestTrajectory(unittest.TestCase):
 
 
 class TestFullChain(unittest.TestCase):
-
     def test_with_detection(self):
         """有目标时全链路各节点应有效输出。
 

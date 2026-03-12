@@ -1,6 +1,5 @@
 """配置加载器单元测试。"""
 
-
 import yaml
 
 from src.rws_tracking.config.loader import (
@@ -38,10 +37,14 @@ class TestSystemConfig:
 class TestLoadConfig:
     def test_load_valid_yaml(self, tmp_path):
         p = tmp_path / "test.yaml"
-        p.write_text(yaml.dump({
-            "camera": {"width": 640, "height": 480},
-            "detector": {"confidence_threshold": 0.5},
-        }))
+        p.write_text(
+            yaml.dump(
+                {
+                    "camera": {"width": 640, "height": 480},
+                    "detector": {"confidence_threshold": 0.5},
+                }
+            )
+        )
         cfg = load_config(str(p))
         assert cfg.camera.width == 640
         assert cfg.camera.height == 480
@@ -55,49 +58,69 @@ class TestLoadConfig:
 
     def test_load_with_controller(self, tmp_path):
         p = tmp_path / "ctrl.yaml"
-        p.write_text(yaml.dump({
-            "controller": {
-                "yaw_pid": {"kp": 8.0, "ki": 0.5, "kd": 0.3},
-                "pitch_pid": {"kp": 7.0},
-            }
-        }))
+        p.write_text(
+            yaml.dump(
+                {
+                    "controller": {
+                        "yaw_pid": {"kp": 8.0, "ki": 0.5, "kd": 0.3},
+                        "pitch_pid": {"kp": 7.0},
+                    }
+                }
+            )
+        )
         cfg = load_config(str(p))
         assert cfg.controller.yaw_pid.kp == 8.0
 
     def test_load_with_safety(self, tmp_path):
         p = tmp_path / "safety.yaml"
-        p.write_text(yaml.dump({
-            "safety": {
-                "enabled": True,
-                "interlock": {"require_operator_auth": False},
-                "zones": [
-                    {"zone_id": "z1", "center_yaw_deg": 90.0,
-                     "center_pitch_deg": 0.0, "radius_deg": 10.0}
-                ],
-            }
-        }))
+        p.write_text(
+            yaml.dump(
+                {
+                    "safety": {
+                        "enabled": True,
+                        "interlock": {"require_operator_auth": False},
+                        "zones": [
+                            {
+                                "zone_id": "z1",
+                                "center_yaw_deg": 90.0,
+                                "center_pitch_deg": 0.0,
+                                "radius_deg": 10.0,
+                            }
+                        ],
+                    }
+                }
+            )
+        )
         cfg = load_config(str(p))
         assert cfg.safety.enabled
         assert len(cfg.safety.zones) == 1
 
     def test_load_with_engagement(self, tmp_path):
         p = tmp_path / "eng.yaml"
-        p.write_text(yaml.dump({
-            "engagement": {
-                "enabled": True,
-                "strategy": "nearest_first",
-                "weights": {"distance": 0.5, "velocity": 0.3},
-            }
-        }))
+        p.write_text(
+            yaml.dump(
+                {
+                    "engagement": {
+                        "enabled": True,
+                        "strategy": "nearest_first",
+                        "weights": {"distance": 0.5, "velocity": 0.3},
+                    }
+                }
+            )
+        )
         cfg = load_config(str(p))
         assert cfg.engagement.enabled
         assert cfg.engagement.strategy == "nearest_first"
 
     def test_unknown_keys_ignored(self, tmp_path):
         p = tmp_path / "unk.yaml"
-        p.write_text(yaml.dump({
-            "camera": {"width": 640, "unknown_key": 42},
-        }))
+        p.write_text(
+            yaml.dump(
+                {
+                    "camera": {"width": 640, "unknown_key": 42},
+                }
+            )
+        )
         cfg = load_config(str(p))
         assert cfg.camera.width == 640
 
@@ -140,18 +163,18 @@ class TestNestedDictToConfig:
         assert cfg.camera.width == 320
 
     def test_ballistic_tables(self):
-        cfg = _nested_dict_to_config({
-            "controller": {
-                "ballistic": {
-                    "distance_table": [5, 10, 15],
-                    "compensation_table": [0.1, 0.4, 0.9],
+        cfg = _nested_dict_to_config(
+            {
+                "controller": {
+                    "ballistic": {
+                        "distance_table": [5, 10, 15],
+                        "compensation_table": [0.1, 0.4, 0.9],
+                    }
                 }
             }
-        })
+        )
         assert len(cfg.controller.ballistic.distance_table) == 3
 
     def test_scan_pattern_list(self):
-        cfg = _nested_dict_to_config({
-            "controller": {"scan_pattern": [30.0, 15.0]}
-        })
+        cfg = _nested_dict_to_config({"controller": {"scan_pattern": [30.0, 15.0]}})
         assert cfg.controller.scan_pattern == (30.0, 15.0)

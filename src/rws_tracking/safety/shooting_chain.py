@@ -157,8 +157,11 @@ class ShootingChain:
         if elapsed > self._arm_confirmation_timeout_s:
             self._arm_initiator = None
             self._arm_initiated_at = None
-            logger.warning("two_man_rule: arm request expired (%.1fs > %.0fs)",
-                           elapsed, self._arm_confirmation_timeout_s)
+            logger.warning(
+                "two_man_rule: arm request expired (%.1fs > %.0fs)",
+                elapsed,
+                self._arm_confirmation_timeout_s,
+            )
             return {
                 "status": "expired",
                 "message": "arm request expired, reinitiate",
@@ -201,9 +204,7 @@ class ShootingChain:
         self._fire_ts = None
         logger.info("chain SAFE from %s reason=%s", prev.value, reason)
 
-    def update_authorization(
-        self, fire_authorized: bool, timestamp: float
-    ) -> None:
+    def update_authorization(self, fire_authorized: bool, timestamp: float) -> None:
         """Called every pipeline frame.
 
         ARMED -> FIRE_AUTHORIZED when *fire_authorized* is True.
@@ -213,10 +214,7 @@ class ShootingChain:
         if self._state is FireChainState.ARMED and fire_authorized:
             self._state = FireChainState.FIRE_AUTHORIZED
             logger.info("chain -> FIRE_AUTHORIZED ts=%.3f", timestamp)
-        elif (
-            self._state is FireChainState.FIRE_AUTHORIZED
-            and not fire_authorized
-        ):
+        elif self._state is FireChainState.FIRE_AUTHORIZED and not fire_authorized:
             self._state = FireChainState.ARMED
             logger.info(
                 "chain FIRE_AUTHORIZED -> ARMED (auth lost) ts=%.3f",

@@ -3,6 +3,7 @@
 # source: tracking.proto
 # Protobuf Python Version: 6.31.1
 """Generated protocol buffer code."""
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
@@ -10,145 +11,140 @@ from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
 
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC,
-    6,
-    31,
-    1,
-    '',
-    'tracking.proto'
+    _runtime_version.Domain.PUBLIC, 6, 31, 1, "", "tracking.proto"
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
-
-
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0etracking.proto\x12\x0crws_tracking\"\x14\n\x12HealthCheckRequest\"6\n\x13HealthCheckResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07service\x18\x02 \x01(\t\"R\n\x14StartTrackingRequest\x12\x13\n\tcamera_id\x18\x01 \x01(\x05H\x00\x12\x14\n\nvideo_path\x18\x02 \x01(\tH\x00\x42\x0f\n\rcamera_source\"H\n\x15StartTrackingResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\"\x15\n\x13StopTrackingRequest\"G\n\x14StopTrackingResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\"\x12\n\x10GetStatusRequest\"\x9a\x01\n\x11GetStatusResponse\x12\x0f\n\x07running\x18\x01 \x01(\x08\x12\x13\n\x0b\x66rame_count\x18\x02 \x01(\x03\x12\x13\n\x0b\x65rror_count\x18\x03 \x01(\x03\x12\x12\n\nlast_error\x18\x04 \x01(\t\x12\x0b\n\x03\x66ps\x18\x05 \x01(\x01\x12)\n\x06gimbal\x18\x06 \x01(\x0b\x32\x19.rws_tracking.GimbalState\"_\n\x0bGimbalState\x12\x0f\n\x07yaw_deg\x18\x01 \x01(\x01\x12\x11\n\tpitch_deg\x18\x02 \x01(\x01\x12\x14\n\x0cyaw_rate_dps\x18\x03 \x01(\x01\x12\x16\n\x0epitch_rate_dps\x18\x04 \x01(\x01\">\n\x18SetGimbalPositionRequest\x12\x0f\n\x07yaw_deg\x18\x01 \x01(\x01\x12\x11\n\tpitch_deg\x18\x02 \x01(\x01\"\x98\x01\n\x19SetGimbalPositionResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12,\n\x06target\x18\x03 \x01(\x0b\x32\x1c.rws_tracking.GimbalPosition\x12-\n\x07\x63urrent\x18\x04 \x01(\x0b\x32\x1c.rws_tracking.GimbalPosition\"4\n\x0eGimbalPosition\x12\x0f\n\x07yaw_deg\x18\x01 \x01(\x01\x12\x11\n\tpitch_deg\x18\x02 \x01(\x01\"D\n\x14SetGimbalRateRequest\x12\x14\n\x0cyaw_rate_dps\x18\x01 \x01(\x01\x12\x16\n\x0epitch_rate_dps\x18\x02 \x01(\x01\"b\n\x15SetGimbalRateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12)\n\x07\x63ommand\x18\x03 \x01(\x0b\x32\x18.rws_tracking.GimbalRate\":\n\nGimbalRate\x12\x14\n\x0cyaw_rate_dps\x18\x01 \x01(\x01\x12\x16\n\x0epitch_rate_dps\x18\x02 \x01(\x01\"\x15\n\x13GetTelemetryRequest\"\xa8\x01\n\x14GetTelemetryResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12@\n\x07metrics\x18\x03 \x03(\x0b\x32/.rws_tracking.GetTelemetryResponse.MetricsEntry\x1a.\n\x0cMetricsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01\"*\n\x13UpdateConfigRequest\x12\x13\n\x0b\x63onfig_json\x18\x01 \x01(\t\"G\n\x14UpdateConfigResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\"-\n\x13StreamStatusRequest\x12\x16\n\x0eupdate_rate_hz\x18\x01 \x01(\x01\"\x7f\n\x0cStatusUpdate\x12\x11\n\ttimestamp\x18\x01 \x01(\x01\x12\x0f\n\x07running\x18\x02 \x01(\x08\x12\x13\n\x0b\x66rame_count\x18\x03 \x01(\x03\x12\x0b\n\x03\x66ps\x18\x04 \x01(\x01\x12)\n\x06gimbal\x18\x05 \x01(\x0b\x32\x19.rws_tracking.GimbalState\"d\n\x13StreamFramesRequest\x12\x0f\n\x07max_fps\x18\x01 \x01(\x01\x12\x14\n\x0cscale_factor\x18\x02 \x01(\x01\x12\x14\n\x0cjpeg_quality\x18\x03 \x01(\x05\x12\x10\n\x08\x61nnotate\x18\x04 \x01(\x08\"\x96\x01\n\nVideoFrame\x12\x11\n\ttimestamp\x18\x01 \x01(\x01\x12\x11\n\tjpeg_data\x18\x02 \x01(\x0c\x12\r\n\x05width\x18\x03 \x01(\x05\x12\x0e\n\x06height\x18\x04 \x01(\x05\x12\x14\n\x0c\x66rame_number\x18\x05 \x01(\x03\x12-\n\x07targets\x18\x06 \x03(\x0b\x32\x1c.rws_tracking.DetectedTarget\"\xb1\x01\n\x0e\x44\x65tectedTarget\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12\x10\n\x08\x63lass_id\x18\x02 \x01(\t\x12\x12\n\nconfidence\x18\x03 \x01(\x02\x12*\n\x04\x62\x62ox\x18\x04 \x01(\x0b\x32\x1c.rws_tracking.BoundingBoxMsg\x12\x12\n\nvelocity_x\x18\x05 \x01(\x02\x12\x12\n\nvelocity_y\x18\x06 \x01(\x02\x12\x13\n\x0bis_selected\x18\x07 \x01(\x08\"<\n\x0e\x42oundingBoxMsg\x12\t\n\x01x\x18\x01 \x01(\x02\x12\t\n\x01y\x18\x02 \x01(\x02\x12\t\n\x01w\x18\x03 \x01(\x02\x12\t\n\x01h\x18\x04 \x01(\x02\"\x18\n\x16GetSafetyStatusRequest\"\x92\x01\n\x17GetSafetyStatusResponse\x12\x17\n\x0f\x66ire_authorized\x18\x01 \x01(\x08\x12\x16\n\x0e\x62locked_reason\x18\x02 \x01(\t\x12\x13\n\x0b\x61\x63tive_zone\x18\x03 \x01(\t\x12\x19\n\x11operator_override\x18\x04 \x01(\x08\x12\x16\n\x0e\x65mergency_stop\x18\x05 \x01(\x08\",\n\x16SetOperatorAuthRequest\x12\x12\n\nauthorized\x18\x01 \x01(\x08\"9\n\x17SetOperatorAuthResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\"(\n\x14\x45mergencyStopRequest\x12\x10\n\x08\x61\x63tivate\x18\x01 \x01(\x08\"V\n\x15\x45mergencyStopResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x1d\n\x15\x65mergency_stop_active\x18\x02 \x01(\x08\x12\r\n\x05\x65rror\x18\x03 \x01(\t\"\x1c\n\x1aGetThreatAssessmentRequest\"J\n\x1bGetThreatAssessmentResponse\x12+\n\x07threats\x18\x01 \x03(\x0b\x32\x1a.rws_tracking.ThreatTarget\"\xa9\x01\n\x0cThreatTarget\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12\x14\n\x0cthreat_score\x18\x02 \x01(\x02\x12\x16\n\x0e\x64istance_score\x18\x03 \x01(\x02\x12\x16\n\x0evelocity_score\x18\x04 \x01(\x02\x12\x13\n\x0b\x63lass_score\x18\x05 \x01(\x02\x12\x15\n\rheading_score\x18\x06 \x01(\x02\x12\x15\n\rpriority_rank\x18\x07 \x01(\x05\"m\n\x13\x46ireControlResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05state\x18\x02 \x01(\t\x12\x10\n\x08\x63\x61n_fire\x18\x03 \x01(\x08\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x13\n\x0boperator_id\x18\x05 \x01(\t\"!\n\nArmRequest\x12\x13\n\x0boperator_id\x18\x01 \x01(\t\"\x1d\n\x0bSafeRequest\x12\x0e\n\x06reason\x18\x01 \x01(\t\")\n\x12RequestFireRequest\x12\x13\n\x0boperator_id\x18\x01 \x01(\t\"\x16\n\x14GetFireStatusRequest\"/\n\x18OperatorHeartbeatRequest\x12\x13\n\x0boperator_id\x18\x01 \x01(\t\"<\n\x19OperatorHeartbeatResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x13\n\x0boperator_id\x18\x02 \x01(\t\"?\n\x16\x44\x65signateTargetRequest\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12\x13\n\x0boperator_id\x18\x02 \x01(\t\"\x19\n\x17\x43learDesignationRequest\"\x17\n\x15GetDesignationRequest\"e\n\x17\x44\x65signateTargetResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x10\n\x08track_id\x18\x02 \x01(\x05\x12\x12\n\ndesignated\x18\x03 \x01(\x08\x12\x18\n\x10\x63leared_track_id\x18\x04 \x01(\t\"S\n\x13StartMissionRequest\x12\x0f\n\x07profile\x18\x01 \x01(\t\x12\x15\n\rcamera_source\x18\x02 \x01(\x05\x12\x14\n\x0cmission_name\x18\x03 \x01(\t\"#\n\x11\x45ndMissionRequest\x12\x0e\n\x06reason\x18\x01 \x01(\t\"\x19\n\x17GetMissionStatusRequest\"\x8d\x01\n\x0fMissionResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\x12\r\n\x05\x65rror\x18\x04 \x01(\t\x12\x11\n\telapsed_s\x18\x05 \x01(\x01\x12\x13\n\x0breport_path\x18\x06 \x01(\t\x12\x12\n\nreport_url\x18\x07 \x01(\t\"\xa6\x01\n\x15MissionStatusResponse\x12\x0e\n\x06\x61\x63tive\x18\x01 \x01(\x08\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x0f\n\x07profile\x18\x03 \x01(\t\x12\x12\n\nstarted_at\x18\x04 \x01(\t\x12\x11\n\telapsed_s\x18\x05 \x01(\x01\x12\x17\n\x0ftargets_engaged\x18\x06 \x01(\x05\x12\x18\n\x10\x66ire_chain_state\x18\x07 \x01(\t\"\x97\x01\n\rSafetyZoneMsg\x12\x0f\n\x07zone_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63\x65nter_yaw_deg\x18\x02 \x01(\x01\x12\x18\n\x10\x63\x65nter_pitch_deg\x18\x03 \x01(\x01\x12\x12\n\nradius_deg\x18\x04 \x01(\x01\x12\x11\n\tzone_type\x18\x05 \x01(\t\x12\r\n\x05\x66ound\x18\x06 \x01(\x08\x12\r\n\x05\x65rror\x18\x07 \x01(\t\"\x12\n\x10ListZonesRequest\"?\n\x11ListZonesResponse\x12*\n\x05zones\x18\x01 \x03(\x0b\x32\x1b.rws_tracking.SafetyZoneMsg\"z\n\x0e\x41\x64\x64ZoneRequest\x12\x0f\n\x07zone_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63\x65nter_yaw_deg\x18\x02 \x01(\x01\x12\x18\n\x10\x63\x65nter_pitch_deg\x18\x03 \x01(\x01\x12\x12\n\nradius_deg\x18\x04 \x01(\x01\x12\x11\n\tzone_type\x18\x05 \x01(\t\"$\n\x11RemoveZoneRequest\x12\x0f\n\x07zone_id\x18\x01 \x01(\t\"!\n\x0eGetZoneRequest\x12\x0f\n\x07zone_id\x18\x01 \x01(\t\":\n\x0cZoneResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x0f\n\x07zone_id\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t2\xe4\x13\n\x0fTrackingService\x12R\n\x0bHealthCheck\x12 .rws_tracking.HealthCheckRequest\x1a!.rws_tracking.HealthCheckResponse\x12X\n\rStartTracking\x12\".rws_tracking.StartTrackingRequest\x1a#.rws_tracking.StartTrackingResponse\x12U\n\x0cStopTracking\x12!.rws_tracking.StopTrackingRequest\x1a\".rws_tracking.StopTrackingResponse\x12L\n\tGetStatus\x12\x1e.rws_tracking.GetStatusRequest\x1a\x1f.rws_tracking.GetStatusResponse\x12\x64\n\x11SetGimbalPosition\x12&.rws_tracking.SetGimbalPositionRequest\x1a\'.rws_tracking.SetGimbalPositionResponse\x12X\n\rSetGimbalRate\x12\".rws_tracking.SetGimbalRateRequest\x1a#.rws_tracking.SetGimbalRateResponse\x12U\n\x0cGetTelemetry\x12!.rws_tracking.GetTelemetryRequest\x1a\".rws_tracking.GetTelemetryResponse\x12U\n\x0cUpdateConfig\x12!.rws_tracking.UpdateConfigRequest\x1a\".rws_tracking.UpdateConfigResponse\x12O\n\x0cStreamStatus\x12!.rws_tracking.StreamStatusRequest\x1a\x1a.rws_tracking.StatusUpdate0\x01\x12M\n\x0cStreamFrames\x12!.rws_tracking.StreamFramesRequest\x1a\x18.rws_tracking.VideoFrame0\x01\x12^\n\x0fGetSafetyStatus\x12$.rws_tracking.GetSafetyStatusRequest\x1a%.rws_tracking.GetSafetyStatusResponse\x12^\n\x0fSetOperatorAuth\x12$.rws_tracking.SetOperatorAuthRequest\x1a%.rws_tracking.SetOperatorAuthResponse\x12X\n\rEmergencyStop\x12\".rws_tracking.EmergencyStopRequest\x1a#.rws_tracking.EmergencyStopResponse\x12j\n\x13GetThreatAssessment\x12(.rws_tracking.GetThreatAssessmentRequest\x1a).rws_tracking.GetThreatAssessmentResponse\x12H\n\tArmSystem\x12\x18.rws_tracking.ArmRequest\x1a!.rws_tracking.FireControlResponse\x12J\n\nSafeSystem\x12\x19.rws_tracking.SafeRequest\x1a!.rws_tracking.FireControlResponse\x12R\n\x0bRequestFire\x12 .rws_tracking.RequestFireRequest\x1a!.rws_tracking.FireControlResponse\x12V\n\rGetFireStatus\x12\".rws_tracking.GetFireStatusRequest\x1a!.rws_tracking.FireControlResponse\x12\x64\n\x11OperatorHeartbeat\x12&.rws_tracking.OperatorHeartbeatRequest\x1a\'.rws_tracking.OperatorHeartbeatResponse\x12^\n\x0f\x44\x65signateTarget\x12$.rws_tracking.DesignateTargetRequest\x1a%.rws_tracking.DesignateTargetResponse\x12`\n\x10\x43learDesignation\x12%.rws_tracking.ClearDesignationRequest\x1a%.rws_tracking.DesignateTargetResponse\x12\\\n\x0eGetDesignation\x12#.rws_tracking.GetDesignationRequest\x1a%.rws_tracking.DesignateTargetResponse\x12P\n\x0cStartMission\x12!.rws_tracking.StartMissionRequest\x1a\x1d.rws_tracking.MissionResponse\x12L\n\nEndMission\x12\x1f.rws_tracking.EndMissionRequest\x1a\x1d.rws_tracking.MissionResponse\x12^\n\x10GetMissionStatus\x12%.rws_tracking.GetMissionStatusRequest\x1a#.rws_tracking.MissionStatusResponse\x12L\n\tListZones\x12\x1e.rws_tracking.ListZonesRequest\x1a\x1f.rws_tracking.ListZonesResponse\x12\x43\n\x07\x41\x64\x64Zone\x12\x1c.rws_tracking.AddZoneRequest\x1a\x1a.rws_tracking.ZoneResponse\x12I\n\nRemoveZone\x12\x1f.rws_tracking.RemoveZoneRequest\x1a\x1a.rws_tracking.ZoneResponse\x12\x44\n\x07GetZone\x12\x1c.rws_tracking.GetZoneRequest\x1a\x1b.rws_tracking.SafetyZoneMsgb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
+    b'\n\x0etracking.proto\x12\x0crws_tracking"\x14\n\x12HealthCheckRequest"6\n\x13HealthCheckResponse\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\x0f\n\x07service\x18\x02 \x01(\t"R\n\x14StartTrackingRequest\x12\x13\n\tcamera_id\x18\x01 \x01(\x05H\x00\x12\x14\n\nvideo_path\x18\x02 \x01(\tH\x00\x42\x0f\n\rcamera_source"H\n\x15StartTrackingResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t"\x15\n\x13StopTrackingRequest"G\n\x14StopTrackingResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t"\x12\n\x10GetStatusRequest"\x9a\x01\n\x11GetStatusResponse\x12\x0f\n\x07running\x18\x01 \x01(\x08\x12\x13\n\x0b\x66rame_count\x18\x02 \x01(\x03\x12\x13\n\x0b\x65rror_count\x18\x03 \x01(\x03\x12\x12\n\nlast_error\x18\x04 \x01(\t\x12\x0b\n\x03\x66ps\x18\x05 \x01(\x01\x12)\n\x06gimbal\x18\x06 \x01(\x0b\x32\x19.rws_tracking.GimbalState"_\n\x0bGimbalState\x12\x0f\n\x07yaw_deg\x18\x01 \x01(\x01\x12\x11\n\tpitch_deg\x18\x02 \x01(\x01\x12\x14\n\x0cyaw_rate_dps\x18\x03 \x01(\x01\x12\x16\n\x0epitch_rate_dps\x18\x04 \x01(\x01">\n\x18SetGimbalPositionRequest\x12\x0f\n\x07yaw_deg\x18\x01 \x01(\x01\x12\x11\n\tpitch_deg\x18\x02 \x01(\x01"\x98\x01\n\x19SetGimbalPositionResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12,\n\x06target\x18\x03 \x01(\x0b\x32\x1c.rws_tracking.GimbalPosition\x12-\n\x07\x63urrent\x18\x04 \x01(\x0b\x32\x1c.rws_tracking.GimbalPosition"4\n\x0eGimbalPosition\x12\x0f\n\x07yaw_deg\x18\x01 \x01(\x01\x12\x11\n\tpitch_deg\x18\x02 \x01(\x01"D\n\x14SetGimbalRateRequest\x12\x14\n\x0cyaw_rate_dps\x18\x01 \x01(\x01\x12\x16\n\x0epitch_rate_dps\x18\x02 \x01(\x01"b\n\x15SetGimbalRateResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12)\n\x07\x63ommand\x18\x03 \x01(\x0b\x32\x18.rws_tracking.GimbalRate":\n\nGimbalRate\x12\x14\n\x0cyaw_rate_dps\x18\x01 \x01(\x01\x12\x16\n\x0epitch_rate_dps\x18\x02 \x01(\x01"\x15\n\x13GetTelemetryRequest"\xa8\x01\n\x14GetTelemetryResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12@\n\x07metrics\x18\x03 \x03(\x0b\x32/.rws_tracking.GetTelemetryResponse.MetricsEntry\x1a.\n\x0cMetricsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\x01:\x02\x38\x01"*\n\x13UpdateConfigRequest\x12\x13\n\x0b\x63onfig_json\x18\x01 \x01(\t"G\n\x14UpdateConfigResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t"-\n\x13StreamStatusRequest\x12\x16\n\x0eupdate_rate_hz\x18\x01 \x01(\x01"\x7f\n\x0cStatusUpdate\x12\x11\n\ttimestamp\x18\x01 \x01(\x01\x12\x0f\n\x07running\x18\x02 \x01(\x08\x12\x13\n\x0b\x66rame_count\x18\x03 \x01(\x03\x12\x0b\n\x03\x66ps\x18\x04 \x01(\x01\x12)\n\x06gimbal\x18\x05 \x01(\x0b\x32\x19.rws_tracking.GimbalState"d\n\x13StreamFramesRequest\x12\x0f\n\x07max_fps\x18\x01 \x01(\x01\x12\x14\n\x0cscale_factor\x18\x02 \x01(\x01\x12\x14\n\x0cjpeg_quality\x18\x03 \x01(\x05\x12\x10\n\x08\x61nnotate\x18\x04 \x01(\x08"\x96\x01\n\nVideoFrame\x12\x11\n\ttimestamp\x18\x01 \x01(\x01\x12\x11\n\tjpeg_data\x18\x02 \x01(\x0c\x12\r\n\x05width\x18\x03 \x01(\x05\x12\x0e\n\x06height\x18\x04 \x01(\x05\x12\x14\n\x0c\x66rame_number\x18\x05 \x01(\x03\x12-\n\x07targets\x18\x06 \x03(\x0b\x32\x1c.rws_tracking.DetectedTarget"\xb1\x01\n\x0e\x44\x65tectedTarget\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12\x10\n\x08\x63lass_id\x18\x02 \x01(\t\x12\x12\n\nconfidence\x18\x03 \x01(\x02\x12*\n\x04\x62\x62ox\x18\x04 \x01(\x0b\x32\x1c.rws_tracking.BoundingBoxMsg\x12\x12\n\nvelocity_x\x18\x05 \x01(\x02\x12\x12\n\nvelocity_y\x18\x06 \x01(\x02\x12\x13\n\x0bis_selected\x18\x07 \x01(\x08"<\n\x0e\x42oundingBoxMsg\x12\t\n\x01x\x18\x01 \x01(\x02\x12\t\n\x01y\x18\x02 \x01(\x02\x12\t\n\x01w\x18\x03 \x01(\x02\x12\t\n\x01h\x18\x04 \x01(\x02"\x18\n\x16GetSafetyStatusRequest"\x92\x01\n\x17GetSafetyStatusResponse\x12\x17\n\x0f\x66ire_authorized\x18\x01 \x01(\x08\x12\x16\n\x0e\x62locked_reason\x18\x02 \x01(\t\x12\x13\n\x0b\x61\x63tive_zone\x18\x03 \x01(\t\x12\x19\n\x11operator_override\x18\x04 \x01(\x08\x12\x16\n\x0e\x65mergency_stop\x18\x05 \x01(\x08",\n\x16SetOperatorAuthRequest\x12\x12\n\nauthorized\x18\x01 \x01(\x08"9\n\x17SetOperatorAuthResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t"(\n\x14\x45mergencyStopRequest\x12\x10\n\x08\x61\x63tivate\x18\x01 \x01(\x08"V\n\x15\x45mergencyStopResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x1d\n\x15\x65mergency_stop_active\x18\x02 \x01(\x08\x12\r\n\x05\x65rror\x18\x03 \x01(\t"\x1c\n\x1aGetThreatAssessmentRequest"J\n\x1bGetThreatAssessmentResponse\x12+\n\x07threats\x18\x01 \x03(\x0b\x32\x1a.rws_tracking.ThreatTarget"\xa9\x01\n\x0cThreatTarget\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12\x14\n\x0cthreat_score\x18\x02 \x01(\x02\x12\x16\n\x0e\x64istance_score\x18\x03 \x01(\x02\x12\x16\n\x0evelocity_score\x18\x04 \x01(\x02\x12\x13\n\x0b\x63lass_score\x18\x05 \x01(\x02\x12\x15\n\rheading_score\x18\x06 \x01(\x02\x12\x15\n\rpriority_rank\x18\x07 \x01(\x05"m\n\x13\x46ireControlResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05state\x18\x02 \x01(\t\x12\x10\n\x08\x63\x61n_fire\x18\x03 \x01(\x08\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x13\n\x0boperator_id\x18\x05 \x01(\t"!\n\nArmRequest\x12\x13\n\x0boperator_id\x18\x01 \x01(\t"\x1d\n\x0bSafeRequest\x12\x0e\n\x06reason\x18\x01 \x01(\t")\n\x12RequestFireRequest\x12\x13\n\x0boperator_id\x18\x01 \x01(\t"\x16\n\x14GetFireStatusRequest"/\n\x18OperatorHeartbeatRequest\x12\x13\n\x0boperator_id\x18\x01 \x01(\t"<\n\x19OperatorHeartbeatResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x13\n\x0boperator_id\x18\x02 \x01(\t"?\n\x16\x44\x65signateTargetRequest\x12\x10\n\x08track_id\x18\x01 \x01(\x05\x12\x13\n\x0boperator_id\x18\x02 \x01(\t"\x19\n\x17\x43learDesignationRequest"\x17\n\x15GetDesignationRequest"e\n\x17\x44\x65signateTargetResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x10\n\x08track_id\x18\x02 \x01(\x05\x12\x12\n\ndesignated\x18\x03 \x01(\x08\x12\x18\n\x10\x63leared_track_id\x18\x04 \x01(\t"S\n\x13StartMissionRequest\x12\x0f\n\x07profile\x18\x01 \x01(\t\x12\x15\n\rcamera_source\x18\x02 \x01(\x05\x12\x14\n\x0cmission_name\x18\x03 \x01(\t"#\n\x11\x45ndMissionRequest\x12\x0e\n\x06reason\x18\x01 \x01(\t"\x19\n\x17GetMissionStatusRequest"\x8d\x01\n\x0fMissionResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\x12\r\n\x05\x65rror\x18\x04 \x01(\t\x12\x11\n\telapsed_s\x18\x05 \x01(\x01\x12\x13\n\x0breport_path\x18\x06 \x01(\t\x12\x12\n\nreport_url\x18\x07 \x01(\t"\xa6\x01\n\x15MissionStatusResponse\x12\x0e\n\x06\x61\x63tive\x18\x01 \x01(\x08\x12\x12\n\nsession_id\x18\x02 \x01(\t\x12\x0f\n\x07profile\x18\x03 \x01(\t\x12\x12\n\nstarted_at\x18\x04 \x01(\t\x12\x11\n\telapsed_s\x18\x05 \x01(\x01\x12\x17\n\x0ftargets_engaged\x18\x06 \x01(\x05\x12\x18\n\x10\x66ire_chain_state\x18\x07 \x01(\t"\x97\x01\n\rSafetyZoneMsg\x12\x0f\n\x07zone_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63\x65nter_yaw_deg\x18\x02 \x01(\x01\x12\x18\n\x10\x63\x65nter_pitch_deg\x18\x03 \x01(\x01\x12\x12\n\nradius_deg\x18\x04 \x01(\x01\x12\x11\n\tzone_type\x18\x05 \x01(\t\x12\r\n\x05\x66ound\x18\x06 \x01(\x08\x12\r\n\x05\x65rror\x18\x07 \x01(\t"\x12\n\x10ListZonesRequest"?\n\x11ListZonesResponse\x12*\n\x05zones\x18\x01 \x03(\x0b\x32\x1b.rws_tracking.SafetyZoneMsg"z\n\x0e\x41\x64\x64ZoneRequest\x12\x0f\n\x07zone_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63\x65nter_yaw_deg\x18\x02 \x01(\x01\x12\x18\n\x10\x63\x65nter_pitch_deg\x18\x03 \x01(\x01\x12\x12\n\nradius_deg\x18\x04 \x01(\x01\x12\x11\n\tzone_type\x18\x05 \x01(\t"$\n\x11RemoveZoneRequest\x12\x0f\n\x07zone_id\x18\x01 \x01(\t"!\n\x0eGetZoneRequest\x12\x0f\n\x07zone_id\x18\x01 \x01(\t":\n\x0cZoneResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x0f\n\x07zone_id\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t2\xe4\x13\n\x0fTrackingService\x12R\n\x0bHealthCheck\x12 .rws_tracking.HealthCheckRequest\x1a!.rws_tracking.HealthCheckResponse\x12X\n\rStartTracking\x12".rws_tracking.StartTrackingRequest\x1a#.rws_tracking.StartTrackingResponse\x12U\n\x0cStopTracking\x12!.rws_tracking.StopTrackingRequest\x1a".rws_tracking.StopTrackingResponse\x12L\n\tGetStatus\x12\x1e.rws_tracking.GetStatusRequest\x1a\x1f.rws_tracking.GetStatusResponse\x12\x64\n\x11SetGimbalPosition\x12&.rws_tracking.SetGimbalPositionRequest\x1a\'.rws_tracking.SetGimbalPositionResponse\x12X\n\rSetGimbalRate\x12".rws_tracking.SetGimbalRateRequest\x1a#.rws_tracking.SetGimbalRateResponse\x12U\n\x0cGetTelemetry\x12!.rws_tracking.GetTelemetryRequest\x1a".rws_tracking.GetTelemetryResponse\x12U\n\x0cUpdateConfig\x12!.rws_tracking.UpdateConfigRequest\x1a".rws_tracking.UpdateConfigResponse\x12O\n\x0cStreamStatus\x12!.rws_tracking.StreamStatusRequest\x1a\x1a.rws_tracking.StatusUpdate0\x01\x12M\n\x0cStreamFrames\x12!.rws_tracking.StreamFramesRequest\x1a\x18.rws_tracking.VideoFrame0\x01\x12^\n\x0fGetSafetyStatus\x12$.rws_tracking.GetSafetyStatusRequest\x1a%.rws_tracking.GetSafetyStatusResponse\x12^\n\x0fSetOperatorAuth\x12$.rws_tracking.SetOperatorAuthRequest\x1a%.rws_tracking.SetOperatorAuthResponse\x12X\n\rEmergencyStop\x12".rws_tracking.EmergencyStopRequest\x1a#.rws_tracking.EmergencyStopResponse\x12j\n\x13GetThreatAssessment\x12(.rws_tracking.GetThreatAssessmentRequest\x1a).rws_tracking.GetThreatAssessmentResponse\x12H\n\tArmSystem\x12\x18.rws_tracking.ArmRequest\x1a!.rws_tracking.FireControlResponse\x12J\n\nSafeSystem\x12\x19.rws_tracking.SafeRequest\x1a!.rws_tracking.FireControlResponse\x12R\n\x0bRequestFire\x12 .rws_tracking.RequestFireRequest\x1a!.rws_tracking.FireControlResponse\x12V\n\rGetFireStatus\x12".rws_tracking.GetFireStatusRequest\x1a!.rws_tracking.FireControlResponse\x12\x64\n\x11OperatorHeartbeat\x12&.rws_tracking.OperatorHeartbeatRequest\x1a\'.rws_tracking.OperatorHeartbeatResponse\x12^\n\x0f\x44\x65signateTarget\x12$.rws_tracking.DesignateTargetRequest\x1a%.rws_tracking.DesignateTargetResponse\x12`\n\x10\x43learDesignation\x12%.rws_tracking.ClearDesignationRequest\x1a%.rws_tracking.DesignateTargetResponse\x12\\\n\x0eGetDesignation\x12#.rws_tracking.GetDesignationRequest\x1a%.rws_tracking.DesignateTargetResponse\x12P\n\x0cStartMission\x12!.rws_tracking.StartMissionRequest\x1a\x1d.rws_tracking.MissionResponse\x12L\n\nEndMission\x12\x1f.rws_tracking.EndMissionRequest\x1a\x1d.rws_tracking.MissionResponse\x12^\n\x10GetMissionStatus\x12%.rws_tracking.GetMissionStatusRequest\x1a#.rws_tracking.MissionStatusResponse\x12L\n\tListZones\x12\x1e.rws_tracking.ListZonesRequest\x1a\x1f.rws_tracking.ListZonesResponse\x12\x43\n\x07\x41\x64\x64Zone\x12\x1c.rws_tracking.AddZoneRequest\x1a\x1a.rws_tracking.ZoneResponse\x12I\n\nRemoveZone\x12\x1f.rws_tracking.RemoveZoneRequest\x1a\x1a.rws_tracking.ZoneResponse\x12\x44\n\x07GetZone\x12\x1c.rws_tracking.GetZoneRequest\x1a\x1b.rws_tracking.SafetyZoneMsgb\x06proto3'
+)
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tracking_pb2', _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "tracking_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-  DESCRIPTOR._loaded_options = None
-  _globals['_GETTELEMETRYRESPONSE_METRICSENTRY']._loaded_options = None
-  _globals['_GETTELEMETRYRESPONSE_METRICSENTRY']._serialized_options = b'8\001'
-  _globals['_HEALTHCHECKREQUEST']._serialized_start=32
-  _globals['_HEALTHCHECKREQUEST']._serialized_end=52
-  _globals['_HEALTHCHECKRESPONSE']._serialized_start=54
-  _globals['_HEALTHCHECKRESPONSE']._serialized_end=108
-  _globals['_STARTTRACKINGREQUEST']._serialized_start=110
-  _globals['_STARTTRACKINGREQUEST']._serialized_end=192
-  _globals['_STARTTRACKINGRESPONSE']._serialized_start=194
-  _globals['_STARTTRACKINGRESPONSE']._serialized_end=266
-  _globals['_STOPTRACKINGREQUEST']._serialized_start=268
-  _globals['_STOPTRACKINGREQUEST']._serialized_end=289
-  _globals['_STOPTRACKINGRESPONSE']._serialized_start=291
-  _globals['_STOPTRACKINGRESPONSE']._serialized_end=362
-  _globals['_GETSTATUSREQUEST']._serialized_start=364
-  _globals['_GETSTATUSREQUEST']._serialized_end=382
-  _globals['_GETSTATUSRESPONSE']._serialized_start=385
-  _globals['_GETSTATUSRESPONSE']._serialized_end=539
-  _globals['_GIMBALSTATE']._serialized_start=541
-  _globals['_GIMBALSTATE']._serialized_end=636
-  _globals['_SETGIMBALPOSITIONREQUEST']._serialized_start=638
-  _globals['_SETGIMBALPOSITIONREQUEST']._serialized_end=700
-  _globals['_SETGIMBALPOSITIONRESPONSE']._serialized_start=703
-  _globals['_SETGIMBALPOSITIONRESPONSE']._serialized_end=855
-  _globals['_GIMBALPOSITION']._serialized_start=857
-  _globals['_GIMBALPOSITION']._serialized_end=909
-  _globals['_SETGIMBALRATEREQUEST']._serialized_start=911
-  _globals['_SETGIMBALRATEREQUEST']._serialized_end=979
-  _globals['_SETGIMBALRATERESPONSE']._serialized_start=981
-  _globals['_SETGIMBALRATERESPONSE']._serialized_end=1079
-  _globals['_GIMBALRATE']._serialized_start=1081
-  _globals['_GIMBALRATE']._serialized_end=1139
-  _globals['_GETTELEMETRYREQUEST']._serialized_start=1141
-  _globals['_GETTELEMETRYREQUEST']._serialized_end=1162
-  _globals['_GETTELEMETRYRESPONSE']._serialized_start=1165
-  _globals['_GETTELEMETRYRESPONSE']._serialized_end=1333
-  _globals['_GETTELEMETRYRESPONSE_METRICSENTRY']._serialized_start=1287
-  _globals['_GETTELEMETRYRESPONSE_METRICSENTRY']._serialized_end=1333
-  _globals['_UPDATECONFIGREQUEST']._serialized_start=1335
-  _globals['_UPDATECONFIGREQUEST']._serialized_end=1377
-  _globals['_UPDATECONFIGRESPONSE']._serialized_start=1379
-  _globals['_UPDATECONFIGRESPONSE']._serialized_end=1450
-  _globals['_STREAMSTATUSREQUEST']._serialized_start=1452
-  _globals['_STREAMSTATUSREQUEST']._serialized_end=1497
-  _globals['_STATUSUPDATE']._serialized_start=1499
-  _globals['_STATUSUPDATE']._serialized_end=1626
-  _globals['_STREAMFRAMESREQUEST']._serialized_start=1628
-  _globals['_STREAMFRAMESREQUEST']._serialized_end=1728
-  _globals['_VIDEOFRAME']._serialized_start=1731
-  _globals['_VIDEOFRAME']._serialized_end=1881
-  _globals['_DETECTEDTARGET']._serialized_start=1884
-  _globals['_DETECTEDTARGET']._serialized_end=2061
-  _globals['_BOUNDINGBOXMSG']._serialized_start=2063
-  _globals['_BOUNDINGBOXMSG']._serialized_end=2123
-  _globals['_GETSAFETYSTATUSREQUEST']._serialized_start=2125
-  _globals['_GETSAFETYSTATUSREQUEST']._serialized_end=2149
-  _globals['_GETSAFETYSTATUSRESPONSE']._serialized_start=2152
-  _globals['_GETSAFETYSTATUSRESPONSE']._serialized_end=2298
-  _globals['_SETOPERATORAUTHREQUEST']._serialized_start=2300
-  _globals['_SETOPERATORAUTHREQUEST']._serialized_end=2344
-  _globals['_SETOPERATORAUTHRESPONSE']._serialized_start=2346
-  _globals['_SETOPERATORAUTHRESPONSE']._serialized_end=2403
-  _globals['_EMERGENCYSTOPREQUEST']._serialized_start=2405
-  _globals['_EMERGENCYSTOPREQUEST']._serialized_end=2445
-  _globals['_EMERGENCYSTOPRESPONSE']._serialized_start=2447
-  _globals['_EMERGENCYSTOPRESPONSE']._serialized_end=2533
-  _globals['_GETTHREATASSESSMENTREQUEST']._serialized_start=2535
-  _globals['_GETTHREATASSESSMENTREQUEST']._serialized_end=2563
-  _globals['_GETTHREATASSESSMENTRESPONSE']._serialized_start=2565
-  _globals['_GETTHREATASSESSMENTRESPONSE']._serialized_end=2639
-  _globals['_THREATTARGET']._serialized_start=2642
-  _globals['_THREATTARGET']._serialized_end=2811
-  _globals['_FIRECONTROLRESPONSE']._serialized_start=2813
-  _globals['_FIRECONTROLRESPONSE']._serialized_end=2922
-  _globals['_ARMREQUEST']._serialized_start=2924
-  _globals['_ARMREQUEST']._serialized_end=2957
-  _globals['_SAFEREQUEST']._serialized_start=2959
-  _globals['_SAFEREQUEST']._serialized_end=2988
-  _globals['_REQUESTFIREREQUEST']._serialized_start=2990
-  _globals['_REQUESTFIREREQUEST']._serialized_end=3031
-  _globals['_GETFIRESTATUSREQUEST']._serialized_start=3033
-  _globals['_GETFIRESTATUSREQUEST']._serialized_end=3055
-  _globals['_OPERATORHEARTBEATREQUEST']._serialized_start=3057
-  _globals['_OPERATORHEARTBEATREQUEST']._serialized_end=3104
-  _globals['_OPERATORHEARTBEATRESPONSE']._serialized_start=3106
-  _globals['_OPERATORHEARTBEATRESPONSE']._serialized_end=3166
-  _globals['_DESIGNATETARGETREQUEST']._serialized_start=3168
-  _globals['_DESIGNATETARGETREQUEST']._serialized_end=3231
-  _globals['_CLEARDESIGNATIONREQUEST']._serialized_start=3233
-  _globals['_CLEARDESIGNATIONREQUEST']._serialized_end=3258
-  _globals['_GETDESIGNATIONREQUEST']._serialized_start=3260
-  _globals['_GETDESIGNATIONREQUEST']._serialized_end=3283
-  _globals['_DESIGNATETARGETRESPONSE']._serialized_start=3285
-  _globals['_DESIGNATETARGETRESPONSE']._serialized_end=3386
-  _globals['_STARTMISSIONREQUEST']._serialized_start=3388
-  _globals['_STARTMISSIONREQUEST']._serialized_end=3471
-  _globals['_ENDMISSIONREQUEST']._serialized_start=3473
-  _globals['_ENDMISSIONREQUEST']._serialized_end=3508
-  _globals['_GETMISSIONSTATUSREQUEST']._serialized_start=3510
-  _globals['_GETMISSIONSTATUSREQUEST']._serialized_end=3535
-  _globals['_MISSIONRESPONSE']._serialized_start=3538
-  _globals['_MISSIONRESPONSE']._serialized_end=3679
-  _globals['_MISSIONSTATUSRESPONSE']._serialized_start=3682
-  _globals['_MISSIONSTATUSRESPONSE']._serialized_end=3848
-  _globals['_SAFETYZONEMSG']._serialized_start=3851
-  _globals['_SAFETYZONEMSG']._serialized_end=4002
-  _globals['_LISTZONESREQUEST']._serialized_start=4004
-  _globals['_LISTZONESREQUEST']._serialized_end=4022
-  _globals['_LISTZONESRESPONSE']._serialized_start=4024
-  _globals['_LISTZONESRESPONSE']._serialized_end=4087
-  _globals['_ADDZONEREQUEST']._serialized_start=4089
-  _globals['_ADDZONEREQUEST']._serialized_end=4211
-  _globals['_REMOVEZONEREQUEST']._serialized_start=4213
-  _globals['_REMOVEZONEREQUEST']._serialized_end=4249
-  _globals['_GETZONEREQUEST']._serialized_start=4251
-  _globals['_GETZONEREQUEST']._serialized_end=4284
-  _globals['_ZONERESPONSE']._serialized_start=4286
-  _globals['_ZONERESPONSE']._serialized_end=4344
-  _globals['_TRACKINGSERVICE']._serialized_start=4347
-  _globals['_TRACKINGSERVICE']._serialized_end=6879
+    DESCRIPTOR._loaded_options = None
+    _globals["_GETTELEMETRYRESPONSE_METRICSENTRY"]._loaded_options = None
+    _globals["_GETTELEMETRYRESPONSE_METRICSENTRY"]._serialized_options = b"8\001"
+    _globals["_HEALTHCHECKREQUEST"]._serialized_start = 32
+    _globals["_HEALTHCHECKREQUEST"]._serialized_end = 52
+    _globals["_HEALTHCHECKRESPONSE"]._serialized_start = 54
+    _globals["_HEALTHCHECKRESPONSE"]._serialized_end = 108
+    _globals["_STARTTRACKINGREQUEST"]._serialized_start = 110
+    _globals["_STARTTRACKINGREQUEST"]._serialized_end = 192
+    _globals["_STARTTRACKINGRESPONSE"]._serialized_start = 194
+    _globals["_STARTTRACKINGRESPONSE"]._serialized_end = 266
+    _globals["_STOPTRACKINGREQUEST"]._serialized_start = 268
+    _globals["_STOPTRACKINGREQUEST"]._serialized_end = 289
+    _globals["_STOPTRACKINGRESPONSE"]._serialized_start = 291
+    _globals["_STOPTRACKINGRESPONSE"]._serialized_end = 362
+    _globals["_GETSTATUSREQUEST"]._serialized_start = 364
+    _globals["_GETSTATUSREQUEST"]._serialized_end = 382
+    _globals["_GETSTATUSRESPONSE"]._serialized_start = 385
+    _globals["_GETSTATUSRESPONSE"]._serialized_end = 539
+    _globals["_GIMBALSTATE"]._serialized_start = 541
+    _globals["_GIMBALSTATE"]._serialized_end = 636
+    _globals["_SETGIMBALPOSITIONREQUEST"]._serialized_start = 638
+    _globals["_SETGIMBALPOSITIONREQUEST"]._serialized_end = 700
+    _globals["_SETGIMBALPOSITIONRESPONSE"]._serialized_start = 703
+    _globals["_SETGIMBALPOSITIONRESPONSE"]._serialized_end = 855
+    _globals["_GIMBALPOSITION"]._serialized_start = 857
+    _globals["_GIMBALPOSITION"]._serialized_end = 909
+    _globals["_SETGIMBALRATEREQUEST"]._serialized_start = 911
+    _globals["_SETGIMBALRATEREQUEST"]._serialized_end = 979
+    _globals["_SETGIMBALRATERESPONSE"]._serialized_start = 981
+    _globals["_SETGIMBALRATERESPONSE"]._serialized_end = 1079
+    _globals["_GIMBALRATE"]._serialized_start = 1081
+    _globals["_GIMBALRATE"]._serialized_end = 1139
+    _globals["_GETTELEMETRYREQUEST"]._serialized_start = 1141
+    _globals["_GETTELEMETRYREQUEST"]._serialized_end = 1162
+    _globals["_GETTELEMETRYRESPONSE"]._serialized_start = 1165
+    _globals["_GETTELEMETRYRESPONSE"]._serialized_end = 1333
+    _globals["_GETTELEMETRYRESPONSE_METRICSENTRY"]._serialized_start = 1287
+    _globals["_GETTELEMETRYRESPONSE_METRICSENTRY"]._serialized_end = 1333
+    _globals["_UPDATECONFIGREQUEST"]._serialized_start = 1335
+    _globals["_UPDATECONFIGREQUEST"]._serialized_end = 1377
+    _globals["_UPDATECONFIGRESPONSE"]._serialized_start = 1379
+    _globals["_UPDATECONFIGRESPONSE"]._serialized_end = 1450
+    _globals["_STREAMSTATUSREQUEST"]._serialized_start = 1452
+    _globals["_STREAMSTATUSREQUEST"]._serialized_end = 1497
+    _globals["_STATUSUPDATE"]._serialized_start = 1499
+    _globals["_STATUSUPDATE"]._serialized_end = 1626
+    _globals["_STREAMFRAMESREQUEST"]._serialized_start = 1628
+    _globals["_STREAMFRAMESREQUEST"]._serialized_end = 1728
+    _globals["_VIDEOFRAME"]._serialized_start = 1731
+    _globals["_VIDEOFRAME"]._serialized_end = 1881
+    _globals["_DETECTEDTARGET"]._serialized_start = 1884
+    _globals["_DETECTEDTARGET"]._serialized_end = 2061
+    _globals["_BOUNDINGBOXMSG"]._serialized_start = 2063
+    _globals["_BOUNDINGBOXMSG"]._serialized_end = 2123
+    _globals["_GETSAFETYSTATUSREQUEST"]._serialized_start = 2125
+    _globals["_GETSAFETYSTATUSREQUEST"]._serialized_end = 2149
+    _globals["_GETSAFETYSTATUSRESPONSE"]._serialized_start = 2152
+    _globals["_GETSAFETYSTATUSRESPONSE"]._serialized_end = 2298
+    _globals["_SETOPERATORAUTHREQUEST"]._serialized_start = 2300
+    _globals["_SETOPERATORAUTHREQUEST"]._serialized_end = 2344
+    _globals["_SETOPERATORAUTHRESPONSE"]._serialized_start = 2346
+    _globals["_SETOPERATORAUTHRESPONSE"]._serialized_end = 2403
+    _globals["_EMERGENCYSTOPREQUEST"]._serialized_start = 2405
+    _globals["_EMERGENCYSTOPREQUEST"]._serialized_end = 2445
+    _globals["_EMERGENCYSTOPRESPONSE"]._serialized_start = 2447
+    _globals["_EMERGENCYSTOPRESPONSE"]._serialized_end = 2533
+    _globals["_GETTHREATASSESSMENTREQUEST"]._serialized_start = 2535
+    _globals["_GETTHREATASSESSMENTREQUEST"]._serialized_end = 2563
+    _globals["_GETTHREATASSESSMENTRESPONSE"]._serialized_start = 2565
+    _globals["_GETTHREATASSESSMENTRESPONSE"]._serialized_end = 2639
+    _globals["_THREATTARGET"]._serialized_start = 2642
+    _globals["_THREATTARGET"]._serialized_end = 2811
+    _globals["_FIRECONTROLRESPONSE"]._serialized_start = 2813
+    _globals["_FIRECONTROLRESPONSE"]._serialized_end = 2922
+    _globals["_ARMREQUEST"]._serialized_start = 2924
+    _globals["_ARMREQUEST"]._serialized_end = 2957
+    _globals["_SAFEREQUEST"]._serialized_start = 2959
+    _globals["_SAFEREQUEST"]._serialized_end = 2988
+    _globals["_REQUESTFIREREQUEST"]._serialized_start = 2990
+    _globals["_REQUESTFIREREQUEST"]._serialized_end = 3031
+    _globals["_GETFIRESTATUSREQUEST"]._serialized_start = 3033
+    _globals["_GETFIRESTATUSREQUEST"]._serialized_end = 3055
+    _globals["_OPERATORHEARTBEATREQUEST"]._serialized_start = 3057
+    _globals["_OPERATORHEARTBEATREQUEST"]._serialized_end = 3104
+    _globals["_OPERATORHEARTBEATRESPONSE"]._serialized_start = 3106
+    _globals["_OPERATORHEARTBEATRESPONSE"]._serialized_end = 3166
+    _globals["_DESIGNATETARGETREQUEST"]._serialized_start = 3168
+    _globals["_DESIGNATETARGETREQUEST"]._serialized_end = 3231
+    _globals["_CLEARDESIGNATIONREQUEST"]._serialized_start = 3233
+    _globals["_CLEARDESIGNATIONREQUEST"]._serialized_end = 3258
+    _globals["_GETDESIGNATIONREQUEST"]._serialized_start = 3260
+    _globals["_GETDESIGNATIONREQUEST"]._serialized_end = 3283
+    _globals["_DESIGNATETARGETRESPONSE"]._serialized_start = 3285
+    _globals["_DESIGNATETARGETRESPONSE"]._serialized_end = 3386
+    _globals["_STARTMISSIONREQUEST"]._serialized_start = 3388
+    _globals["_STARTMISSIONREQUEST"]._serialized_end = 3471
+    _globals["_ENDMISSIONREQUEST"]._serialized_start = 3473
+    _globals["_ENDMISSIONREQUEST"]._serialized_end = 3508
+    _globals["_GETMISSIONSTATUSREQUEST"]._serialized_start = 3510
+    _globals["_GETMISSIONSTATUSREQUEST"]._serialized_end = 3535
+    _globals["_MISSIONRESPONSE"]._serialized_start = 3538
+    _globals["_MISSIONRESPONSE"]._serialized_end = 3679
+    _globals["_MISSIONSTATUSRESPONSE"]._serialized_start = 3682
+    _globals["_MISSIONSTATUSRESPONSE"]._serialized_end = 3848
+    _globals["_SAFETYZONEMSG"]._serialized_start = 3851
+    _globals["_SAFETYZONEMSG"]._serialized_end = 4002
+    _globals["_LISTZONESREQUEST"]._serialized_start = 4004
+    _globals["_LISTZONESREQUEST"]._serialized_end = 4022
+    _globals["_LISTZONESRESPONSE"]._serialized_start = 4024
+    _globals["_LISTZONESRESPONSE"]._serialized_end = 4087
+    _globals["_ADDZONEREQUEST"]._serialized_start = 4089
+    _globals["_ADDZONEREQUEST"]._serialized_end = 4211
+    _globals["_REMOVEZONEREQUEST"]._serialized_start = 4213
+    _globals["_REMOVEZONEREQUEST"]._serialized_end = 4249
+    _globals["_GETZONEREQUEST"]._serialized_start = 4251
+    _globals["_GETZONEREQUEST"]._serialized_end = 4284
+    _globals["_ZONERESPONSE"]._serialized_start = 4286
+    _globals["_ZONERESPONSE"]._serialized_end = 4344
+    _globals["_TRACKINGSERVICE"]._serialized_start = 4347
+    _globals["_TRACKINGSERVICE"]._serialized_end = 6879
 # @@protoc_insertion_point(module_scope)

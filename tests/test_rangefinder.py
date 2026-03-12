@@ -22,7 +22,9 @@ class TestSimulatedRangefinder:
             failure_rate=0.0,
         )
         return SimulatedRangefinder(
-            config=cfg, camera_fy=965.0, target_height_m=1.8,
+            config=cfg,
+            camera_fy=965.0,
+            target_height_m=1.8,
         )
 
     def test_measure_without_target_returns_invalid(self, rangefinder: SimulatedRangefinder):
@@ -47,7 +49,9 @@ class TestSimulatedRangefinder:
         assert last.valid
 
     def test_max_range_clamp(self):
-        cfg = SimulatedRangefinderConfig(max_range_m=50.0, min_range_m=1.0, failure_rate=0.0, noise_std_m=0.0)
+        cfg = SimulatedRangefinderConfig(
+            max_range_m=50.0, min_range_m=1.0, failure_rate=0.0, noise_std_m=0.0
+        )
         rf = SimulatedRangefinder(config=cfg, camera_fy=965.0, target_height_m=1.8)
         tiny_bbox = BoundingBox(x=500, y=300, w=10, h=2)
         rf.set_target_bbox(tiny_bbox)
@@ -60,7 +64,9 @@ class TestDistanceFusion:
     @pytest.fixture
     def fusion(self) -> DistanceFusion:
         return DistanceFusion(
-            max_laser_age_s=0.5, camera_fy=965.0, target_height_m=1.8,
+            max_laser_age_s=0.5,
+            camera_fy=965.0,
+            target_height_m=1.8,
         )
 
     def test_laser_preferred_over_bbox(self, fusion: DistanceFusion):

@@ -164,9 +164,7 @@ def _nested_dict_to_config(data: dict[str, Any]) -> SystemConfig:
 
     mpc_d = ctrl_d.pop("mpc", {})
     _warn_unknown_keys("controller.mpc", mpc_d, MPCConfig)
-    mpc = MPCConfig(
-        **{k: v for k, v in mpc_d.items() if k in MPCConfig.__dataclass_fields__}
-    )
+    mpc = MPCConfig(**{k: v for k, v in mpc_d.items() if k in MPCConfig.__dataclass_fields__})
 
     _warn_unknown_keys("controller.yaw_pid", yaw_d, PIDConfig)
     _warn_unknown_keys("controller.pitch_pid", pitch_d, PIDConfig)
@@ -186,7 +184,8 @@ def _nested_dict_to_config(data: dict[str, Any]) -> SystemConfig:
             k: v
             for k, v in ctrl_d.items()
             if k in GimbalControllerConfig.__dataclass_fields__
-            and k not in ("yaw_pid", "pitch_pid", "scan_pattern", "ballistic", "adaptive_pid", "mpc")
+            and k
+            not in ("yaw_pid", "pitch_pid", "scan_pattern", "ballistic", "adaptive_pid", "mpc")
         },
     )
 

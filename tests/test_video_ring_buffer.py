@@ -22,6 +22,7 @@ from src.rws_tracking.telemetry.video_ring_buffer import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _frame(val: int = 128) -> np.ndarray:
     """Return a 640x480 BGR uint8 frame filled with *val*."""
     return np.full((480, 640, 3), val, dtype=np.uint8)
@@ -39,6 +40,7 @@ def _push_n(buf: VideoRingBuffer, n: int, start_ts: float = 0.0, dt: float = 1.0
 # ---------------------------------------------------------------------------
 # Basic construction and push
 # ---------------------------------------------------------------------------
+
 
 class TestBasicBehavior:
     def test_empty_buffer_len(self):
@@ -89,6 +91,7 @@ class TestBasicBehavior:
 # save_clip — empty-buffer early exit
 # ---------------------------------------------------------------------------
 
+
 class TestSaveClipEmptyBuffer:
     def test_returns_none_when_empty(self, tmp_path):
         buf = VideoRingBuffer(output_dir=tmp_path, fps=30.0)
@@ -100,6 +103,7 @@ class TestSaveClipEmptyBuffer:
 # save_clip — JPEG fallback (no cv2.VideoWriter required)
 # ---------------------------------------------------------------------------
 
+
 class TestSaveClipJpegFallback:
     """Force the JPEG fallback by monkeypatching _try_write_mp4."""
 
@@ -109,8 +113,11 @@ class TestSaveClipJpegFallback:
             lambda *a, **kw: False,
         )
         buf = VideoRingBuffer(
-            duration_s=5.0, pre_event_s=1.0, post_event_s=0.1,
-            output_dir=tmp_path, fps=10.0,
+            duration_s=5.0,
+            pre_event_s=1.0,
+            post_event_s=0.1,
+            output_dir=tmp_path,
+            fps=10.0,
         )
         n = 20
         _push_n(buf, n, start_ts=0.0, dt=0.1)
@@ -134,8 +141,11 @@ class TestSaveClipJpegFallback:
             lambda *a, **kw: False,
         )
         buf = VideoRingBuffer(
-            duration_s=5.0, pre_event_s=2.0, post_event_s=0.1,
-            output_dir=tmp_path, fps=10.0,
+            duration_s=5.0,
+            pre_event_s=2.0,
+            post_event_s=0.1,
+            output_dir=tmp_path,
+            fps=10.0,
         )
         _push_n(buf, 30, start_ts=0.0, dt=0.1)
 
@@ -155,6 +165,7 @@ class TestSaveClipJpegFallback:
 # ---------------------------------------------------------------------------
 # save_clip — MP4 path (mocked VideoWriter)
 # ---------------------------------------------------------------------------
+
 
 class TestSaveClipMp4:
     """Test the MP4 write path using a mock cv2 module."""
@@ -182,11 +193,15 @@ class TestSaveClipMp4:
                 return _MockWriter()
 
         import src.rws_tracking.telemetry.video_ring_buffer as vrb_module
+
         monkeypatch.setattr(vrb_module, "_try_write_mp4", lambda frames, path, w, h, fps: True)
 
         buf = VideoRingBuffer(
-            duration_s=5.0, pre_event_s=1.0, post_event_s=0.1,
-            output_dir=tmp_path, fps=10.0,
+            duration_s=5.0,
+            pre_event_s=1.0,
+            post_event_s=0.1,
+            output_dir=tmp_path,
+            fps=10.0,
         )
         _push_n(buf, 20, start_ts=0.0, dt=0.1)
 
@@ -198,6 +213,7 @@ class TestSaveClipMp4:
 # ---------------------------------------------------------------------------
 # Return path naming
 # ---------------------------------------------------------------------------
+
 
 class TestClipNaming:
     def test_stem_with_track_id(self):
@@ -221,8 +237,11 @@ class TestClipNaming:
             lambda *a, **kw: True,
         )
         buf = VideoRingBuffer(
-            duration_s=5.0, pre_event_s=1.0, post_event_s=0.0,
-            output_dir=tmp_path, fps=10.0,
+            duration_s=5.0,
+            pre_event_s=1.0,
+            post_event_s=0.0,
+            output_dir=tmp_path,
+            fps=10.0,
         )
         _push_n(buf, 15, start_ts=0.0, dt=0.1)
         out = buf.save_clip(event_ts=1.0, event_label="fire", track_id=1)
@@ -236,6 +255,7 @@ class TestClipNaming:
 # Pre-event window filtering
 # ---------------------------------------------------------------------------
 
+
 class TestPreEventWindow:
     def test_only_pre_event_frames_collected(self, tmp_path, monkeypatch):
         """Frames older than pre_event_s should NOT be included."""
@@ -245,8 +265,11 @@ class TestPreEventWindow:
             collected.extend(frames)
 
         buf = VideoRingBuffer(
-            duration_s=10.0, pre_event_s=1.0, post_event_s=0.0,
-            output_dir=tmp_path, fps=10.0,
+            duration_s=10.0,
+            pre_event_s=1.0,
+            post_event_s=0.0,
+            output_dir=tmp_path,
+            fps=10.0,
         )
         # Patch _write so we can inspect which frames were collected.
         monkeypatch.setattr(buf, "_write", fake_write)
@@ -268,6 +291,7 @@ class TestPreEventWindow:
 # Post-event window
 # ---------------------------------------------------------------------------
 
+
 class TestPostEventWindow:
     def test_post_event_frames_included(self, tmp_path, monkeypatch):
         """Frames pushed AFTER save_clip() is called should appear in the clip."""
@@ -277,8 +301,11 @@ class TestPostEventWindow:
             collected.extend(frames)
 
         buf = VideoRingBuffer(
-            duration_s=10.0, pre_event_s=0.5, post_event_s=0.5,
-            output_dir=tmp_path, fps=10.0,
+            duration_s=10.0,
+            pre_event_s=0.5,
+            post_event_s=0.5,
+            output_dir=tmp_path,
+            fps=10.0,
         )
         monkeypatch.setattr(buf, "_write", fake_write)
 
@@ -305,13 +332,17 @@ class TestPostEventWindow:
 # _parse_timestamp_from_filename
 # ---------------------------------------------------------------------------
 
+
 class TestParseTimestamp:
-    @pytest.mark.parametrize("name,expected", [
-        ("fire_tid3_1708123456_789.mp4", 1708123456.789),
-        ("fire_1708000000_000.mp4", 1708000000.0),
-        ("no_numbers_here.mp4", 0.0),
-        ("fire_123.mp4", 0.0),  # only one numeric group at end — no match
-    ])
+    @pytest.mark.parametrize(
+        "name,expected",
+        [
+            ("fire_tid3_1708123456_789.mp4", 1708123456.789),
+            ("fire_1708000000_000.mp4", 1708000000.0),
+            ("no_numbers_here.mp4", 0.0),
+            ("fire_123.mp4", 0.0),  # only one numeric group at end — no match
+        ],
+    )
     def test_parse(self, name, expected):
         result = _parse_timestamp_from_filename(name)
         assert abs(result - expected) < 1e-6, f"{name}: got {result}, expected {expected}"
@@ -321,10 +352,12 @@ class TestParseTimestamp:
 # _write_jpegs with numpy PPM fallback
 # ---------------------------------------------------------------------------
 
+
 class TestWriteJpegsFallback:
     def test_ppm_written_when_cv2_absent(self, tmp_path, monkeypatch):
         """When cv2 is not importable, _write_jpegs falls back to PPM files."""
         import builtins
+
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
@@ -353,6 +386,7 @@ class TestWriteJpegsFallback:
 # Multiple overlapping events
 # ---------------------------------------------------------------------------
 
+
 class TestMultipleOverlappingEvents:
     def test_two_events_produce_two_clips(self, tmp_path, monkeypatch):
         calls = []
@@ -361,8 +395,11 @@ class TestMultipleOverlappingEvents:
             calls.append((str(out_path), len(frames)))
 
         buf = VideoRingBuffer(
-            duration_s=10.0, pre_event_s=0.5, post_event_s=0.1,
-            output_dir=tmp_path, fps=10.0,
+            duration_s=10.0,
+            pre_event_s=0.5,
+            post_event_s=0.1,
+            output_dir=tmp_path,
+            fps=10.0,
         )
         monkeypatch.setattr(buf, "_write", fake_write)
 

@@ -26,7 +26,9 @@ def _make_api(pipeline=None, start_ok: bool = True) -> MagicMock:
     """Return a minimal TrackingAPI-like mock."""
     api = MagicMock()
     api.pipeline = pipeline
-    api.start_tracking.return_value = {"success": start_ok} if start_ok else {"success": False, "error": "camera error"}
+    api.start_tracking.return_value = (
+        {"success": start_ok} if start_ok else {"success": False, "error": "camera error"}
+    )
     api.stop_tracking.return_value = None
     return api
 
@@ -45,6 +47,7 @@ def _make_app(extensions: dict | None = None) -> Flask:
 def _reset_mission_state() -> None:
     """Reset module-level _mission_state to its initial values before each test."""
     from src.rws_tracking.api.mission_routes import _reset_state
+
     _reset_state()
 
 
@@ -309,6 +312,7 @@ class TestMissionStart:
     def test_start_with_valid_profile(self, tmp_path):
         """Profile loading succeeds when YAML file exists."""
         import yaml
+
         (tmp_path / "test_profile.yaml").write_text(yaml.dump({"version": 1}))
 
         api = _make_api()
@@ -336,8 +340,9 @@ class TestMissionStart:
         with patch("src.rws_tracking.api.events.event_bus") as mock_bus:
             with app.test_client() as c:
                 c.post("/api/mission/start?force=true", json={})
-                calls = [call for call in mock_bus.emit.call_args_list
-                         if call[0][0] == "mission_started"]
+                calls = [
+                    call for call in mock_bus.emit.call_args_list if call[0][0] == "mission_started"
+                ]
                 assert len(calls) == 1
 
 
@@ -352,7 +357,9 @@ class TestMissionStartPreflight:
         api = _make_api()
         app = _make_app({"tracking_api": api})
 
-        with patch("src.rws_tracking.api.mission_routes._run_preflight", return_value=[]) as mock_pf:
+        with patch(
+            "src.rws_tracking.api.mission_routes._run_preflight", return_value=[]
+        ) as mock_pf:
             with app.test_client() as c:
                 c.post("/api/mission/start", json={})
                 mock_pf.assert_called_once()
@@ -372,8 +379,9 @@ class TestMissionStartPreflight:
         api = _make_api()
         app = _make_app({"tracking_api": api})
 
-        with patch("src.rws_tracking.api.mission_routes._run_preflight",
-                   return_value=["logs_dir_writable"]):
+        with patch(
+            "src.rws_tracking.api.mission_routes._run_preflight", return_value=["logs_dir_writable"]
+        ):
             with app.test_client() as c:
                 resp = c.post("/api/mission/start", json={})
                 assert resp.status_code == 424
@@ -382,8 +390,10 @@ class TestMissionStartPreflight:
         api = _make_api()
         app = _make_app({"tracking_api": api})
 
-        with patch("src.rws_tracking.api.mission_routes._run_preflight",
-                   return_value=["config_valid", "pipeline_imports"]):
+        with patch(
+            "src.rws_tracking.api.mission_routes._run_preflight",
+            return_value=["config_valid", "pipeline_imports"],
+        ):
             with app.test_client() as c:
                 data = c.post("/api/mission/start", json={}).get_json()
                 assert data["error"] == "preflight_failed"
@@ -532,8 +542,9 @@ class TestMissionEnd:
             with app.test_client() as c:
                 self._start_mission(c)
                 c.post("/api/mission/end")
-                calls = [call for call in mock_bus.emit.call_args_list
-                         if call[0][0] == "mission_ended"]
+                calls = [
+                    call for call in mock_bus.emit.call_args_list if call[0][0] == "mission_ended"
+                ]
                 assert len(calls) == 1
 
     def test_end_without_api_still_completes(self):
@@ -674,7 +685,9 @@ class TestMissionCycle:
         app = _make_app({"tracking_api": api})
         with app.test_client() as c:
             # Start
-            start_resp = c.post("/api/mission/start?force=true", json={"mission_name": "Cycle-Test"})
+            start_resp = c.post(
+                "/api/mission/start?force=true", json={"mission_name": "Cycle-Test"}
+            )
             assert start_resp.status_code == 200
             session_id = start_resp.get_json()["session_id"]
 

@@ -289,7 +289,7 @@ class AppearanceGallery:
             if position is not None:
                 entry.recent_obs.append((position[0], position[1], timestamp))
                 if len(entry.recent_obs) > self._cfg.ocm_window:
-                    entry.recent_obs = entry.recent_obs[-self._cfg.ocm_window:]
+                    entry.recent_obs = entry.recent_obs[-self._cfg.ocm_window :]
             if bbox_height > 1.0:
                 entry.height_history.append(bbox_height)
                 if len(entry.height_history) > 20:
@@ -316,7 +316,9 @@ class AppearanceGallery:
             )
 
     @staticmethod
-    def _box_iou_xywh(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> float:
+    def _box_iou_xywh(
+        a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+    ) -> float:
         """IoU for XYWH boxes."""
         ax1, ay1, aw, ah = a
         bx1, by1, bw, bh = b
@@ -403,7 +405,10 @@ class AppearanceGallery:
                 if dist > gate_radius:
                     logger.debug(
                         "Re-ID spatial reject: lost_id=%d  dist=%.0f > gate=%.0f  sim=%.3f",
-                        tid, dist, gate_radius, sim,
+                        tid,
+                        dist,
+                        gate_radius,
+                        sim,
                     )
                     continue
 
@@ -423,7 +428,10 @@ class AppearanceGallery:
                 qvx, qvy = query_velocity
                 ls = (lvx * lvx + lvy * lvy) ** 0.5
                 qs = (qvx * qvx + qvy * qvy) ** 0.5
-                if ls > self._cfg.direction_gate_min_speed and qs > self._cfg.direction_gate_min_speed:
+                if (
+                    ls > self._cfg.direction_gate_min_speed
+                    and qs > self._cfg.direction_gate_min_speed
+                ):
                     cos_dir = (lvx * qvx + lvy * qvy) / max(ls * qs, 1e-6)
                     if cos_dir < self._cfg.dir_consistency_min_cos:
                         continue
@@ -445,7 +453,9 @@ class AppearanceGallery:
             w_motion = max(0.05, self._cfg.motion_weight * (1.0 - 0.6 * uncertainty))
             w_iou = self._cfg.iou_weight
             w_sum = w_app + w_motion + w_iou
-            fused = (w_app * app_score + w_motion * motion_score + w_iou * iou_score) / max(w_sum, 1e-6)
+            fused = (w_app * app_score + w_motion * motion_score + w_iou * iou_score) / max(
+                w_sum, 1e-6
+            )
             if fused < self._cfg.min_fused_score:
                 continue
 
@@ -498,7 +508,8 @@ class AppearanceGallery:
             if best[1] - aw_boosted[1][1] < self._cfg.second_best_margin:
                 logger.debug(
                     "Re-ID ambiguous after AW: best=%.3f second=%.3f (margin=%.3f < %.3f)",
-                    best[1], aw_boosted[1][1],
+                    best[1],
+                    aw_boosted[1][1],
                     best[1] - aw_boosted[1][1],
                     self._cfg.second_best_margin,
                 )
@@ -508,7 +519,11 @@ class AppearanceGallery:
 
         logger.info(
             "Re-ID match (AW): lost_id=%d  fused=%.3f  sim=%.3f  lost_for=%.2fs  aw_boost=%.3f",
-            best_tid, best[1], best[2], best[3], sim_diff * self._cfg.aw_base_weight,
+            best_tid,
+            best[1],
+            best[2],
+            best[3],
+            sim_diff * self._cfg.aw_base_weight,
         )
 
         del self._lost[best_tid]
@@ -597,9 +612,7 @@ class AppearanceGallery:
     def purge_expired(self, timestamp: float) -> None:
         """Remove lost entries that have exceeded max_lost_age."""
         expired = [
-            tid
-            for tid, e in self._lost.items()
-            if (timestamp - e.lost_ts) > self._cfg.max_lost_age
+            tid for tid, e in self._lost.items() if (timestamp - e.lost_ts) > self._cfg.max_lost_age
         ]
         for tid in expired:
             del self._lost[tid]

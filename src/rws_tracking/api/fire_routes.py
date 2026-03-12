@@ -34,6 +34,7 @@ def _check_fire_rate_limit():
         return jsonify({"error": "Rate limit exceeded"}), 429
     return None
 
+
 logger = logging.getLogger(__name__)
 
 fire_bp = Blueprint("fire", __name__, url_prefix="/api/fire")
@@ -71,11 +72,13 @@ def get_status():
     chain = _get_chain()
     if chain is None:
         return jsonify({"state": "not_configured", "can_fire": False}), 200
-    return jsonify({
-        "state": chain.state.value,
-        "can_fire": chain.can_fire,
-        "operator_id": chain.operator_id,
-    })
+    return jsonify(
+        {
+            "state": chain.state.value,
+            "can_fire": chain.can_fire,
+            "operator_id": chain.operator_id,
+        }
+    )
 
 
 @fire_bp.route("/arm", methods=["POST"])
@@ -113,11 +116,15 @@ def arm():
         result["chain_state"] = chain.state.value
         try:
             from .events import event_bus
-            event_bus.emit("fire_chain_state", {
-                "state": chain.state.value,
-                "two_man_status": status,
-                "operator_id": operator_id,
-            })
+
+            event_bus.emit(
+                "fire_chain_state",
+                {
+                    "state": chain.state.value,
+                    "two_man_status": status,
+                    "operator_id": operator_id,
+                },
+            )
         except Exception:
             pass
         return jsonify(result), http_code
@@ -125,9 +132,11 @@ def arm():
     # Normal single-operator arm.
     ok = chain.arm(operator_id)
     if not ok:
-        return jsonify({
-            "error": f"cannot arm from state {chain.state.value}",
-        }), 409
+        return jsonify(
+            {
+                "error": f"cannot arm from state {chain.state.value}",
+            }
+        ), 409
     return jsonify({"state": chain.state.value, "operator_id": operator_id})
 
 
@@ -189,11 +198,15 @@ def arm_confirm():
     result["chain_state"] = chain.state.value
     try:
         from .events import event_bus
-        event_bus.emit("fire_chain_state", {
-            "state": chain.state.value,
-            "two_man_status": "armed",
-            "operator_id": operator_id,
-        })
+
+        event_bus.emit(
+            "fire_chain_state",
+            {
+                "state": chain.state.value,
+                "two_man_status": "armed",
+                "operator_id": operator_id,
+            },
+        )
     except Exception:
         pass
     return jsonify(result)
@@ -232,13 +245,17 @@ def request_fire():
         return jsonify({"error": "operator_id required"}), 400
     ok = chain.request_fire(operator_id)
     if not ok:
-        return jsonify({
-            "error": f"cannot request fire from state {chain.state.value}",
-        }), 403
-    return jsonify({
-        "state": chain.state.value,
-        "can_fire": chain.can_fire,
-    })
+        return jsonify(
+            {
+                "error": f"cannot request fire from state {chain.state.value}",
+            }
+        ), 403
+    return jsonify(
+        {
+            "state": chain.state.value,
+            "can_fire": chain.can_fire,
+        }
+    )
 
 
 @fire_bp.route("/report", methods=["GET"])
@@ -254,6 +271,7 @@ def get_report():
 
     mission_name = request.args.get("mission", "Mission Debrief")
     from ..telemetry.report import generate_report
+
     html_content = generate_report(audit, mission_name=mission_name)
     return Response(
         html_content,
@@ -347,6 +365,7 @@ def operator_heartbeat():
 # Fire-event clip endpoints
 # ---------------------------------------------------------------------------
 
+
 def _clips_dir() -> Path | None:
     """Return the clips output directory from the video_ring_buffer extension."""
     vrb = current_app.extensions.get("video_ring_buffer")
@@ -378,11 +397,13 @@ def list_clips():
             continue
         size = entry.stat().st_size
         ts = _parse_timestamp_from_filename(entry.name)
-        entries.append({
-            "filename": entry.name,
-            "size_bytes": size,
-            "timestamp": ts,
-        })
+        entries.append(
+            {
+                "filename": entry.name,
+                "size_bytes": size,
+                "timestamp": ts,
+            }
+        )
 
     # Most-recent first.
     entries.sort(key=lambda e: e["timestamp"], reverse=True)
@@ -448,8 +469,9 @@ def get_dwell_status():
     """
     pipeline = _get_pipeline()
     if pipeline is None:
-        return jsonify({"active": False, "track_id": None,
-                        "elapsed_s": 0.0, "total_s": 0.0, "fraction": 0.0})
+        return jsonify(
+            {"active": False, "track_id": None, "elapsed_s": 0.0, "total_s": 0.0, "fraction": 0.0}
+        )
     return jsonify(pipeline.dwell_status)
 
 
@@ -474,7 +496,9 @@ def designate_target():
     if track_id is None:
         return jsonify({"ok": False, "error": "track_id is required"}), 400
     if not isinstance(track_id, int) or track_id <= 0 or track_id > 99999:
-        return jsonify({"ok": False, "error": "track_id must be a positive integer \u2264 99999"}), 400
+        return jsonify(
+            {"ok": False, "error": "track_id must be a positive integer \u2264 99999"}
+        ), 400
 
     operator_id = str(data.get("operator_id", ""))[:64]  # cap at 64 chars
     pipeline = _get_pipeline()
@@ -485,10 +509,14 @@ def designate_target():
 
     try:
         from .events import event_bus
-        event_bus.emit("target_designated", {
-            "track_id": track_id,
-            "operator_id": operator_id,
-        })
+
+        event_bus.emit(
+            "target_designated",
+            {
+                "track_id": track_id,
+                "operator_id": operator_id,
+            },
+        )
     except Exception:
         pass
 
@@ -512,6 +540,7 @@ def clear_designation():
 
     try:
         from .events import event_bus
+
         event_bus.emit("target_designated", {"track_id": None, "operator_id": ""})
     except Exception:
         pass
@@ -571,10 +600,12 @@ def list_roe_profiles():
     roe = _get_roe()
     if roe is None:
         return jsonify({"error": "roe_manager not configured"}), 503
-    return jsonify({
-        "active_profile": roe.active.name,
-        "profiles": roe.list_profiles(),
-    })
+    return jsonify(
+        {
+            "active_profile": roe.active.name,
+            "profiles": roe.list_profiles(),
+        }
+    )
 
 
 @fire_bp.route("/roe/<name>", methods=["POST"])
@@ -608,17 +639,23 @@ def switch_roe_profile(name: str):
     logger.info("ROE profile switched to %r by operator='%s'", name, operator_id)
     try:
         from .events import event_bus
-        event_bus.emit("roe_profile_changed", {
-            "profile": profile.name,
-            "fire_enabled": profile.fire_enabled,
-            "operator_id": operator_id,
-        })
+
+        event_bus.emit(
+            "roe_profile_changed",
+            {
+                "profile": profile.name,
+                "fire_enabled": profile.fire_enabled,
+                "operator_id": operator_id,
+            },
+        )
     except Exception:
         pass
 
-    return jsonify({
-        "ok": True,
-        "active_profile": profile.name,
-        "fire_enabled": profile.fire_enabled,
-        "require_two_man": profile.require_two_man,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "active_profile": profile.name,
+            "fire_enabled": profile.fire_enabled,
+            "require_two_man": profile.require_two_man,
+        }
+    )

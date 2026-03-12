@@ -106,9 +106,7 @@ class TestGetSessionEvents:
         _write_jsonl(tmp_path / "session.jsonl", SAMPLE_EVENTS)
         app = _make_app(str(tmp_path))
         with app.test_client() as client:
-            resp = client.get(
-                "/api/replay/sessions/session.jsonl?event_type=fired"
-            )
+            resp = client.get("/api/replay/sessions/session.jsonl?event_type=fired")
             body = resp.get_json()
             assert body["returned_events"] == 1
             assert body["events"][0]["event_type"] == "fired"
@@ -118,8 +116,7 @@ class TestGetSessionEvents:
         app = _make_app(str(tmp_path))
         with app.test_client() as client:
             resp = client.get(
-                "/api/replay/sessions/session.jsonl"
-                "?event_type=fired&event_type=mission_end"
+                "/api/replay/sessions/session.jsonl?event_type=fired&event_type=mission_end"
             )
             body = resp.get_json()
             assert body["returned_events"] == 2

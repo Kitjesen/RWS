@@ -1,4 +1,5 @@
 """快速测试脚本 - 仿真模式演示"""
+
 import time
 
 import cv2
@@ -16,9 +17,12 @@ def main():
 
     # 创建相机模型
     cam = CameraModel(
-        width=1280, height=720,
-        fx=970.0, fy=965.0,
-        cx=640.0, cy=360.0,
+        width=1280,
+        height=720,
+        fx=970.0,
+        fy=965.0,
+        cx=640.0,
+        cy=360.0,
     )
 
     # 构建仿真 pipeline
@@ -26,16 +30,12 @@ def main():
 
     # 创建合成场景
     scene = SyntheticScene(cam.width, cam.height, seed=42)
-    scene.add_target(SimTarget(
-        x=300, y=200, w=80, h=120,
-        vx=50, vy=30,
-        confidence=0.92, class_id="person"
-    ))
-    scene.add_target(SimTarget(
-        x=900, y=400, w=100, h=90,
-        vx=-40, vy=-15,
-        confidence=0.85, class_id="vehicle"
-    ))
+    scene.add_target(
+        SimTarget(x=300, y=200, w=80, h=120, vx=50, vy=30, confidence=0.92, class_id="person")
+    )
+    scene.add_target(
+        SimTarget(x=900, y=400, w=100, h=90, vx=-40, vy=-15, confidence=0.85, class_id="vehicle")
+    )
 
     # 创建实时仪表盘
     dashboard = RealtimeDashboard(
@@ -78,18 +78,17 @@ def main():
 
                 # 绘制目标信息
                 label = f"ID:{t.track_id} {t.class_id} {t.confidence:.2f}"
-                cv2.putText(display, label, (x, y - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                cv2.putText(
+                    display, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2
+                )
 
                 # 绘制中心十字
                 cx, cy = int(t.bbox.center[0]), int(t.bbox.center[1])
-                cv2.drawMarker(display, (cx, cy), (0, 255, 0),
-                              cv2.MARKER_CROSS, 20, 2)
+                cv2.drawMarker(display, (cx, cy), (0, 255, 0), cv2.MARKER_CROSS, 20, 2)
 
             # 绘制画面中心十字（瞄准点）
             center_x, center_y = cam.width // 2, cam.height // 2
-            cv2.drawMarker(display, (center_x, center_y), (0, 0, 255),
-                          cv2.MARKER_CROSS, 30, 2)
+            cv2.drawMarker(display, (center_x, center_y), (0, 0, 255), cv2.MARKER_CROSS, 30, 2)
 
             # 显示控制命令
             cmd = output.command
@@ -115,8 +114,9 @@ def main():
 
             for i, line in enumerate(info_lines):
                 color = state_color if i == 0 else (0, 200, 255)
-                cv2.putText(display, line, (10, 30 + i * 30),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                cv2.putText(
+                    display, line, (10, 30 + i * 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2
+                )
 
             # 更新仪表盘
             dashboard.update(ts)
@@ -125,7 +125,7 @@ def main():
             cv2.imshow("RWS Tracking - Simulation", display)
             dashboard.show("RWS Dashboard")
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
             ts += dt
@@ -137,7 +137,7 @@ def main():
         # 显示最终指标
         metrics = pipeline.telemetry.snapshot_metrics()
         print("\n[RWS] 仿真完成，性能指标：")
-        print(f"  Lock Rate: {metrics['lock_rate']*100:.1f}%")
+        print(f"  Lock Rate: {metrics['lock_rate'] * 100:.1f}%")
         print(f"  Avg Error: {metrics['avg_abs_error_deg']:.2f} deg")
         print(f"  Switches: {metrics['switches_per_min']:.1f} /min")
 

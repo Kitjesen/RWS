@@ -85,20 +85,12 @@ class TestMissionEndReportUrl:
 
         # Simulate: the function logic that builds report_url
         report_path = "logs/reports/test_session_report.html"
-        report_url = (
-            f"/api/mission/report/{Path(report_path).name}"
-            if report_path
-            else None
-        )
+        report_url = f"/api/mission/report/{Path(report_path).name}" if report_path else None
         assert report_url is not None
         assert report_url.startswith("/api/")
         assert "test_session_report.html" in report_url
 
     def test_report_url_none_when_no_report(self):
         report_path = None
-        report_url = (
-            f"/api/mission/report/{Path(report_path).name}"
-            if report_path
-            else None
-        )
+        report_url = f"/api/mission/report/{Path(report_path).name}" if report_path else None
         assert report_url is None

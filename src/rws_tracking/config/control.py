@@ -55,13 +55,13 @@ class MPCConfig:
     horizon: int = 10
     q_error: float = 100.0
     r_effort: float = 1.0
-    q_terminal: float = 0.0        # 0 = use q_error
+    q_terminal: float = 0.0  # 0 = use q_error
     integral_limit: float = 30.0
     output_limit: float = 90.0
     ki: float = 0.3
     derivative_lpf_alpha: float = 0.3
     feedforward_kv: float = 0.0
-    plant_dt: float = 0.033        # Should match pipeline loop interval
+    plant_dt: float = 0.033  # Should match pipeline loop interval
 
 
 @dataclass(frozen=True)
@@ -96,7 +96,7 @@ class GimbalControllerConfig:
     dob_alpha: float = 0.5
     dob_gain: float = 1.0
     # Controller mode — 'pid' (default) or 'mpc'
-    controller_mode: str = 'pid'
+    controller_mode: str = "pid"
     # MPC parameters used when controller_mode == 'mpc'
     mpc: MPCConfig = MPCConfig()
 

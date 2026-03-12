@@ -165,6 +165,7 @@ class FrameAnnotator:
     def _ensure_cv2(self) -> None:
         if self._cv2 is None:
             import cv2
+
             self._cv2 = cv2
 
     def annotate(
@@ -227,8 +228,13 @@ class FrameAnnotator:
 
                 label = f"ID:{track.track_id} {track.class_id} {track.confidence:.2f}"
                 cv2.putText(
-                    annotated, label, (x1, y1 - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1,
+                    annotated,
+                    label,
+                    (x1, y1 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45,
+                    color,
+                    1,
                 )
 
                 # 速度向量
@@ -243,8 +249,13 @@ class FrameAnnotator:
         # 状态文字
         if status_text:
             cv2.putText(
-                annotated, status_text, (10, 25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1,
+                annotated,
+                status_text,
+                (10, 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 255),
+                1,
             )
 
         return annotated
@@ -281,6 +292,7 @@ class MJPEGStreamer:
     def _ensure_cv2(self) -> None:
         if self._cv2 is None:
             import cv2
+
             self._cv2 = cv2
 
     def generate(self) -> Generator[bytes, None, None]:
@@ -349,6 +361,7 @@ class GrpcFrameEncoder:
     def _ensure_cv2(self) -> None:
         if self._cv2 is None:
             import cv2
+
             self._cv2 = cv2
 
     def encode(self, frame: np.ndarray, timestamp: float) -> dict:

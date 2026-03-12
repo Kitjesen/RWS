@@ -75,7 +75,7 @@ class MPCConfig:
     horizon: int = 10
     q_error: float = 100.0
     r_effort: float = 1.0
-    q_terminal: float = 0.0       # 0 = use q_error
+    q_terminal: float = 0.0  # 0 = use q_error
     integral_limit: float = 30.0
     output_limit: float = 90.0
     ki: float = 0.3
@@ -130,11 +130,13 @@ class MPCController:
             dt=self.cfg.plant_dt,
         )
         logger.info(
-            "MPCController initialized: horizon=%d q_e=%.1f r_u=%.2f "
-            "K_mpc=%.4f (equiv_Kp≈%.4f)",
-            self.cfg.horizon, self.cfg.q_error, self.cfg.r_effort,
+            "MPCController initialized: horizon=%d q_e=%.1f r_u=%.2f K_mpc=%.4f (equiv_Kp≈%.4f)",
+            self.cfg.horizon,
+            self.cfg.q_error,
+            self.cfg.r_effort,
             self._K,
-            math.sqrt(self.cfg.q_error / max(self.cfg.r_effort, 1e-9)) / max(self.cfg.plant_dt, 1e-9),
+            math.sqrt(self.cfg.q_error / max(self.cfg.r_effort, 1e-9))
+            / max(self.cfg.plant_dt, 1e-9),
         )
 
     # ------------------------------------------------------------------
@@ -181,9 +183,7 @@ class MPCController:
         # MPC proportional + integral + feedforward
         # Note: K_mpc replaces Kp; ki and feedforward_kv are additive
         output = (
-            self._K * error
-            + self.cfg.ki * self._integral
-            + self.cfg.feedforward_kv * feedforward
+            self._K * error + self.cfg.ki * self._integral + self.cfg.feedforward_kv * feedforward
         )
         return max(-self.cfg.output_limit, min(self.cfg.output_limit, output))
 
@@ -249,7 +249,7 @@ class MPCController:
 
         # Sx (N+1, 1): free-response state sequence for U=0
         # e[k] = A^k · e[0]
-        Sx = np.array([[A ** k] for k in range(1, N + 2)], dtype=np.float64)  # (N+1, 1)
+        Sx = np.array([[A**k] for k in range(1, N + 2)], dtype=np.float64)  # (N+1, 1)
 
         # Su (N+1, N): forced-response matrix
         # e[k] is influenced by u[j] for j < k:  coeff = A^(k-j-1) · B
@@ -261,11 +261,11 @@ class MPCController:
         # Diagonal cost weights: stage cost q_e, terminal cost q_term
         Q_diag = np.full(N + 1, q_e, dtype=np.float64)
         Q_diag[-1] = q_term
-        Q_N = np.diag(Q_diag)           # (N+1, N+1)
+        Q_N = np.diag(Q_diag)  # (N+1, N+1)
         R_N = r_u * np.eye(N, dtype=np.float64)  # (N, N)
 
         # Optimal gain matrix: K_full (N, 1), only first element needed
-        SuT_Q = Su.T @ Q_N                                  # (N, N+1)
+        SuT_Q = Su.T @ Q_N  # (N, N+1)
         # U* = -(Su^T Q Su + R)^{-1} Su^T Q Sx · e0  → negate result
         K_full = np.linalg.solve(SuT_Q @ Su + R_N, SuT_Q @ Sx)  # (N, 1)
 

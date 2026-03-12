@@ -26,18 +26,20 @@ import pytest
 def _make_camera_model(width=640, height=480, fx=800.0, fy=800.0):
     """Return a CameraModel (full algebra type, not CameraConfig)."""
     from rws_tracking.algebra.coordinate_transform import CameraModel
-    return CameraModel(width=width, height=height,
-                       fx=fx, fy=fy, cx=width / 2, cy=height / 2)
+
+    return CameraModel(width=width, height=height, fx=fx, fy=fy, cx=width / 2, cy=height / 2)
 
 
 def _make_transform(fx=800.0, fy=800.0):
     from rws_tracking.algebra import PixelToGimbalTransform
+
     return PixelToGimbalTransform(_make_camera_model(fx=fx, fy=fy))
 
 
 def _make_track(track_id=1, confidence=0.8, class_id="person"):
     from rws_tracking.types import BoundingBox
     from rws_tracking.types.perception import Track
+
     bbox = BoundingBox(x=100.0, y=100.0, w=60.0, h=80.0)
     return Track(
         track_id=track_id,
@@ -50,9 +52,9 @@ def _make_track(track_id=1, confidence=0.8, class_id="person"):
     )
 
 
-def _make_obs(vx=0.0, vy=0.0, ax=0.0, ay=0.0, ts=0.0,
-              cx=320.0, cy=240.0, track_id=1):
+def _make_obs(vx=0.0, vy=0.0, ax=0.0, ay=0.0, ts=0.0, cx=320.0, cy=240.0, track_id=1):
     from rws_tracking.types import BoundingBox, TargetObservation
+
     bbox = BoundingBox(x=cx - 30, y=cy - 40, w=60.0, h=80.0)
     return TargetObservation(
         timestamp=ts,
@@ -67,6 +69,7 @@ def _make_obs(vx=0.0, vy=0.0, ax=0.0, ay=0.0, ts=0.0,
 
 def _make_feedback(yaw_rate=0.0, pitch_rate=0.0, ts=0.0):
     from rws_tracking.types import GimbalFeedback
+
     return GimbalFeedback(
         timestamp=ts,
         yaw_deg=0.0,
@@ -80,6 +83,7 @@ def _make_pid_controller():
     """Build a TwoAxisGimbalController with plain PID (no adaptive, DOB off)."""
     from rws_tracking.config import GimbalControllerConfig, PIDConfig
     from rws_tracking.control.controller import TwoAxisGimbalController
+
     pid = PIDConfig(kp=3.0, ki=0.1, kd=0.05)
     cfg = GimbalControllerConfig(yaw_pid=pid, pitch_pid=pid, dob_enabled=False)
     return TwoAxisGimbalController(_make_transform(), cfg)
@@ -95,6 +99,7 @@ class TestEMAP:
 
     def _make_kf(self, cx=320.0, cy=240.0, vx=0.0, vy=0.0):
         from rws_tracking.algebra.kalman2d import CentroidKalmanCA, KalmanCAConfig
+
         cfg = KalmanCAConfig(process_noise_acc=5.0)
         return CentroidKalmanCA(cx, cy, vx0=vx, vy0=vy, config=cfg)
 
@@ -115,8 +120,7 @@ class TestEMAP:
         d_yaw = 2.0  # degrees
 
         before_cx, _ = kf.position
-        kf.predict_with_ego_motion(0.033, d_yaw_deg=d_yaw, d_pitch_deg=0.0,
-                                   fx=fx, fy=800.0)
+        kf.predict_with_ego_motion(0.033, d_yaw_deg=d_yaw, d_pitch_deg=0.0, fx=fx, fy=800.0)
         after_cx, _ = kf.position
 
         expected_shift = -fx * math.tan(math.radians(d_yaw))
@@ -129,8 +133,7 @@ class TestEMAP:
         d_pitch = 1.5  # degrees
 
         _, before_cy = kf.position
-        kf.predict_with_ego_motion(0.033, d_yaw_deg=0.0, d_pitch_deg=d_pitch,
-                                   fx=800.0, fy=fy)
+        kf.predict_with_ego_motion(0.033, d_yaw_deg=0.0, d_pitch_deg=d_pitch, fx=800.0, fy=fy)
         _, after_cy = kf.position
 
         expected_shift = fy * math.tan(math.radians(d_pitch))
@@ -173,6 +176,7 @@ class TestAdaptiveQ:
 
     def _make_kf(self, vx, adaptive=True):
         from rws_tracking.algebra.kalman2d import CentroidKalmanCA, KalmanCAConfig
+
         cfg = KalmanCAConfig(
             adaptive_q_enabled=adaptive,
             adaptive_q_speed_ref_px_s=100.0,
@@ -183,8 +187,8 @@ class TestAdaptiveQ:
 
     def test_fast_target_has_larger_variance_growth(self):
         """After predict, fast target's covariance diagonal must grow more than slow."""
-        kf_fast = self._make_kf(vx=200.0)   # speed >> speed_ref → scale ≥ 2
-        kf_slow = self._make_kf(vx=5.0)     # speed << speed_ref → scale ≈ 1
+        kf_fast = self._make_kf(vx=200.0)  # speed >> speed_ref → scale ≥ 2
+        kf_slow = self._make_kf(vx=5.0)  # speed << speed_ref → scale ≈ 1
 
         P_before_fast = kf_fast._P.copy()
         P_before_slow = kf_slow._P.copy()
@@ -228,6 +232,7 @@ class TestORUBlendVelocity:
 
     def _make_kf(self):
         from rws_tracking.algebra.kalman2d import CentroidKalmanCA
+
         return CentroidKalmanCA(100.0, 200.0, vx0=10.0, vy0=5.0)
 
     def test_full_replace(self):
@@ -274,6 +279,7 @@ class TestORUBlendVelocity:
         import inspect
 
         import rws_tracking.perception.fusion_mot as fm_mod
+
         src = inspect.getsource(fm_mod)
         # The ORU block should call blend_velocity, not access _x[2] directly
         assert "blend_velocity" in src
@@ -291,6 +297,7 @@ class TestMPCController:
 
     def _make_mpc(self, **kwargs):
         from rws_tracking.control.mpc_controller import MPCConfig, MPCController
+
         cfg = MPCConfig(**kwargs)
         return MPCController(cfg)
 
@@ -299,10 +306,10 @@ class TestMPCController:
         """Compute DARE steady-state gain for plant e[k+1]=e[k]-dt*u[k]."""
         # DARE: P^2*dt^2 - Q*P*dt^2 - Q*R = 0  →  P^2 - Q*P - Q*R/dt^2 = 0
         # Taking positive root:
-        discriminant = q ** 2 + 4.0 * q * r / dt ** 2
+        discriminant = q**2 + 4.0 * q * r / dt**2
         P_ss = (q + math.sqrt(discriminant)) / 2.0
         # LQR gain K = -B*(R+B^2*P)^{-1}*P*A = dt*P / (r + dt^2*P)
-        return dt * P_ss / (r + dt ** 2 * P_ss)
+        return dt * P_ss / (r + dt**2 * P_ss)
 
     def test_gain_positive(self):
         """K_mpc must be strictly positive (positive error → positive rate)."""
@@ -324,20 +331,15 @@ class TestMPCController:
     def test_lqr_limit_convergence(self):
         """As N → ∞, K_mpc should converge to the DARE steady-state gain."""
         q, r, dt = 100.0, 1.0, 0.033
-        mpc = self._make_mpc(q_error=q, r_effort=r, horizon=50,
-                              ki=0.0, plant_dt=dt)
+        mpc = self._make_mpc(q_error=q, r_effort=r, horizon=50, ki=0.0, plant_dt=dt)
         lqr_gain = self._dare_gain(q, r, dt)
         # N=50 should be within 1% of the LQR limit
-        assert abs(mpc._K - lqr_gain) / lqr_gain < 0.01, (
-            f"K_mpc={mpc._K:.4f}, LQR={lqr_gain:.4f}"
-        )
+        assert abs(mpc._K - lqr_gain) / lqr_gain < 0.01, f"K_mpc={mpc._K:.4f}, LQR={lqr_gain:.4f}"
 
     def test_k_increases_with_horizon(self):
         """Larger horizon must yield a larger (more anticipatory) gain."""
-        mpc_short = self._make_mpc(q_error=100.0, r_effort=1.0, horizon=2,
-                                   ki=0.0, plant_dt=0.033)
-        mpc_long = self._make_mpc(q_error=100.0, r_effort=1.0, horizon=20,
-                                  ki=0.0, plant_dt=0.033)
+        mpc_short = self._make_mpc(q_error=100.0, r_effort=1.0, horizon=2, ki=0.0, plant_dt=0.033)
+        mpc_long = self._make_mpc(q_error=100.0, r_effort=1.0, horizon=20, ki=0.0, plant_dt=0.033)
         assert mpc_long._K > mpc_short._K
 
     def test_output_clamped_to_limit(self):
@@ -377,6 +379,7 @@ class TestMPCController:
     def test_axis_controller_protocol(self):
         """MPCController must satisfy the AxisController protocol (step + reset)."""
         from rws_tracking.control.mpc_controller import MPCConfig, MPCController
+
         mpc = MPCController(MPCConfig())
         # Protocol check: must have step() and reset()
         assert callable(getattr(mpc, "step", None))
@@ -394,10 +397,14 @@ class TestDOB:
     def _make_controller(self, dob_enabled=True, dob_alpha=0.5, dob_gain=1.0):
         from rws_tracking.config import GimbalControllerConfig, PIDConfig
         from rws_tracking.control.controller import TwoAxisGimbalController
+
         pid = PIDConfig(kp=3.0, ki=0.1, kd=0.05)
         cfg = GimbalControllerConfig(
-            yaw_pid=pid, pitch_pid=pid,
-            dob_enabled=dob_enabled, dob_alpha=dob_alpha, dob_gain=dob_gain,
+            yaw_pid=pid,
+            pitch_pid=pid,
+            dob_enabled=dob_enabled,
+            dob_alpha=dob_alpha,
+            dob_gain=dob_gain,
         )
         return TwoAxisGimbalController(_make_transform(), cfg)
 
@@ -437,6 +444,7 @@ class TestDOB:
     def test_dob_cfg_fields_present(self):
         """GimbalControllerConfig must expose dob_enabled, dob_alpha, dob_gain."""
         from rws_tracking.config import GimbalControllerConfig, PIDConfig
+
         pid = PIDConfig(kp=3.0)
         cfg = GimbalControllerConfig(yaw_pid=pid, pitch_pid=pid)
         assert hasattr(cfg, "dob_enabled")
@@ -473,6 +481,7 @@ class TestJerkEstimation:
     def _make_calculator(self):
         from rws_tracking.config.control import LeadAngleConfig
         from rws_tracking.control.lead_angle import LeadAngleCalculator, SimpleFlightTimeProvider
+
         transform = _make_transform()
         provider = SimpleFlightTimeProvider(muzzle_velocity_mps=900.0)
         cfg = LeadAngleConfig(enabled=True)
@@ -483,8 +492,8 @@ class TestJerkEstimation:
         calc = self._make_calculator()
         obs = _make_obs(vx=100.0, vy=-30.0, ts=time.monotonic())
         result = calc.compute(obs)
-        assert hasattr(result, 'yaw_lead_deg')
-        assert hasattr(result, 'pitch_lead_deg')
+        assert hasattr(result, "yaw_lead_deg")
+        assert hasattr(result, "pitch_lead_deg")
         assert isinstance(result.yaw_lead_deg, float)
 
     def test_confidence_in_range(self):
@@ -492,8 +501,7 @@ class TestJerkEstimation:
         calc = self._make_calculator()
         t0 = time.monotonic()
         for i in range(10):
-            obs = _make_obs(vx=50.0, vy=20.0, ax=100.0, ay=50.0,
-                            ts=t0 + i * 0.033)
+            obs = _make_obs(vx=50.0, vy=20.0, ax=100.0, ay=50.0, ts=t0 + i * 0.033)
             result = calc.compute(obs)
             assert 0.0 <= result.confidence <= 1.0
 
@@ -502,8 +510,7 @@ class TestJerkEstimation:
         calc = self._make_calculator()
         t0 = time.monotonic()
         for i in range(5):
-            obs = _make_obs(vx=30.0, vy=10.0, ax=50.0, ay=10.0,
-                            ts=t0 + i * 0.033)
+            obs = _make_obs(vx=30.0, vy=10.0, ax=50.0, ay=10.0, ts=t0 + i * 0.033)
             result = calc.compute(obs)
         assert result.confidence > 0.1
 
@@ -511,7 +518,7 @@ class TestJerkEstimation:
         """Calculator must maintain previous acceleration state for jerk computation."""
         calc = self._make_calculator()
         # Check that the jerk-tracking attributes exist
-        assert hasattr(calc, '_prev_ax') or hasattr(calc, '_prev_obs_ts'), (
+        assert hasattr(calc, "_prev_ax") or hasattr(calc, "_prev_obs_ts"), (
             "LeadAngleCalculator should maintain jerk state attributes"
         )
 
@@ -534,6 +541,7 @@ class TestIFFConfidenceThreshold:
     def test_above_threshold_is_hostile(self):
         """Confidence above threshold → is_friend=False (hostile, engage)."""
         from rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker(min_hostile_confidence=0.5)
         track = _make_track(confidence=0.8)
         result = iff.check([track])
@@ -542,6 +550,7 @@ class TestIFFConfidenceThreshold:
     def test_below_threshold_abstains(self):
         """Confidence below threshold → is_friend=True with confidence/abstain in reason."""
         from rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker(min_hostile_confidence=0.5)
         track = _make_track(confidence=0.3)
         result = iff.check([track])
@@ -552,6 +561,7 @@ class TestIFFConfidenceThreshold:
     def test_exact_threshold_is_hostile(self):
         """Confidence exactly at threshold → hostile (< threshold required to abstain)."""
         from rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker(min_hostile_confidence=0.5)
         track = _make_track(confidence=0.5)
         result = iff.check([track])
@@ -561,6 +571,7 @@ class TestIFFConfidenceThreshold:
     def test_zero_threshold_disables_gate(self):
         """min_hostile_confidence=0.0 disables the gate — any confidence engages."""
         from rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker(min_hostile_confidence=0.0)
         track = _make_track(confidence=0.01)
         result = iff.check([track])
@@ -569,6 +580,7 @@ class TestIFFConfidenceThreshold:
     def test_threshold_does_not_override_class_whitelist(self):
         """A track in friendly_classes stays as friend regardless of confidence."""
         from rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker(
             friendly_classes=frozenset(["friendly_vehicle"]),
             min_hostile_confidence=0.9,
@@ -580,6 +592,7 @@ class TestIFFConfidenceThreshold:
     def test_threshold_does_not_override_id_whitelist(self):
         """A track in the operator ID whitelist stays as friend despite low confidence."""
         from rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker(track_id_whitelist={42}, min_hostile_confidence=0.9)
         track = _make_track(track_id=42, confidence=0.05)
         result = iff.check([track])
@@ -588,18 +601,20 @@ class TestIFFConfidenceThreshold:
     def test_min_hostile_confidence_property(self):
         """Property must return the value passed to __init__."""
         from rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker(min_hostile_confidence=0.65)
         assert iff.min_hostile_confidence == pytest.approx(0.65)
 
     def test_multiple_tracks_mixed_confidence(self):
         """In a batch, each track is evaluated independently against the threshold."""
         from rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker(min_hostile_confidence=0.6)
         high_conf = _make_track(track_id=1, confidence=0.9)
         low_conf = _make_track(track_id=2, confidence=0.2)
         result = iff.check([high_conf, low_conf])
-        assert result[1].is_friend is False   # high conf → hostile
-        assert result[2].is_friend is True    # low conf → abstain
+        assert result[1].is_friend is False  # high conf → hostile
+        assert result[2].is_friend is True  # low conf → abstain
 
 
 # ---------------------------------------------------------------------------
@@ -613,6 +628,7 @@ class TestPIDMethods:
     def _make_pid(self, kp=3.0, ki=0.5, kd=0.1):
         from rws_tracking.config import PIDConfig
         from rws_tracking.control.controller import PID
+
         cfg = PIDConfig(kp=kp, ki=ki, kd=kd)
         return PID(cfg)
 
@@ -659,6 +675,7 @@ class TestPIDMethods:
 
         # Inspect just the compute_command method to avoid matching docstring comments
         from rws_tracking.control.controller import TwoAxisGimbalController
+
         src = inspect.getsource(TwoAxisGimbalController.compute_command)
         assert "scale_integral" in src
         # The old pattern state.integral *= should not appear in the method body

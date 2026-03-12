@@ -26,7 +26,9 @@ class TestInMemoryTelemetryLogger:
         logger = InMemoryTelemetryLogger()
         for i in range(10):
             state = 2.0 if i < 7 else 1.0
-            logger.log("control", float(i), {"state": state, "yaw_error_deg": 0.5, "pitch_error_deg": 0.3})
+            logger.log(
+                "control", float(i), {"state": state, "yaw_error_deg": 0.5, "pitch_error_deg": 0.3}
+            )
         m = logger.snapshot_metrics()
         assert m["lock_rate"] == pytest.approx(0.7)
 
@@ -48,7 +50,9 @@ class TestInMemoryTelemetryLogger:
     def test_ring_buffer(self):
         logger = InMemoryTelemetryLogger(max_events=5)
         for i in range(10):
-            logger.log("control", float(i), {"state": 1.0, "yaw_error_deg": 0.0, "pitch_error_deg": 0.0})
+            logger.log(
+                "control", float(i), {"state": 1.0, "yaw_error_deg": 0.0, "pitch_error_deg": 0.0}
+            )
         assert len(logger.events) == 5
 
     def test_export_jsonl(self):
@@ -62,10 +66,17 @@ class TestInMemoryTelemetryLogger:
 
     def test_thread_safety(self):
         import threading
+
         logger = InMemoryTelemetryLogger()
+
         def writer():
             for i in range(100):
-                logger.log("control", float(i), {"state": 1.0, "yaw_error_deg": 0.0, "pitch_error_deg": 0.0})
+                logger.log(
+                    "control",
+                    float(i),
+                    {"state": 1.0, "yaw_error_deg": 0.0, "pitch_error_deg": 0.0},
+                )
+
         threads = [threading.Thread(target=writer) for _ in range(4)]
         for t in threads:
             t.start()

@@ -144,16 +144,16 @@ class IFFChecker:
                         f" (conf={track.confidence:.2f})"
                     ),
                 )
-                logger.debug(
-                    "IFF: track %d class '%s' flagged FRIEND", tid, track.class_id
-                )
+                logger.debug("IFF: track %d class '%s' flagged FRIEND", tid, track.class_id)
                 continue
 
             # Confidence threshold: if the detection score is too low to
             # reliably identify the target, abstain from hostile classification
             # to prevent inadvertent engagement on uncertain detections.
-            if (self._min_hostile_confidence > 0.0
-                    and track.confidence < self._min_hostile_confidence):
+            if (
+                self._min_hostile_confidence > 0.0
+                and track.confidence < self._min_hostile_confidence
+            ):
                 results[tid] = IFFResult(
                     track_id=tid,
                     is_friend=True,
@@ -166,7 +166,9 @@ class IFFChecker:
                 )
                 logger.debug(
                     "IFF: track %d conf=%.2f below threshold %.2f — ABSTAIN",
-                    tid, track.confidence, self._min_hostile_confidence,
+                    tid,
+                    track.confidence,
+                    self._min_hostile_confidence,
                 )
                 continue
 

@@ -108,15 +108,21 @@ class TestSafetyManager:
 
     def test_clear_position_allows_fire(self, manager: SafetyManager):
         status = manager.evaluate(
-            yaw_deg=0.0, pitch_deg=0.0,
-            target_locked=True, lock_duration_s=2.0, target_distance_m=50.0,
+            yaw_deg=0.0,
+            pitch_deg=0.0,
+            target_locked=True,
+            lock_duration_s=2.0,
+            target_distance_m=50.0,
         )
         assert status.fire_authorized
 
     def test_nfz_blocks_fire(self, manager: SafetyManager):
         status = manager.evaluate(
-            yaw_deg=90.0, pitch_deg=0.0,
-            target_locked=True, lock_duration_s=2.0, target_distance_m=50.0,
+            yaw_deg=90.0,
+            pitch_deg=0.0,
+            target_locked=True,
+            lock_duration_s=2.0,
+            target_distance_m=50.0,
         )
         assert not status.fire_authorized
         assert "NFZ" in status.blocked_reason
@@ -130,18 +136,26 @@ class TestSafetyManager:
         assert factor < 1.0
 
     def test_add_and_remove_nfz(self, manager: SafetyManager):
-        new_zone = SafetyZone(zone_id="tmp", center_yaw_deg=0.0, center_pitch_deg=0.0, radius_deg=5.0)
+        new_zone = SafetyZone(
+            zone_id="tmp", center_yaw_deg=0.0, center_pitch_deg=0.0, radius_deg=5.0
+        )
         manager.add_no_fire_zone(new_zone)
         status = manager.evaluate(
-            yaw_deg=0.0, pitch_deg=0.0,
-            target_locked=True, lock_duration_s=2.0, target_distance_m=50.0,
+            yaw_deg=0.0,
+            pitch_deg=0.0,
+            target_locked=True,
+            lock_duration_s=2.0,
+            target_distance_m=50.0,
         )
         assert not status.fire_authorized
 
         removed = manager.remove_no_fire_zone("tmp")
         assert removed
         status = manager.evaluate(
-            yaw_deg=0.0, pitch_deg=0.0,
-            target_locked=True, lock_duration_s=2.0, target_distance_m=50.0,
+            yaw_deg=0.0,
+            pitch_deg=0.0,
+            target_locked=True,
+            lock_duration_s=2.0,
+            target_distance_m=50.0,
         )
         assert status.fire_authorized

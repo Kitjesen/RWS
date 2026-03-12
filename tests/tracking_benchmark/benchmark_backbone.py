@@ -5,6 +5,7 @@ Compares three configurations:
   B: Re-ID with MobileNet (ImageNet pretrained, generic classifier)
   C: Re-ID with OSNet x1.0 (MSMT17 pretrained, person Re-ID specialist)
 """
+
 import sys
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent / "src"))
@@ -20,12 +21,19 @@ from rws_tracking.perception.reid_extractor import ReIDConfig
 from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker
 
 GALLERY_CFG = GalleryConfig(
-    match_threshold=0.26, match_threshold_relaxed=0.20,
-    cascade_recent_s=2.0, second_best_margin=0.02,
-    spatial_gate_px=450.0, spatial_gate_grow_rate=220.0,
-    appearance_weight=0.50, motion_weight=0.35,
-    iou_weight=0.15, min_fused_score=0.24,
-    ema_alpha=0.85, max_lost_age=5.0, min_track_age_frames=3,
+    match_threshold=0.26,
+    match_threshold_relaxed=0.20,
+    cascade_recent_s=2.0,
+    second_best_margin=0.02,
+    spatial_gate_px=450.0,
+    spatial_gate_grow_rate=220.0,
+    appearance_weight=0.50,
+    motion_weight=0.35,
+    iou_weight=0.15,
+    min_fused_score=0.24,
+    ema_alpha=0.85,
+    max_lost_age=5.0,
+    min_track_age_frames=3,
 )
 
 COMMON = {
@@ -38,8 +46,13 @@ COMMON = {
 }
 
 
-def run_tracker(video_path: str, label: str, max_frames: int,
-                enable_reid: bool = False, backbone: str = "mobilenet"):
+def run_tracker(
+    video_path: str,
+    label: str,
+    max_frames: int,
+    enable_reid: bool = False,
+    backbone: str = "mobilenet",
+):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -70,8 +83,10 @@ def run_tracker(video_path: str, label: str, max_frames: int,
             id_history.setdefault(t.track_id, []).append(i)
 
         if (i + 1) % 100 == 0:
-            print(f"  [{label}] frame {i+1}/{n}: {len(unique_ids)} IDs, "
-                  f"avg={sum(latencies[-100:]) / min(100, len(latencies)):.0f}ms")
+            print(
+                f"  [{label}] frame {i + 1}/{n}: {len(unique_ids)} IDs, "
+                f"avg={sum(latencies[-100:]) / min(100, len(latencies)):.0f}ms"
+            )
 
     cap.release()
 
@@ -90,9 +105,9 @@ def run_tracker(video_path: str, label: str, max_frames: int,
     if enable_reid:
         rs = tracker.reid_stats
         skip_pct = rs["skips"] / max(rs["extractions"] + rs["skips"], 1) * 100
-        reid_info = (f"  remaps={rs['remaps']}  "
-                     f"extractions={rs['extractions']}  "
-                     f"skip%={skip_pct:.0f}%")
+        reid_info = (
+            f"  remaps={rs['remaps']}  extractions={rs['extractions']}  skip%={skip_pct:.0f}%"
+        )
 
     avg_lat = sum(latencies) / max(len(latencies), 1)
     p95_lat = sorted(latencies)[int(len(latencies) * 0.95)] if latencies else 0
@@ -137,7 +152,7 @@ def main():
     all_results: dict[str, dict[str, dict]] = {}
 
     for vpath, vname, vtotal, vw, vh in videos:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"VIDEO: {vname}  ({vw}x{vh}, {vtotal} frames, testing {min(MAX_FRAMES, vtotal)})")
         print("=" * 60)
 
@@ -147,16 +162,18 @@ def main():
         results["baseline"] = run_tracker(vpath, "Baseline", MAX_FRAMES)
 
         print("\n--- B: MobileNet Re-ID (ImageNet) ---")
-        results["mobilenet"] = run_tracker(vpath, "MobileNet", MAX_FRAMES,
-                                           enable_reid=True, backbone="mobilenet")
+        results["mobilenet"] = run_tracker(
+            vpath, "MobileNet", MAX_FRAMES, enable_reid=True, backbone="mobilenet"
+        )
 
         print("\n--- C: OSNet Re-ID (MSMT17 person Re-ID) ---")
-        results["osnet"] = run_tracker(vpath, "OSNet", MAX_FRAMES,
-                                       enable_reid=True, backbone="osnet_x1_0")
+        results["osnet"] = run_tracker(
+            vpath, "OSNet", MAX_FRAMES, enable_reid=True, backbone="osnet_x1_0"
+        )
 
         all_results[vname] = results
 
-    print(f"\n\n{'='*60}")
+    print(f"\n\n{'=' * 60}")
     print("SUMMARY")
     print("=" * 60)
     for vname, results in all_results.items():
@@ -168,7 +185,7 @@ def main():
 
         print(f"\n{vname}:")
         print(f"  {'Metric':<20} {'Baseline':>10} {'MobileNet':>12} {'OSNet':>12}")
-        print(f"  {'-'*20} {'-'*10} {'-'*12} {'-'*12}")
+        print(f"  {'-' * 20} {'-' * 10} {'-' * 12} {'-' * 12}")
         for key in ["unique_ids", "avg_track_len", "frag_breaks", "avg_gap", "avg_latency"]:
             bv = results["baseline"][key]
             mv = results["mobilenet"][key]

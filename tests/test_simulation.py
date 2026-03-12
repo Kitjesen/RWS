@@ -12,8 +12,7 @@ from src.rws_tracking.tools.simulation import (
 
 class TestSimTarget:
     def test_creation(self):
-        t = SimTarget(cx=640, cy=360, w=80, h=150, vx=10, vy=5,
-                      confidence=0.9, class_id="person")
+        t = SimTarget(cx=640, cy=360, w=80, h=150, vx=10, vy=5, confidence=0.9, class_id="person")
         assert t.cx == 640
         assert t.class_id == "person"
 
@@ -28,8 +27,9 @@ class TestSyntheticScene:
     @pytest.fixture
     def scene(self):
         s = SyntheticScene(width=1280, height=720, seed=42)
-        s.add_target(SimTarget(cx=640, cy=360, w=80, h=150, vx=10, vy=5,
-                               confidence=0.9, class_id="person"))
+        s.add_target(
+            SimTarget(cx=640, cy=360, w=80, h=150, vx=10, vy=5, confidence=0.9, class_id="person")
+        )
         return s
 
     def test_step_returns_detections(self, scene):
@@ -66,15 +66,26 @@ class TestWorldCoordinateScene:
     @pytest.fixture
     def scene(self):
         s = WorldCoordinateScene(
-            cam_width=1280, cam_height=720,
-            fx=970.0, fy=965.0, cx=640.0, cy=360.0, seed=42,
+            cam_width=1280,
+            cam_height=720,
+            fx=970.0,
+            fy=965.0,
+            cx=640.0,
+            cy=360.0,
+            seed=42,
         )
-        s.add_target(WorldSimTarget(
-            world_yaw_deg=5.0, world_pitch_deg=2.0,
-            vel_yaw_dps=2.0, vel_pitch_dps=1.0,
-            bbox_width=75, bbox_height=100,
-            confidence=0.92, class_id="person",
-        ))
+        s.add_target(
+            WorldSimTarget(
+                world_yaw_deg=5.0,
+                world_pitch_deg=2.0,
+                vel_yaw_dps=2.0,
+                vel_pitch_dps=1.0,
+                bbox_width=75,
+                bbox_height=100,
+                confidence=0.92,
+                class_id="person",
+            )
+        )
         return s
 
     def test_step_returns_detections(self, scene):
@@ -84,31 +95,47 @@ class TestWorldCoordinateScene:
     def test_gimbal_rotation_affects_detection(self, scene):
         d1 = scene.step(0.033, 0.0, 0.0)
         scene2 = WorldCoordinateScene(
-            cam_width=1280, cam_height=720,
-            fx=970.0, fy=965.0, cx=640.0, cy=360.0, seed=42,
+            cam_width=1280,
+            cam_height=720,
+            fx=970.0,
+            fy=965.0,
+            cx=640.0,
+            cy=360.0,
+            seed=42,
         )
-        scene2.add_target(WorldSimTarget(
-            world_yaw_deg=5.0, world_pitch_deg=2.0,
-            vel_yaw_dps=2.0, vel_pitch_dps=1.0,
-            bbox_width=75, bbox_height=100,
-        ))
+        scene2.add_target(
+            WorldSimTarget(
+                world_yaw_deg=5.0,
+                world_pitch_deg=2.0,
+                vel_yaw_dps=2.0,
+                vel_pitch_dps=1.0,
+                bbox_width=75,
+                bbox_height=100,
+            )
+        )
         d2 = scene2.step(0.033, 50.0, 0.0)
         # With gimbal rotated 50 deg, target should be at different pixel position
         if d1 and d2:
             assert d1[0].bbox.x != d2[0].bbox.x
 
     def test_empty_scene(self):
-        s = WorldCoordinateScene(cam_width=1280, cam_height=720,
-                                 fx=970.0, fy=965.0, cx=640.0, cy=360.0)
+        s = WorldCoordinateScene(
+            cam_width=1280, cam_height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0
+        )
         dets = s.step(0.033, 0.0, 0.0)
         assert dets == []
 
     def test_target_out_of_fov(self):
-        s = WorldCoordinateScene(cam_width=1280, cam_height=720,
-                                 fx=970.0, fy=965.0, cx=640.0, cy=360.0)
-        s.add_target(WorldSimTarget(
-            world_yaw_deg=90.0, world_pitch_deg=0.0,
-            bbox_width=75, bbox_height=100,
-        ))
+        s = WorldCoordinateScene(
+            cam_width=1280, cam_height=720, fx=970.0, fy=965.0, cx=640.0, cy=360.0
+        )
+        s.add_target(
+            WorldSimTarget(
+                world_yaw_deg=90.0,
+                world_pitch_deg=0.0,
+                bbox_width=75,
+                bbox_height=100,
+            )
+        )
         dets = s.step(0.033, 0.0, 0.0)
         assert len(dets) == 0  # target outside FOV

@@ -22,11 +22,15 @@ class TestInMemoryTelemetryLogger:
         logger = InMemoryTelemetryLogger()
         for i in range(10):
             state = 2.0 if i >= 5 else 1.0
-            logger.log("control", float(i), {
-                "state": state,
-                "yaw_error_deg": 1.0,
-                "pitch_error_deg": 0.5,
-            })
+            logger.log(
+                "control",
+                float(i),
+                {
+                    "state": state,
+                    "yaw_error_deg": 1.0,
+                    "pitch_error_deg": 0.5,
+                },
+            )
         m = logger.snapshot_metrics()
         assert m["lock_rate"] == 0.5
         assert m["avg_abs_error_deg"] == 1.0
@@ -34,7 +38,9 @@ class TestInMemoryTelemetryLogger:
     def test_ring_buffer(self):
         logger = InMemoryTelemetryLogger(max_events=5)
         for i in range(10):
-            logger.log("control", float(i), {"state": 0.0, "yaw_error_deg": 0.0, "pitch_error_deg": 0.0})
+            logger.log(
+                "control", float(i), {"state": 0.0, "yaw_error_deg": 0.0, "pitch_error_deg": 0.0}
+            )
         assert len(logger.events) == 5
         assert logger.events[0].timestamp == 5.0
 

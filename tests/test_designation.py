@@ -34,9 +34,7 @@ class TestPipelineDesignation:
                 frame_height=cam.height,
                 config=SelectorConfig(),
             ),
-            controller=TwoAxisGimbalController(
-                transform=PixelToGimbalTransform(cam), cfg=cfg
-            ),
+            controller=TwoAxisGimbalController(transform=PixelToGimbalTransform(cam), cfg=cfg),
             driver=SimulatedGimbalDriver(),
             telemetry=InMemoryTelemetryLogger(),
         )

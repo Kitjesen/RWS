@@ -14,6 +14,7 @@ import time
 def _import_bus():
     """Import a fresh EventBus (bypasses module-level singleton)."""
     from src.rws_tracking.api.events import EventBus
+
     return EventBus()
 
 
@@ -105,13 +106,19 @@ class TestEventBusBroadcast:
         t.join(timeout=2.0)
 
         # IDs should increase.
-        id_lines = [id_line for chunk in received for id_line in chunk.split("\n") if id_line.startswith("id:")]
+        id_lines = [
+            id_line
+            for chunk in received
+            for id_line in chunk.split("\n")
+            if id_line.startswith("id:")
+        ]
         ids = [int(id_line.split(":")[1]) for id_line in id_lines]
         assert ids == sorted(ids), "event IDs must be monotonically increasing"
 
     def test_slow_subscriber_queue_full_does_not_block_others(self):
         """Dropping events for a slow subscriber must not affect a fast one."""
         from src.rws_tracking.api.events import _MAX_QUEUE_SIZE
+
         bus = _import_bus()
 
         fast_received = []
@@ -152,6 +159,7 @@ class TestEventBusBroadcast:
 class TestFormatSSE:
     def test_format_includes_event_data_id(self):
         from src.rws_tracking.api.events import _format_sse
+
         out = _format_sse("fire_executed", {"track_id": 7}, 3)
         assert "event: fire_executed" in out
         assert '"track_id": 7' in out
@@ -162,6 +170,7 @@ class TestFormatSSE:
         import datetime
 
         from src.rws_tracking.api.events import _format_sse
+
         out = _format_sse("ts_event", {"ts": datetime.datetime(2025, 1, 1)}, 1)
         assert "2025" in out  # datetime serialised via str()
 
@@ -186,6 +195,7 @@ class TestSseBlueprintRoute:
 
         # Patch the module-level event_bus used inside the route.
         import src.rws_tracking.api.events as events_mod
+
         original_bus = events_mod.event_bus
         events_mod.event_bus = fresh_bus
 

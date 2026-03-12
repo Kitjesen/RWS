@@ -13,11 +13,17 @@ def logger_with_events(tmp_path):
     """AuditLogger pre-populated with a typical fire sequence."""
     al = AuditLogger(tmp_path / "mission.jsonl")
     al.log("arm", "op1", "armed")
-    al.log("fire_authorized", "op1", "fire_authorized",
-           target_id=3, threat_score=0.82, distance_m=45.0, fire_authorized=True)
+    al.log(
+        "fire_authorized",
+        "op1",
+        "fire_authorized",
+        target_id=3,
+        threat_score=0.82,
+        distance_m=45.0,
+        fire_authorized=True,
+    )
     al.log("fire_requested", "op1", "fire_requested", target_id=3)
-    al.log("fired", "op1", "fired",
-           target_id=3, threat_score=0.82, distance_m=45.0)
+    al.log("fired", "op1", "fired", target_id=3, threat_score=0.82, distance_m=45.0)
     al.log("cooldown_expired", "op1", "armed")
     al.log("safe", "op1", "safe")
     return al
@@ -50,6 +56,7 @@ class TestAuditLogger:
         # Tamper a record in-place (break the chain)
         original = recs[2]
         from dataclasses import replace
+
         recs[2] = replace(original, threat_score=99.0)
         ok, err = logger_with_events.verify_chain()
         assert not ok
@@ -97,6 +104,7 @@ class TestReportGenerator:
 
     def test_chain_broken_flag_in_report(self, logger_with_events):
         from dataclasses import replace
+
         recs = logger_with_events._records
         recs[1] = replace(recs[1], threat_score=99.0)
         html = generate_report(logger_with_events, "Tampered")

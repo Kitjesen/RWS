@@ -479,9 +479,5 @@ class TestIFFAPIRoutes:
 
         with flask_app.test_client() as c:
             assert c.get("/api/fire/iff/status").status_code == 503
-            assert c.post(
-                "/api/fire/iff/mark_friendly", json={"track_id": 1}
-            ).status_code == 503
-            assert c.post(
-                "/api/fire/iff/unmark_friendly", json={"track_id": 1}
-            ).status_code == 503
+            assert c.post("/api/fire/iff/mark_friendly", json={"track_id": 1}).status_code == 503
+            assert c.post("/api/fire/iff/unmark_friendly", json={"track_id": 1}).status_code == 503

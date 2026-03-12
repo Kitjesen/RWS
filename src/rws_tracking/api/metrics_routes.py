@@ -87,8 +87,9 @@ def metrics():
 
     # ---- track count ----
     tracks = getattr(api, "_last_tracks", []) if api else []
-    lines.append(_gauge("rws_tracks_total", float(len(tracks)),
-                        help_text="Number of active tracks"))
+    lines.append(
+        _gauge("rws_tracks_total", float(len(tracks)), help_text="Number of active tracks")
+    )
 
     # ---- threat scores ----
     lines.append("# HELP rws_threat_score Threat score per track")
@@ -99,17 +100,21 @@ def metrics():
 
     # ---- fire chain state ----
     chain = current_app.extensions.get("shooting_chain")
-    chain_code = _CHAIN_STATE_CODES.get(
-        chain.state.value if chain else "not_configured", -1
+    chain_code = _CHAIN_STATE_CODES.get(chain.state.value if chain else "not_configured", -1)
+    lines.append(
+        _gauge(
+            "rws_fire_chain_state",
+            float(chain_code),
+            help_text="Fire chain state (0=safe,1=armed,2=auth,3=req,4=fired,5=cooldown)",
+        )
     )
-    lines.append(_gauge("rws_fire_chain_state", float(chain_code),
-                        help_text="Fire chain state (0=safe,1=armed,2=auth,3=req,4=fired,5=cooldown)"))
 
     # ---- shots fired (from audit log) ----
     audit = current_app.extensions.get("audit_logger")
     shots = sum(1 for r in (audit._records if audit else []) if r.event_type == "fired")  # noqa: SLF001
-    lines.append(_gauge("rws_shots_fired_total", float(shots),
-                        help_text="Total shots fired this session"))
+    lines.append(
+        _gauge("rws_shots_fired_total", float(shots), help_text="Total shots fired this session")
+    )
 
     # ---- lifecycle by state ----
     lines.append("# HELP rws_lifecycle_by_state Target counts per lifecycle state")
@@ -123,42 +128,74 @@ def metrics():
 
     # ---- health subsystems ----
     hm = current_app.extensions.get("health_monitor")
-    lines.append("# HELP rws_health_subsystem Subsystem health (0=unknown,1=ok,2=degraded,3=failed)")
+    lines.append(
+        "# HELP rws_health_subsystem Subsystem health (0=unknown,1=ok,2=degraded,3=failed)"
+    )
     lines.append("# TYPE rws_health_subsystem gauge")
     if hm is not None:
         for name, status in hm.get_status().items():
             # get_status() returns plain dicts with a 'status' key
-            status_str = status.get("status", "unknown") if isinstance(status, dict) else status.compute_status()
+            status_str = (
+                status.get("status", "unknown")
+                if isinstance(status, dict)
+                else status.compute_status()
+            )
             code = _HEALTH_CODES.get(status_str, 0)
             lines.append(f'rws_health_subsystem{{name="{_escape(name)}"}} {code}')
 
     # ---- operator watchdog ----
     wd = current_app.extensions.get("operator_watchdog")
     if wd is not None:
-        lines.append(_gauge("rws_operator_heartbeat_age_s",
-                            round(wd.seconds_since_heartbeat, 1),
-                            help_text="Seconds since last operator heartbeat"))
+        lines.append(
+            _gauge(
+                "rws_operator_heartbeat_age_s",
+                round(wd.seconds_since_heartbeat, 1),
+                help_text="Seconds since last operator heartbeat",
+            )
+        )
 
     # ---- pipeline FPS ----
-    lines.append(_gauge("rws_pipeline_fps", round(_fps(), 1),
-                        help_text="Estimated pipeline frames per second"))
+    lines.append(
+        _gauge(
+            "rws_pipeline_fps", round(_fps(), 1), help_text="Estimated pipeline frames per second"
+        )
+    )
 
     # ---- gimbal position & tracking error ----
     if pipeline is not None:
         import time as _time
+
         try:
             fb = pipeline.driver.get_feedback(_time.monotonic())
-            lines.append(_gauge("rws_gimbal_yaw_deg", round(fb.yaw_deg, 3),
-                                help_text="Current gimbal yaw position (degrees)"))
-            lines.append(_gauge("rws_gimbal_pitch_deg", round(fb.pitch_deg, 3),
-                                help_text="Current gimbal pitch position (degrees)"))
+            lines.append(
+                _gauge(
+                    "rws_gimbal_yaw_deg",
+                    round(fb.yaw_deg, 3),
+                    help_text="Current gimbal yaw position (degrees)",
+                )
+            )
+            lines.append(
+                _gauge(
+                    "rws_gimbal_pitch_deg",
+                    round(fb.pitch_deg, 3),
+                    help_text="Current gimbal pitch position (degrees)",
+                )
+            )
         except Exception:
             pass
-        lines.append(_gauge("rws_yaw_error_deg",
-                            round(getattr(pipeline, "_last_yaw_error_deg", 0.0), 3),
-                            help_text="Current yaw tracking error (degrees)"))
-        lines.append(_gauge("rws_pitch_error_deg",
-                            round(getattr(pipeline, "_last_pitch_error_deg", 0.0), 3),
-                            help_text="Current pitch tracking error (degrees)"))
+        lines.append(
+            _gauge(
+                "rws_yaw_error_deg",
+                round(getattr(pipeline, "_last_yaw_error_deg", 0.0), 3),
+                help_text="Current yaw tracking error (degrees)",
+            )
+        )
+        lines.append(
+            _gauge(
+                "rws_pitch_error_deg",
+                round(getattr(pipeline, "_last_pitch_error_deg", 0.0), 3),
+                help_text="Current pitch tracking error (degrees)",
+            )
+        )
 
     return Response("\n".join(lines) + "\n", mimetype="text/plain; version=0.0.4")

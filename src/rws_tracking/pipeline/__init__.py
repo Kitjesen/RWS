@@ -32,9 +32,11 @@ def __getattr__(name: str):
     }
     if name in _app_names:
         from . import app
+
         return getattr(app, name)
     if name in _multi_names:
         import importlib
+
         mod = importlib.import_module(f".{_multi_names[name]}", __package__)
         return getattr(mod, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

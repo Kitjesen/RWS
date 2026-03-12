@@ -369,7 +369,7 @@ class CentroidKalmanCA:
         # Ego-motion compensation: offset predicted position by the pixel
         # displacement that camera rotation would impose on a world-fixed point.
         dx_cam = -fx * math.tan(math.radians(d_yaw_deg))
-        dy_cam =  fy * math.tan(math.radians(d_pitch_deg))
+        dy_cam = fy * math.tan(math.radians(d_pitch_deg))
         self._x[0] += dx_cam
         self._x[1] += dy_cam
 
@@ -382,8 +382,7 @@ class CentroidKalmanCA:
         self._x = self._x + K @ y
         self._P = (self._I6 - K @ self._H) @ self._P
 
-    def update_with_confidence(self, cx: float, cy: float,
-                               confidence: float = 1.0) -> None:
+    def update_with_confidence(self, cx: float, cy: float, confidence: float = 1.0) -> None:
         """Fuse a centroid measurement with confidence-scaled noise.
 
         Higher detection confidence → smaller R → measurement trusted more.

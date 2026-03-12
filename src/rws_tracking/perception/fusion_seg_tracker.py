@@ -98,7 +98,9 @@ class FusionSegTracker:
 
         logger.info(
             "FusionSegTracker ready  model=%s  reid=%s  device=%s  kalman=internal_CA",
-            model_path, (reid_config or ReIDConfig()).backbone, device or "auto",
+            model_path,
+            (reid_config or ReIDConfig()).backbone,
+            device or "auto",
         )
 
     @property
@@ -107,10 +109,8 @@ class FusionSegTracker:
 
     @property
     def reid_stats(self) -> dict[str, int]:
-        active = sum(1 for t in self._mot.active_tracks.values()
-                     if t.state == "confirmed")
-        lost = sum(1 for t in self._mot.active_tracks.values()
-                   if t.state == "lost")
+        active = sum(1 for t in self._mot.active_tracks.values() if t.state == "confirmed")
+        lost = sum(1 for t in self._mot.active_tracks.values() if t.state == "lost")
         return {
             "enabled": 1,
             "active": active,
@@ -120,8 +120,7 @@ class FusionSegTracker:
             "skips": self._total_skips,
         }
 
-    def detect_and_track(self, frame: np.ndarray,
-                         timestamp: float) -> list[Track]:
+    def detect_and_track(self, frame: np.ndarray, timestamp: float) -> list[Track]:
         """Run full pipeline: detect → extract features → FusionMOT(Kalman).
 
         Automatically extracts COCO-17 keypoints when the loaded model is a
@@ -146,7 +145,7 @@ class FusionSegTracker:
 
         all_bboxes: list[np.ndarray] = []
         all_confs: list[float] = []
-        all_keypoints: list[np.ndarray] = []   # (17, 3) per detection: [x, y, vis]
+        all_keypoints: list[np.ndarray] = []  # (17, 3) per detection: [x, y, vis]
         has_pose = False
 
         for result in results:
@@ -191,7 +190,10 @@ class FusionSegTracker:
         self._total_extractions += N
 
         mot_results = self._mot.update(
-            bboxes_arr, confs_arr, features, timestamp,
+            bboxes_arr,
+            confs_arr,
+            features,
+            timestamp,
             keypoints=keypoints_arr,
         )
 
@@ -203,27 +205,35 @@ class FusionSegTracker:
             tracklet = self._mot.active_tracks.get(tid)
             vel = tracklet.kf.velocity if tracklet else (0.0, 0.0)
             acc = tracklet.kf.acceleration if tracklet else (0.0, 0.0)
-            kf_pos = tracklet.kf.position if tracklet else (
-                float(bbox_xywh[0] + bbox_xywh[2] / 2),
-                float(bbox_xywh[1] + bbox_xywh[3] / 2),
+            kf_pos = (
+                tracklet.kf.position
+                if tracklet
+                else (
+                    float(bbox_xywh[0] + bbox_xywh[2] / 2),
+                    float(bbox_xywh[1] + bbox_xywh[3] / 2),
+                )
             )
 
-            tracks.append(Track(
-                track_id=tid,
-                bbox=BoundingBox(
-                    x=float(bbox_xywh[0]), y=float(bbox_xywh[1]),
-                    w=float(bbox_xywh[2]), h=float(bbox_xywh[3]),
-                ),
-                confidence=conf,
-                class_id="person",
-                first_seen_ts=self._first_seen[tid],
-                last_seen_ts=timestamp,
-                age_frames=tracklet.total_frames if tracklet else 1,
-                misses=tracklet.frames_since_update if tracklet else 0,
-                velocity_px_per_s=vel,
-                acceleration_px_per_s2=acc,
-                mask_center=kf_pos,
-            ))
+            tracks.append(
+                Track(
+                    track_id=tid,
+                    bbox=BoundingBox(
+                        x=float(bbox_xywh[0]),
+                        y=float(bbox_xywh[1]),
+                        w=float(bbox_xywh[2]),
+                        h=float(bbox_xywh[3]),
+                    ),
+                    confidence=conf,
+                    class_id="person",
+                    first_seen_ts=self._first_seen[tid],
+                    last_seen_ts=timestamp,
+                    age_frames=tracklet.total_frames if tracklet else 1,
+                    misses=tracklet.frames_since_update if tracklet else 0,
+                    velocity_px_per_s=vel,
+                    acceleration_px_per_s2=acc,
+                    mask_center=kf_pos,
+                )
+            )
 
         # Purge first_seen for tracks that are fully deleted
         active_ids = set(self._mot.active_tracks.keys())

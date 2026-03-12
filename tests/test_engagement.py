@@ -12,9 +12,14 @@ from src.rws_tracking.types import BoundingBox, ThreatAssessment, Track
 
 def _track(tid=1, x=600, y=340, w=80, h=150, cls="person", vx=5.0, vy=2.0):
     return Track(
-        track_id=tid, bbox=BoundingBox(x=x, y=y, w=w, h=h),
-        confidence=0.9, class_id=cls, first_seen_ts=0.0, last_seen_ts=0.0,
-        age_frames=10, velocity_px_per_s=(vx, vy),
+        track_id=tid,
+        bbox=BoundingBox(x=x, y=y, w=w, h=h),
+        confidence=0.9,
+        class_id=cls,
+        first_seen_ts=0.0,
+        last_seen_ts=0.0,
+        age_frames=10,
+        velocity_px_per_s=(vx, vy),
     )
 
 
@@ -34,7 +39,7 @@ class TestThreatAssessor:
 
     def test_near_beats_far(self, assessor):
         near = _track(tid=1, h=200)  # close
-        far = _track(tid=2, h=50)    # far
+        far = _track(tid=2, h=50)  # far
         r = assessor.assess([near, far])
         assert r[0].threat_score >= r[1].threat_score
 
@@ -97,9 +102,15 @@ class TestEngagementQueue:
 
     def _assessments(self, n=3):
         return [
-            ThreatAssessment(track_id=i, threat_score=1.0 - i * 0.1,
-                             distance_score=0.5, velocity_score=0.5,
-                             class_score=0.5, heading_score=0.5, priority_rank=i + 1)
+            ThreatAssessment(
+                track_id=i,
+                threat_score=1.0 - i * 0.1,
+                distance_score=0.5,
+                velocity_score=0.5,
+                class_score=0.5,
+                heading_score=0.5,
+                priority_rank=i + 1,
+            )
             for i in range(n)
         ]
 
@@ -141,9 +152,17 @@ class TestEngagementQueue:
         queue.update(self._assessments())
         queue.advance()  # now at track_id=1
         # New list without track_id=1
-        new = [ThreatAssessment(track_id=99, threat_score=0.9,
-                                distance_score=0.5, velocity_score=0.5,
-                                class_score=0.5, heading_score=0.5, priority_rank=1)]
+        new = [
+            ThreatAssessment(
+                track_id=99,
+                threat_score=0.9,
+                distance_score=0.5,
+                velocity_score=0.5,
+                class_score=0.5,
+                heading_score=0.5,
+                priority_rank=1,
+            )
+        ]
         queue.update(new)
         assert queue.current_target_id == 99
 

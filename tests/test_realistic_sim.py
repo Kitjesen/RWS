@@ -1,4 +1,5 @@
 """真实仿真测试 - 考虑云台转动对目标位置的影响"""
+
 import math
 
 from src.rws_tracking.algebra import CameraModel, PixelToGimbalTransform
@@ -56,26 +57,31 @@ class RealisticSimulation:
         if 0 <= pixel_x < self.cam.width and 0 <= pixel_y < self.cam.height:
             # 目标在画面内，返回检测结果
             bbox_w, bbox_h = 80, 120
-            return [{
-                "bbox": (pixel_x - bbox_w/2, pixel_y - bbox_h/2, bbox_w, bbox_h),
-                "confidence": 0.95,
-                "class_id": "person",
-            }]
+            return [
+                {
+                    "bbox": (pixel_x - bbox_w / 2, pixel_y - bbox_h / 2, bbox_w, bbox_h),
+                    "confidence": 0.95,
+                    "class_id": "person",
+                }
+            ]
         else:
             # 目标在画面外
             return []
 
 
 def main():
-    print("="*70)
+    print("=" * 70)
     print("真实仿真测试 - 云台转动会改变目标在画面中的位置")
-    print("="*70)
+    print("=" * 70)
 
     # 相机模型
     cam = CameraModel(
-        width=1280, height=720,
-        fx=970.0, fy=965.0,
-        cx=640.0, cy=360.0,
+        width=1280,
+        height=720,
+        fx=970.0,
+        fy=965.0,
+        cx=640.0,
+        cy=360.0,
     )
 
     transform = PixelToGimbalTransform(cam)
@@ -83,14 +89,20 @@ def main():
     # PID 配置
     controller_cfg = GimbalControllerConfig(
         yaw_pid=PIDConfig(
-            kp=10.0, ki=0.3, kd=0.2,
-            integral_limit=20.0, output_limit=180.0,
+            kp=10.0,
+            ki=0.3,
+            kd=0.2,
+            integral_limit=20.0,
+            output_limit=180.0,
             derivative_lpf_alpha=0.4,
             feedforward_kv=0.5,
         ),
         pitch_pid=PIDConfig(
-            kp=10.0, ki=0.3, kd=0.2,
-            integral_limit=20.0, output_limit=180.0,
+            kp=10.0,
+            ki=0.3,
+            kd=0.2,
+            integral_limit=20.0,
+            output_limit=180.0,
             derivative_lpf_alpha=0.4,
             feedforward_kv=0.5,
         ),
@@ -131,8 +143,10 @@ def main():
     dt = 0.033  # 30 Hz
     duration = 15.0
 
-    print(f"{'时间':<6} {'状态':<8} {'目标世界位置':<20} {'云台角度':<20} {'误差':<20} {'Lock?':<6}")
-    print("-"*90)
+    print(
+        f"{'时间':<6} {'状态':<8} {'目标世界位置':<20} {'云台角度':<20} {'误差':<20} {'Lock?':<6}"
+    )
+    print("-" * 90)
 
     step_count = 0
     while ts < duration:
@@ -164,7 +178,9 @@ def main():
                 error_str = f"Y:{error_yaw:+6.2f} P:{error_pitch:+6.2f}"
                 is_lock = "LOCK" if state == "LOCK" else ""
 
-                print(f"{ts:5.2f}  {state:<8} {target_world:<20} {gimbal_pos:<20} {error_str:<20} {is_lock:<6}")
+                print(
+                    f"{ts:5.2f}  {state:<8} {target_world:<20} {gimbal_pos:<20} {error_str:<20} {is_lock:<6}"
+                )
 
         ts += dt
         step_count += 1
@@ -172,10 +188,10 @@ def main():
     # 最终指标
     metrics = pipeline.telemetry.snapshot_metrics()
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("最终指标")
-    print("="*70)
-    print(f"  Lock Rate:  {metrics['lock_rate']*100:6.2f}%")
+    print("=" * 70)
+    print(f"  Lock Rate:  {metrics['lock_rate'] * 100:6.2f}%")
     print(f"  Avg Error:  {metrics['avg_abs_error_deg']:6.2f} deg")
     print(f"  Switches:   {metrics['switches_per_min']:6.2f} /min")
 
@@ -183,6 +199,7 @@ def main():
     state_map = {0.0: "SEARCH", 1.0: "TRACK", 2.0: "LOCK", 3.0: "LOST"}
     states = [state_map.get(e.payload.get("state", -1), "?") for e in pipeline.telemetry.events]
     from collections import Counter
+
     state_counts = Counter(states)
 
     print("\n状态分布：")
@@ -190,14 +207,14 @@ def main():
         percentage = count / len(states) * 100
         print(f"  {state:<8}: {count:4d} 帧 ({percentage:5.1f}%)")
 
-    print("\n" + "="*70)
-    if metrics['lock_rate'] > 0.5:
+    print("\n" + "=" * 70)
+    if metrics["lock_rate"] > 0.5:
         print("[SUCCESS] System can lock onto moving target")
-    elif metrics['lock_rate'] > 0.2:
+    elif metrics["lock_rate"] > 0.2:
         print("[PARTIAL] System occasionally locks onto target")
     else:
         print("[FAIL] System cannot lock onto target")
-    print("="*70)
+    print("=" * 70)
 
 
 if __name__ == "__main__":

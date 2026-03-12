@@ -90,11 +90,13 @@ class SyntheticScene:
             noisy_cx = t.cx + self.rng.uniform(-1.5, 1.5)
             noisy_cy = t.cy + self.rng.uniform(-1.5, 1.5)
             conf = max(0.05, min(0.99, t.confidence + self.rng.uniform(-0.02, 0.02)))
-            out.append(Detection(
-                bbox=BoundingBox(x=noisy_cx - t.w / 2, y=noisy_cy - t.h / 2, w=t.w, h=t.h),
-                confidence=conf,
-                class_id=t.class_id,
-            ))
+            out.append(
+                Detection(
+                    bbox=BoundingBox(x=noisy_cx - t.w / 2, y=noisy_cy - t.h / 2, w=t.w, h=t.h),
+                    confidence=conf,
+                    class_id=t.class_id,
+                )
+            )
         self.targets = surviving
         return out
 
@@ -227,10 +229,14 @@ class WorldCoordinateScene:
                 bbox_x = noisy_x - target.bbox_width / 2
                 bbox_y = noisy_y - target.bbox_height / 2
 
-                detections.append(Detection(
-                    bbox=BoundingBox(x=bbox_x, y=bbox_y, w=target.bbox_width, h=target.bbox_height),
-                    confidence=noisy_conf,
-                    class_id=target.class_id,
-                ))
+                detections.append(
+                    Detection(
+                        bbox=BoundingBox(
+                            x=bbox_x, y=bbox_y, w=target.bbox_width, h=target.bbox_height
+                        ),
+                        confidence=noisy_conf,
+                        class_id=target.class_id,
+                    )
+                )
 
         return detections

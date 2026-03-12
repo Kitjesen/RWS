@@ -13,12 +13,14 @@ from src.rws_tracking.control.adaptive import (
 class TestErrorBasedScheduler:
     @pytest.fixture
     def scheduler(self):
-        return ErrorBasedScheduler(ErrorBasedSchedulerConfig(
-            low_error_threshold_deg=2.0,
-            high_error_threshold_deg=10.0,
-            low_error_multiplier=0.8,
-            high_error_multiplier=1.5,
-        ))
+        return ErrorBasedScheduler(
+            ErrorBasedSchedulerConfig(
+                low_error_threshold_deg=2.0,
+                high_error_threshold_deg=10.0,
+                low_error_multiplier=0.8,
+                high_error_multiplier=1.5,
+            )
+        )
 
     def test_low_error_reduces_gain(self, scheduler):
         kp, ki, kd = scheduler.compute_multipliers(1.0, 0.0)
@@ -55,14 +57,16 @@ class TestErrorBasedScheduler:
 class TestDistanceBasedScheduler:
     @pytest.fixture
     def scheduler(self):
-        return DistanceBasedScheduler(DistanceBasedSchedulerConfig(
-            near_distance_m=5.0,
-            far_distance_m=30.0,
-            near_multiplier=1.0,
-            far_multiplier=1.3,
-            bbox_area_max=50000.0,
-            ki_distance_scale=0.8,
-        ))
+        return DistanceBasedScheduler(
+            DistanceBasedSchedulerConfig(
+                near_distance_m=5.0,
+                far_distance_m=30.0,
+                near_multiplier=1.0,
+                far_multiplier=1.3,
+                bbox_area_max=50000.0,
+                ki_distance_scale=0.8,
+            )
+        )
 
     def test_large_bbox_near_target(self, scheduler):
         kp, ki, kd = scheduler.compute_multipliers(5.0, 50000.0)

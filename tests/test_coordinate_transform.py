@@ -166,8 +166,9 @@ class TestFullChainTransform:
         cam = CameraModel(1280, 720, 970.0, 965.0, 640.0, 360.0)
         mount = MountExtrinsics(roll_deg=0.0, pitch_deg=0.0, yaw_deg=0.0)
         transform = FullChainTransform(cam, mount)
-        fb = GimbalFeedback(timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0,
-                            yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        fb = GimbalFeedback(
+            timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
+        )
 
         yaw_err, pitch_err = transform.target_lock_error(740.0, 360.0, fb, None)
 
@@ -179,8 +180,9 @@ class TestFullChainTransform:
         cam = CameraModel(1280, 720, 970.0, 965.0, 640.0, 360.0)
         mount = MountExtrinsics(roll_deg=0.0, pitch_deg=0.0, yaw_deg=0.0)
         transform = FullChainTransform(cam, mount)
-        fb = GimbalFeedback(timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0,
-                            yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        fb = GimbalFeedback(
+            timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
+        )
 
         body_state = BodyState(
             timestamp=1.0,
@@ -201,8 +203,9 @@ class TestFullChainTransform:
     def test_mount_offset_effect(self):
         """Test effect of mount offset."""
         cam = CameraModel(1280, 720, 970.0, 965.0, 640.0, 360.0)
-        fb = GimbalFeedback(timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0,
-                            yaw_rate_dps=0.0, pitch_rate_dps=0.0)
+        fb = GimbalFeedback(
+            timestamp=0.0, yaw_deg=0.0, pitch_deg=0.0, yaw_rate_dps=0.0, pitch_rate_dps=0.0
+        )
 
         mount_zero = MountExtrinsics(roll_deg=0.0, pitch_deg=0.0, yaw_deg=0.0)
         transform_zero = FullChainTransform(cam, mount_zero)
@@ -290,6 +293,7 @@ class TestEdgeCases:
     def test_zero_focal_length(self):
         """Test handling of invalid focal length — raises when transform is created."""
         import numpy as np
+
         cam = CameraModel(1280, 720, 0.0, 0.0, 640.0, 360.0)
         with pytest.raises((ValueError, ZeroDivisionError, np.linalg.LinAlgError)):
             PixelToGimbalTransform(cam)

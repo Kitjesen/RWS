@@ -31,10 +31,12 @@ def get_subsystem_health():
     monitor = _get_monitor()
     if monitor is None:
         return jsonify({"overall": "unknown", "subsystems": {}}), 200
-    return jsonify({
-        "overall": monitor.overall_status(),
-        "subsystems": monitor.get_status(),
-    })
+    return jsonify(
+        {
+            "overall": monitor.overall_status(),
+            "subsystems": monitor.get_status(),
+        }
+    )
 
 
 @health_bp.route("/api/config/profiles", methods=["GET"])
@@ -43,11 +45,14 @@ def list_profiles():
     profiles_dir = Path("profiles")
     if pm is None:
         from ..config.profiles import ProfileManager
+
         pm = ProfileManager(profiles_dir)
-    return jsonify({
-        "profiles": pm.list_profiles(),
-        "current": pm.current_profile,
-    })
+    return jsonify(
+        {
+            "profiles": pm.list_profiles(),
+            "current": pm.current_profile,
+        }
+    )
 
 
 @health_bp.route("/api/config/profile/<name>", methods=["POST"])
@@ -56,6 +61,7 @@ def switch_profile(name: str):
     profiles_dir = Path("profiles")
     if pm is None:
         from ..config.profiles import ProfileManager
+
         pm = ProfileManager(profiles_dir)
     try:
         pm.load_profile(name)

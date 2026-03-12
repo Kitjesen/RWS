@@ -107,10 +107,7 @@ class VideoRingBuffer:
             if the buffer is empty.
         """
         with self._lock:
-            pre_frames = [
-                e for e in self._buffer
-                if e.timestamp >= event_ts - self.pre_event_s
-            ]
+            pre_frames = [e for e in self._buffer if e.timestamp >= event_ts - self.pre_event_s]
             if not pre_frames and len(self._buffer) == 0:
                 logger.warning("VideoRingBuffer.save_clip: buffer empty, skipping")
                 return None
@@ -123,7 +120,7 @@ class VideoRingBuffer:
             stream_deadline = event_ts + self.post_event_s
             pending: dict = {
                 "frames": list(pre_frames),
-                "deadline": wall_deadline,       # wall-clock → used for sleep
+                "deadline": wall_deadline,  # wall-clock → used for sleep
                 "stream_deadline": stream_deadline,  # domain ts → used in push()
                 "event_ts": event_ts,
                 "event_label": event_label,
@@ -188,17 +185,13 @@ class VideoRingBuffer:
         h, w = frames[0].frame.shape[:2]
 
         if _try_write_mp4(frames, out_path, w, h, self.fps):
-            logger.info(
-                "VideoRingBuffer: saved %d-frame clip -> %s", len(frames), out_path
-            )
+            logger.info("VideoRingBuffer: saved %d-frame clip -> %s", len(frames), out_path)
         else:
             # Fall back to JPEG frames in a subdirectory.
             stem = out_path.stem
             jpeg_dir = out_path.parent / stem
             _write_jpegs(frames, jpeg_dir)
-            logger.info(
-                "VideoRingBuffer: saved %d JPEG frames -> %s/", len(frames), jpeg_dir
-            )
+            logger.info("VideoRingBuffer: saved %d JPEG frames -> %s/", len(frames), jpeg_dir)
 
 
 # ---------------------------------------------------------------------------

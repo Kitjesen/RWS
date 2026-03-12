@@ -40,11 +40,13 @@ def get_mode():
     """Return current controller mode and available options."""
     api = _get_api()
     mode = getattr(api, "_controller_mode", "pid") if api else "pid"
-    return jsonify({
-        "mode": mode,
-        "available": sorted(_VALID_MODES),
-        "requires_restart": True,  # Change takes effect on next pipeline start
-    })
+    return jsonify(
+        {
+            "mode": mode,
+            "available": sorted(_VALID_MODES),
+            "requires_restart": True,  # Change takes effect on next pipeline start
+        }
+    )
 
 
 @controller_bp.post("/mode")
@@ -60,20 +62,22 @@ def set_mode():
     body = request.get_json(silent=True) or {}
     mode = str(body.get("mode", "")).lower()
     if mode not in _VALID_MODES:
-        return jsonify({
-            "error": f"Invalid mode '{mode}'. Must be one of {sorted(_VALID_MODES)}"
-        }), 400
+        return jsonify(
+            {"error": f"Invalid mode '{mode}'. Must be one of {sorted(_VALID_MODES)}"}
+        ), 400
 
     old_mode = getattr(api, "_controller_mode", "pid")
     api._controller_mode = mode  # type: ignore[attr-defined]
 
     logger.info("Controller mode: %s → %s", old_mode, mode)
-    return jsonify({
-        "ok": True,
-        "mode": mode,
-        "previous": old_mode,
-        "requires_restart": True,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "mode": mode,
+            "previous": old_mode,
+            "requires_restart": True,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +101,7 @@ def get_mpc_config():
         return jsonify({})
 
     import dataclasses
+
     return jsonify(dataclasses.asdict(mpc_cfg))
 
 
@@ -116,24 +121,36 @@ def set_mpc_config():
 
     body = request.get_json(silent=True) or {}
     _NUM_FIELDS = {
-        "horizon", "q_error", "r_effort", "q_terminal", "integral_limit",
-        "output_limit", "ki", "derivative_lpf_alpha", "feedforward_kv", "plant_dt",
+        "horizon",
+        "q_error",
+        "r_effort",
+        "q_terminal",
+        "integral_limit",
+        "output_limit",
+        "ki",
+        "derivative_lpf_alpha",
+        "feedforward_kv",
+        "plant_dt",
     }
 
     import dataclasses
+
     old_mpc = getattr(cfg.controller, "mpc", None)
     if old_mpc is None:
         from ..config.control import MPCConfig
+
         old_mpc = MPCConfig()
 
     old_dict = dataclasses.asdict(old_mpc)
-    updated = {k: float(v) if k != "horizon" else int(v)
-               for k, v in body.items() if k in _NUM_FIELDS}
+    updated = {
+        k: float(v) if k != "horizon" else int(v) for k, v in body.items() if k in _NUM_FIELDS
+    }
     if not updated:
         return jsonify({"error": "No valid fields provided", "valid": sorted(_NUM_FIELDS)}), 400
 
     old_dict.update(updated)
     from ..config.control import MPCConfig
+
     new_mpc = MPCConfig(**old_dict)
 
     # Replace mpc field in the frozen controller config via dataclass replace

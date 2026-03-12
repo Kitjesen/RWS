@@ -69,9 +69,7 @@ class SafetyManager:
 
     def __init__(self, config: SafetyManagerConfig = SafetyManagerConfig()) -> None:
         self._cfg = config
-        self._nfz = NoFireZoneManager(
-            slow_down_margin_deg=config.nfz_slow_down_margin_deg
-        )
+        self._nfz = NoFireZoneManager(slow_down_margin_deg=config.nfz_slow_down_margin_deg)
         self._interlock = SafetyInterlock(config.interlock)
 
         # 加载预定义禁射区

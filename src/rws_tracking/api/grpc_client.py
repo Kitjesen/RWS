@@ -188,9 +188,7 @@ class TrackingGrpcClient:
             position fields.
         """
         try:
-            request = tracking_pb2.SetGimbalPositionRequest(
-                yaw_deg=yaw_deg, pitch_deg=pitch_deg
-            )
+            request = tracking_pb2.SetGimbalPositionRequest(yaw_deg=yaw_deg, pitch_deg=pitch_deg)
             response = self.stub.SetGimbalPosition(request, timeout=self.timeout)
 
             result: dict[str, Any] = {
@@ -215,9 +213,7 @@ class TrackingGrpcClient:
             logger.error("SetGimbalPosition failed: %s", e)
             return {"success": False, "error": str(e)}
 
-    def set_gimbal_rate(
-        self, yaw_rate_dps: float, pitch_rate_dps: float
-    ) -> dict[str, Any]:
+    def set_gimbal_rate(self, yaw_rate_dps: float, pitch_rate_dps: float) -> dict[str, Any]:
         """Set gimbal velocity (rate control).
 
         Parameters
@@ -533,9 +529,7 @@ class TrackingGrpcClient:
     # Target designation
     # ------------------------------------------------------------------
 
-    def designate_target(
-        self, track_id: int, operator_id: str = ""
-    ) -> dict[str, Any]:
+    def designate_target(self, track_id: int, operator_id: str = "") -> dict[str, Any]:
         """Operator-designate a specific track for engagement (C2 override).
 
         Parameters

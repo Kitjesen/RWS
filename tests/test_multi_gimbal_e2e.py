@@ -61,10 +61,24 @@ def _make_controller(transform=None):
     from rws_tracking.control import TwoAxisGimbalController
 
     cfg = GimbalControllerConfig(
-        yaw_pid=PIDConfig(kp=5.0, ki=0.4, kd=0.35, integral_limit=40.0,
-                          output_limit=180.0, derivative_lpf_alpha=0.4, feedforward_kv=0.75),
-        pitch_pid=PIDConfig(kp=5.5, ki=0.35, kd=0.35, integral_limit=40.0,
-                            output_limit=180.0, derivative_lpf_alpha=0.4, feedforward_kv=0.70),
+        yaw_pid=PIDConfig(
+            kp=5.0,
+            ki=0.4,
+            kd=0.35,
+            integral_limit=40.0,
+            output_limit=180.0,
+            derivative_lpf_alpha=0.4,
+            feedforward_kv=0.75,
+        ),
+        pitch_pid=PIDConfig(
+            kp=5.5,
+            ki=0.35,
+            kd=0.35,
+            integral_limit=40.0,
+            output_limit=180.0,
+            derivative_lpf_alpha=0.4,
+            feedforward_kv=0.70,
+        ),
         command_lpf_alpha=0.75,
         latency_compensation_s=0.033,
     )
@@ -83,6 +97,7 @@ def _make_driver():
 
 def _make_telemetry():
     from rws_tracking.telemetry import InMemoryTelemetryLogger
+
     return InMemoryTelemetryLogger()
 
 
@@ -101,8 +116,9 @@ def _make_pipeline(n_gimbals: int = 2) -> tuple[MultiGimbalPipeline, Passthrough
 
     detector = PassthroughDetector()
     tracker = SimpleIoUTracker(iou_threshold=0.18, max_misses=10)
-    selector = WeightedMultiTargetSelector(frame_width=1280, frame_height=720,
-                                            config=SelectorConfig())
+    selector = WeightedMultiTargetSelector(
+        frame_width=1280, frame_height=720, config=SelectorConfig()
+    )
     allocator = TargetAllocator(num_executors=n_gimbals)
     units = [_make_gimbal_unit(i) for i in range(n_gimbals)]
 
@@ -116,8 +132,9 @@ def _make_pipeline(n_gimbals: int = 2) -> tuple[MultiGimbalPipeline, Passthrough
     return pipeline, detector
 
 
-def _det(x: float, y: float, w: float = 80, h: float = 120,
-         conf: float = 0.9, cls: str = "person") -> Detection:
+def _det(
+    x: float, y: float, w: float = 80, h: float = 120, conf: float = 0.9, cls: str = "person"
+) -> Detection:
     """Create a Detection at the given position."""
     return Detection(
         bbox=BoundingBox(x=x, y=y, w=w, h=h),
@@ -131,12 +148,21 @@ def _blank_frame() -> object:
     return np.zeros((720, 1280, 3), dtype=np.uint8)
 
 
-def _obs(tid: int, x: float, y: float, w: float = 80, h: float = 120,
-         conf: float = 0.9, cls: str = "person") -> TargetObservation:
+def _obs(
+    tid: int,
+    x: float,
+    y: float,
+    w: float = 80,
+    h: float = 120,
+    conf: float = 0.9,
+    cls: str = "person",
+) -> TargetObservation:
     return TargetObservation(
-        timestamp=0.0, track_id=tid,
+        timestamp=0.0,
+        track_id=tid,
         bbox=BoundingBox(x=x, y=y, w=w, h=h),
-        confidence=conf, class_id=cls,
+        confidence=conf,
+        class_id=cls,
     )
 
 
@@ -146,7 +172,6 @@ def _obs(tid: int, x: float, y: float, w: float = 80, h: float = 120,
 
 
 class TestMultiGimbalE2E:
-
     # -----------------------------------------------------------------------
     # Test 1: 2 gimbals, 2 targets → 2 distinct assignments
     # -----------------------------------------------------------------------
@@ -158,10 +183,12 @@ class TestMultiGimbalE2E:
         # Inject two well-separated targets and step several times to establish tracks
         for _ in range(5):
             ts = time.monotonic()
-            detector.inject([
-                _det(x=100, y=300, conf=0.92),   # left
-                _det(x=1100, y=300, conf=0.88),  # right
-            ])
+            detector.inject(
+                [
+                    _det(x=100, y=300, conf=0.92),  # left
+                    _det(x=1100, y=300, conf=0.88),  # right
+                ]
+            )
             outputs = pipeline.step(frame, ts)
 
         # After stabilisation the last step should have 2 assignments
@@ -232,8 +259,8 @@ class TestMultiGimbalE2E:
         allocator = TargetAllocator(num_executors=2)
 
         targets = [
-            _obs(tid=1, x=100,  y=300, conf=0.92),  # left
-            _obs(tid=2, x=640,  y=300, conf=0.85),  # center
+            _obs(tid=1, x=100, y=300, conf=0.92),  # left
+            _obs(tid=2, x=640, y=300, conf=0.85),  # center
             _obs(tid=3, x=1100, y=300, conf=0.78),  # right
         ]
         executor_positions = [(0.0, 0.0), (0.0, 0.0)]
@@ -242,8 +269,7 @@ class TestMultiGimbalE2E:
 
         # At most 2 assignments (only 2 gimbals available)
         assert len(assignments) <= 2, (
-            f"Expected at most 2 assignments with 2 gimbals and 3 targets, "
-            f"got {len(assignments)}"
+            f"Expected at most 2 assignments with 2 gimbals and 3 targets, got {len(assignments)}"
         )
 
         # At least 1 unassigned target
@@ -279,8 +305,7 @@ class TestMultiGimbalE2E:
         )
         # Commands must still be produced (one per gimbal — SEARCH mode)
         assert len(outputs.commands) == 2, (
-            f"Expected 2 commands (SEARCH state for each gimbal), "
-            f"got {len(outputs.commands)}"
+            f"Expected 2 commands (SEARCH state for each gimbal), got {len(outputs.commands)}"
         )
         assert outputs.all_targets == []
 
@@ -305,10 +330,12 @@ class TestMultiGimbalE2E:
 
         for _step in range(10):
             ts = time.monotonic()
-            detector.inject([
-                _det(x=100,  y=300, conf=0.92),
-                _det(x=1100, y=300, conf=0.88),
-            ])
+            detector.inject(
+                [
+                    _det(x=100, y=300, conf=0.92),
+                    _det(x=1100, y=300, conf=0.88),
+                ]
+            )
             outputs = pipeline.step(frame, ts)
             # MultiGimbalOutputs uses all_targets (not tracks)
             lifecycle.update(outputs.all_targets, [], ts)
@@ -366,13 +393,15 @@ class TestMultiGimbalE2E:
         )
 
         eng_cfg = EngagementConfig(
-            weights=ThreatWeights(distance=0.30, velocity=0.25, class_threat=0.20,
-                                  heading=0.15, size=0.10),
+            weights=ThreatWeights(
+                distance=0.30, velocity=0.25, class_threat=0.20, heading=0.15, size=0.10
+            ),
             strategy="threat_first",
             min_threat_threshold=0.05,
         )
-        assessor = ThreatAssessor(frame_width=1280, frame_height=720,
-                                   camera_fy=900.0, config=eng_cfg)
+        assessor = ThreatAssessor(
+            frame_width=1280, frame_height=720, camera_fy=900.0, config=eng_cfg
+        )
         queue = EngagementQueue(config=eng_cfg)
 
         ts = time.monotonic()
@@ -383,14 +412,18 @@ class TestMultiGimbalE2E:
             bbox=BoundingBox(x=560, y=270, w=160, h=240),  # large, near center
             confidence=0.95,
             class_id="person",
-            first_seen_ts=ts, last_seen_ts=ts, age_frames=10,
+            first_seen_ts=ts,
+            last_seen_ts=ts,
+            age_frames=10,
         )
         track_low = Track(
             track_id=2,
             bbox=BoundingBox(x=50, y=50, w=40, h=60),  # small, far corner
             confidence=0.60,
             class_id="person",
-            first_seen_ts=ts, last_seen_ts=ts, age_frames=10,
+            first_seen_ts=ts,
+            last_seen_ts=ts,
+            age_frames=10,
         )
 
         assessments = assessor.assess([track_high, track_low])
@@ -404,8 +437,7 @@ class TestMultiGimbalE2E:
             rank1 = next((a for a in assessments if a.priority_rank == 1), None)
             if rank1 is not None:
                 assert current_id == rank1.track_id, (
-                    f"Queue should front rank-1 target {rank1.track_id}, "
-                    f"got {current_id}"
+                    f"Queue should front rank-1 target {rank1.track_id}, got {current_id}"
                 )
 
         # Verify ordering: rank 1 has higher score than rank 2
@@ -522,9 +554,7 @@ class TestTargetAllocatorProperties:
         targets = [_obs(tid=1, x=200, y=300), _obs(tid=2, x=1000, y=300)]
         result = allocator.allocate(targets, [(0.0, 0.0), (0.0, 0.0)])
         target_ids = [a.target.track_id for a in result]
-        assert len(target_ids) == len(set(target_ids)), (
-            f"Duplicate target assignment: {target_ids}"
-        )
+        assert len(target_ids) == len(set(target_ids)), f"Duplicate target assignment: {target_ids}"
 
     def test_continuity_keeps_same_target(self):
         """After first allocation, the same target gets a continuity discount."""
@@ -572,8 +602,7 @@ class TestMultiGimbalPipelineOutputs:
             detector.inject([])
             outputs = pipeline.step(frame, ts)
             assert len(outputs.commands) == n, (
-                f"Expected {n} commands for {n}-gimbal pipeline, "
-                f"got {len(outputs.commands)}"
+                f"Expected {n} commands for {n}-gimbal pipeline, got {len(outputs.commands)}"
             )
 
     def test_assignments_reference_valid_executor_ids(self):
@@ -583,16 +612,16 @@ class TestMultiGimbalPipelineOutputs:
 
         for _ in range(5):
             ts = time.monotonic()
-            detector.inject([
-                _det(x=100, y=300, conf=0.9),
-                _det(x=1100, y=300, conf=0.85),
-            ])
+            detector.inject(
+                [
+                    _det(x=100, y=300, conf=0.9),
+                    _det(x=1100, y=300, conf=0.85),
+                ]
+            )
             outputs = pipeline.step(frame, ts)
 
         for a in outputs.assignments:
-            assert 0 <= a.executor_id < 2, (
-                f"executor_id {a.executor_id} out of range [0, 2)"
-            )
+            assert 0 <= a.executor_id < 2, f"executor_id {a.executor_id} out of range [0, 2)"
 
     def test_all_targets_tracked_ids_non_negative(self):
         """Track IDs from all_targets must be positive integers."""
@@ -600,10 +629,12 @@ class TestMultiGimbalPipelineOutputs:
         frame = _blank_frame()
 
         ts = time.monotonic()
-        detector.inject([
-            _det(x=200, y=300, conf=0.9),
-            _det(x=900, y=300, conf=0.85),
-        ])
+        detector.inject(
+            [
+                _det(x=200, y=300, conf=0.9),
+                _det(x=900, y=300, conf=0.85),
+            ]
+        )
         outputs = pipeline.step(frame, ts)
 
         for t in outputs.all_targets:

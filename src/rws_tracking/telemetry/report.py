@@ -97,6 +97,7 @@ def generate_report(
 
     if output_path:
         from pathlib import Path
+
         Path(output_path).write_text(html_str, encoding="utf-8")
 
     return html_str
@@ -185,7 +186,7 @@ def _render(
     <div class="card"><div class="num">{len(records)}</div><div class="label">Total events</div></div>
     <div class="card"><div class="num">{len(fire_events)}</div><div class="label">Shots fired</div></div>
     <div class="card"><div class="num">{len(operators)}</div><div class="label">Operators</div></div>
-    <div class="card"><div class="num">{'OK' if chain_ok else 'FAIL'}</div><div class="label">Chain integrity</div></div>
+    <div class="card"><div class="num">{"OK" if chain_ok else "FAIL"}</div><div class="label">Chain integrity</div></div>
   </div>
 
   <div class="section-title">Operator Statistics</div>

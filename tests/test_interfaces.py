@@ -1,6 +1,5 @@
 """接口协议单元测试 — 验证各模块接口定义。"""
 
-
 from src.rws_tracking.control.interfaces import GimbalController
 from src.rws_tracking.decision.interfaces import EngagementQueueProtocol, ThreatAssessorProtocol
 from src.rws_tracking.hardware.interfaces import (

@@ -170,9 +170,7 @@ class EventBus:
                     self._subscribers.remove(q)
                 except ValueError:
                     pass
-            logger.debug(
-                "SSE subscriber disconnected (total=%d)", len(self._subscribers)
-            )
+            logger.debug("SSE subscriber disconnected (total=%d)", len(self._subscribers))
 
     # ------------------------------------------------------------------
     # Internal

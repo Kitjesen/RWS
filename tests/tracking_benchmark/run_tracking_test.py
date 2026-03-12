@@ -56,6 +56,7 @@ def download_test_video(output_path: Path) -> bool:
     print(f"[DL] Downloading from {url} ...")
     try:
         import urllib.request
+
         urllib.request.urlretrieve(url, str(output_path))
         if output_path.exists() and output_path.stat().st_size > 100_000:
             print(f"[OK] Downloaded ({output_path.stat().st_size // 1024} KB)")
@@ -158,8 +159,9 @@ def run_single_test(
             lbl = f"ID:{tid}"
             (tw, th_t), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
             cv2.rectangle(annotated, (x1, y1 - th_t - 6), (x1 + tw + 4, y1), color, -1)
-            cv2.putText(annotated, lbl, (x1 + 2, y1 - 4),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(
+                annotated, lbl, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1
+            )
 
         reid_info = ""
         if hasattr(tracker, "reid_stats"):
@@ -170,9 +172,15 @@ def run_single_test(
                 stats.reid_recoveries = rs["remaps"]
 
         avg_ms = stats.inference_times[-1] * 1000
-        cv2.putText(annotated,
-                     f"[{label}] F{frame_idx}  {avg_ms:.0f}ms  IDs:{len(stats.unique_ids)}{reid_info}",
-                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 1)
+        cv2.putText(
+            annotated,
+            f"[{label}] F{frame_idx}  {avg_ms:.0f}ms  IDs:{len(stats.unique_ids)}{reid_info}",
+            (10, 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (0, 255, 0),
+            1,
+        )
 
         if writer is not None:
             writer.write(annotated)
@@ -183,7 +191,9 @@ def run_single_test(
         if frame_idx % 100 == 0:
             elapsed = time.monotonic() - t_start
             fps_actual = frame_idx / max(elapsed, 0.001)
-            print(f"    [{frame_idx}/{total_frames}] {fps_actual:.1f} FPS, {len(stats.unique_ids)} IDs")
+            print(
+                f"    [{frame_idx}/{total_frames}] {fps_actual:.1f} FPS, {len(stats.unique_ids)} IDs"
+            )
 
     cap.release()
     if writer is not None:
@@ -213,13 +223,13 @@ def print_comparison(*all_stats: BenchmarkStats, baseline_unique_ids: int | None
     col_w = 18
     header_names = [s.name for s in all_stats]
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"{'COMPARISON REPORT':^80}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     header = f"  {'Metric':<30}" + "".join(f" {n:>{col_w}}" for n in header_names)
     print(header)
-    print(f"  {'-'*30}" + (" " + "-"*col_w) * len(all_stats))
+    print(f"  {'-' * 30}" + (" " + "-" * col_w) * len(all_stats))
 
     def row(label: str, values: list[str]):
         print(f"  {label:<30}" + "".join(f" {v:>{col_w}}" for v in values))
@@ -234,7 +244,10 @@ def print_comparison(*all_stats: BenchmarkStats, baseline_unique_ids: int | None
     row("Avg track length", [f"{avg_len(s):.1f}" for s in all_stats])
     row("Fragmentation breaks", [str(s.fragmentation) for s in all_stats])
     row("Avg break gap", [f"{s.avg_gap:.1f}" for s in all_stats])
-    row("Re-ID recoveries", [str(s.reid_recoveries) if s.reid_recoveries else "N/A" for s in all_stats])
+    row(
+        "Re-ID recoveries",
+        [str(s.reid_recoveries) if s.reid_recoveries else "N/A" for s in all_stats],
+    )
     row("Composite score", [f"{s.score:.4f}" for s in all_stats])
 
     baseline_ids = baseline_unique_ids or (len(all_stats[0].unique_ids) if all_stats else 1)
@@ -247,7 +260,7 @@ def print_comparison(*all_stats: BenchmarkStats, baseline_unique_ids: int | None
             f"Frag delta={s.fragmentation - all_stats[0].fragmentation:+d}"
         )
 
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
 
 if __name__ == "__main__":

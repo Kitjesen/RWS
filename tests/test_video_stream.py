@@ -1,6 +1,5 @@
 """视频流模块单元测试。"""
 
-
 import numpy as np
 import pytest
 
@@ -69,10 +68,13 @@ class TestFrameAnnotator:
         assert result.shape == frame.shape
 
     def test_annotate_with_detections(self, annotator, frame):
-        dets = [Detection(
-            bbox=BoundingBox(x=100, y=100, w=80, h=150),
-            confidence=0.9, class_id="person",
-        )]
+        dets = [
+            Detection(
+                bbox=BoundingBox(x=100, y=100, w=80, h=150),
+                confidence=0.9,
+                class_id="person",
+            )
+        ]
         result = annotator.annotate(frame, dets, None)
         assert result.shape == frame.shape
         # Should have drawn something (not all zeros)
@@ -80,19 +82,27 @@ class TestFrameAnnotator:
 
     def test_annotate_with_selected_target(self, annotator, frame):
         target = TargetObservation(
-            timestamp=0.0, track_id=1,
+            timestamp=0.0,
+            track_id=1,
             bbox=BoundingBox(x=600, y=300, w=80, h=150),
-            confidence=0.9, class_id="person",
+            confidence=0.9,
+            class_id="person",
         )
         result = annotator.annotate(frame, [], selected_id=target.track_id)
         assert result.sum() > 0
 
     def test_annotate_with_tracks(self, annotator, frame):
-        tracks = [Track(
-            track_id=1, bbox=BoundingBox(x=100, y=100, w=80, h=150),
-            confidence=0.9, class_id="person",
-            first_seen_ts=0.0, last_seen_ts=0.0, age_frames=10,
-        )]
+        tracks = [
+            Track(
+                track_id=1,
+                bbox=BoundingBox(x=100, y=100, w=80, h=150),
+                confidence=0.9,
+                class_id="person",
+                first_seen_ts=0.0,
+                last_seen_ts=0.0,
+                age_frames=10,
+            )
+        ]
         result = annotator.annotate(frame, [], tracks)
         assert result.shape == frame.shape
 

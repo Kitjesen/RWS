@@ -107,8 +107,7 @@ BUILTIN_PROFILES: dict[str, RoeProfile] = {
         nfz_buffer_multiplier=2.0,
         require_two_man=True,
         description=(
-            "Live operations. Maximum safety constraints enforced. "
-            "Two-man arming rule required."
+            "Live operations. Maximum safety constraints enforced. Two-man arming rule required."
         ),
     ),
 }
@@ -171,10 +170,7 @@ class RoeManager:
             If *name* is not a registered profile.
         """
         if name not in self._profiles:
-            raise ValueError(
-                f"Unknown ROE profile: {name!r}. "
-                f"Available: {list(self._profiles)}"
-            )
+            raise ValueError(f"Unknown ROE profile: {name!r}. Available: {list(self._profiles)}")
         old = self._active.name
         self._active = self._profiles[name]
         logger.warning(

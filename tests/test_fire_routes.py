@@ -19,6 +19,7 @@ from flask import Flask
 def _make_chain(state: str = "safe", can_fire: bool = False, operator_id: str | None = None):
     """Build a minimal ShootingChain-like mock."""
     from src.rws_tracking.safety.shooting_chain import ShootingChain
+
     chain = ShootingChain()
     # Advance to the requested state.
     if state in ("armed", "fire_authorized", "fire_requested"):
@@ -241,8 +242,9 @@ class TestHeartbeatEndpoint:
 class TestIffEndpoints:
     def _make_iff_checker(self, friendly_ids: list[int] | None = None):
         from src.rws_tracking.safety.iff import IFFChecker
+
         iff = IFFChecker()
-        for tid in (friendly_ids or []):
+        for tid in friendly_ids or []:
             iff.add_friendly_track(tid)
         return iff
 

@@ -15,10 +15,10 @@ from ultralytics import YOLO
 
 
 def run_trackers_benchmark(video_path: Path, output_path: Path):
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("  Roboflow Trackers Benchmark")
     print(f"  Video: {video_path.name}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Load YOLO model for detection
     model = YOLO("yolo11n.pt")
@@ -63,7 +63,7 @@ def run_trackers_benchmark(video_path: Path, output_path: Path):
         t0 = time.monotonic()
 
         # 1. Detect
-        results = model(frame, verbose=False, classes=[0, 2, 3, 5]) # person, car, motorcycle, bus
+        results = model(frame, verbose=False, classes=[0, 2, 3, 5])  # person, car, motorcycle, bus
         detections = sv.Detections.from_ultralytics(results[0])
 
         # 2. Track (DeepSORT needs image for ReID features)
@@ -78,13 +78,16 @@ def run_trackers_benchmark(video_path: Path, output_path: Path):
         inference_times.append(t1 - t0)
 
         # Annotate
-        labels = [
-            f"ID:{tracker_id}"
-            for tracker_id in tracked_detections.tracker_id
-        ] if tracked_detections.tracker_id is not None else []
+        labels = (
+            [f"ID:{tracker_id}" for tracker_id in tracked_detections.tracker_id]
+            if tracked_detections.tracker_id is not None
+            else []
+        )
 
         annotated_frame = box_annotator.annotate(scene=frame.copy(), detections=tracked_detections)
-        annotated_frame = label_annotator.annotate(scene=annotated_frame, detections=tracked_detections, labels=labels)
+        annotated_frame = label_annotator.annotate(
+            scene=annotated_frame, detections=tracked_detections, labels=labels
+        )
 
         # Record stats
         if tracked_detections.tracker_id is not None:
@@ -98,10 +101,24 @@ def run_trackers_benchmark(video_path: Path, output_path: Path):
 
         # HUD
         avg_ms = inference_times[-1] * 1000
-        cv2.putText(annotated_frame, f"Frame {frame_idx}/{total_frames}  {avg_ms:.0f}ms  IDs:{len(total_ids)}",
-                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1)
-        cv2.putText(annotated_frame, "Roboflow DeepSORT (ReID)", (10, 50),
-                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        cv2.putText(
+            annotated_frame,
+            f"Frame {frame_idx}/{total_frames}  {avg_ms:.0f}ms  IDs:{len(total_ids)}",
+            (10, 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 0),
+            1,
+        )
+        cv2.putText(
+            annotated_frame,
+            "Roboflow DeepSORT (ReID)",
+            (10, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (200, 200, 200),
+            1,
+        )
 
         writer.write(annotated_frame)
         frame_idx += 1
@@ -109,7 +126,9 @@ def run_trackers_benchmark(video_path: Path, output_path: Path):
         if frame_idx % 50 == 0:
             elapsed = time.monotonic() - t_start
             fps_actual = frame_idx / max(elapsed, 0.001)
-            print(f"  [{frame_idx}/{total_frames}] {fps_actual:.1f} FPS, {len(total_ids)} unique IDs so far")
+            print(
+                f"  [{frame_idx}/{total_frames}] {fps_actual:.1f} FPS, {len(total_ids)} unique IDs so far"
+            )
 
     cap.release()
     writer.release()
@@ -118,9 +137,9 @@ def run_trackers_benchmark(video_path: Path, output_path: Path):
     elapsed = time.monotonic() - t_start
     avg_inference_ms = np.mean(inference_times) * 1000 if inference_times else 0
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("  TRACKING BENCHMARK REPORT: DeepSORT")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  Total frames processed : {frame_idx}")
     print(f"  Average FPS            : {frame_idx / max(elapsed, 0.001):.1f}")
     print(f"  Avg inference time     : {avg_inference_ms:.1f}ms")
@@ -140,7 +159,10 @@ def run_trackers_benchmark(video_path: Path, output_path: Path):
             if gap > 1:
                 gaps.append(gap)
         gap_str = f"  gaps: {gaps}" if gaps else "  continuous"
-        print(f"  ID {tid:3d}: {len(frames_list):4d} frames, span={span}, coverage={coverage:.0f}%{gap_str}")
+        print(
+            f"  ID {tid:3d}: {len(frames_list):4d} frames, span={span}, coverage={coverage:.0f}%{gap_str}"
+        )
+
 
 if __name__ == "__main__":
     benchmark_dir = Path(__file__).parent

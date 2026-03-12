@@ -8,6 +8,7 @@ Four-way comparison:
 
 Lower unique IDs / higher avg_track_len / lower frag = better tracking stability.
 """
+
 import sys
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent.parent.parent / "src"))
@@ -47,22 +48,32 @@ def run_test(tracker_obj, video_path: str, label: str, max_frames: int):
             id_history.setdefault(t.track_id, []).append(i)
 
         if (i + 1) % 100 == 0:
-            print(f"  [{label}] frame {i+1}/{n}: {len(unique_ids)} IDs, "
-                  f"avg={sum(latencies[-100:]) / min(100, len(latencies)):.0f}ms")
+            print(
+                f"  [{label}] frame {i + 1}/{n}: {len(unique_ids)} IDs, "
+                f"avg={sum(latencies[-100:]) / min(100, len(latencies)):.0f}ms"
+            )
 
     cap.release()
 
     track_lens = [len(f) for f in id_history.values()]
     avg_len = sum(track_lens) / max(len(track_lens), 1)
-    frag = sum(1 for frames in id_history.values()
-               for j in range(1, len(frames)) if frames[j] - frames[j-1] > 1)
-    gaps = [frames[j] - frames[j-1] for frames in id_history.values()
-            for j in range(1, len(frames)) if frames[j] - frames[j-1] > 1]
+    frag = sum(
+        1
+        for frames in id_history.values()
+        for j in range(1, len(frames))
+        if frames[j] - frames[j - 1] > 1
+    )
+    gaps = [
+        frames[j] - frames[j - 1]
+        for frames in id_history.values()
+        for j in range(1, len(frames))
+        if frames[j] - frames[j - 1] > 1
+    ]
     avg_gap = sum(gaps) / max(len(gaps), 1)
     avg_lat = sum(latencies) / max(len(latencies), 1)
     p95_lat = sorted(latencies)[int(len(latencies) * 0.95)] if latencies else 0
 
-    rs = tracker_obj.reid_stats if hasattr(tracker_obj, 'reid_stats') else {}
+    rs = tracker_obj.reid_stats if hasattr(tracker_obj, "reid_stats") else {}
     skip_pct = 0
     if rs.get("extractions", 0) + rs.get("skips", 0) > 0:
         skip_pct = rs["skips"] / (rs["extractions"] + rs["skips"]) * 100
@@ -90,19 +101,19 @@ def print_results(video_name: str, results: list[dict]):
     for r in results:
         print(f" {r['label']:>{col}}", end="")
     print()
-    print(f"  {'-'*20}", end="")
+    print(f"  {'-' * 20}", end="")
     for _ in results:
-        print(f" {'-'*col}", end="")
+        print(f" {'-' * col}", end="")
     print()
 
     base = results[0]
     for key, label, fmt, _higher_better in [
-        ("unique_ids",    "Unique IDs",      "d",   False),
-        ("avg_track_len", "Avg track len",   ".1f", True),
-        ("frag",          "Frag breaks",     "d",   False),
-        ("avg_gap",       "Avg break gap",   ".1f", False),
-        ("avg_lat",       "Avg latency(ms)", ".0f", False),
-        ("p95_lat",       "P95 latency(ms)", ".0f", False),
+        ("unique_ids", "Unique IDs", "d", False),
+        ("avg_track_len", "Avg track len", ".1f", True),
+        ("frag", "Frag breaks", "d", False),
+        ("avg_gap", "Avg break gap", ".1f", False),
+        ("avg_lat", "Avg latency(ms)", ".0f", False),
+        ("p95_lat", "P95 latency(ms)", ".0f", False),
     ]:
         print(f"  {label:<20}", end="")
         for r in results:
@@ -136,12 +147,19 @@ def main():
 
     MAX = 300
     GalleryConfig(
-        match_threshold=0.26, match_threshold_relaxed=0.20,
-        cascade_recent_s=2.0, second_best_margin=0.02,
-        spatial_gate_px=450.0, spatial_gate_grow_rate=220.0,
-        appearance_weight=0.50, motion_weight=0.35,
-        iou_weight=0.15, min_fused_score=0.24,
-        ema_alpha=0.85, max_lost_age=5.0, min_track_age_frames=3,
+        match_threshold=0.26,
+        match_threshold_relaxed=0.20,
+        cascade_recent_s=2.0,
+        second_best_margin=0.02,
+        spatial_gate_px=450.0,
+        spatial_gate_grow_rate=220.0,
+        appearance_weight=0.50,
+        motion_weight=0.35,
+        iou_weight=0.15,
+        min_fused_score=0.24,
+        ema_alpha=0.85,
+        max_lost_age=5.0,
+        min_track_age_frames=3,
     )
 
     for vpath, vname in videos:
@@ -149,33 +167,81 @@ def main():
         w, h = int(cap.get(3)), int(cap.get(4))
         total = int(cap.get(7))
         cap.release()
-        print(f"\n{'#'*65}")
+        print(f"\n{'#' * 65}")
         print(f"  VIDEO: {vname} ({w}x{h}, {total}f, testing {min(MAX, total)})")
-        print(f"{'#'*65}")
+        print(f"{'#' * 65}")
 
         # Cached baseline numbers from previous full run (saves ~4 min per video)
         CACHED = {
             "test_people.mp4": [
-                {"label": "Baseline",  "unique_ids": 69,  "avg_track_len": 87.6,
-                 "frag": 213, "avg_gap": 5.4,  "avg_lat": 172, "p95_lat": 216,
-                 "remaps": 0, "skip_pct": 0},
-                {"label": "BoT+OSNet", "unique_ids": 28,  "avg_track_len": 215.9,
-                 "frag": 117, "avg_gap": 8.7,  "avg_lat": 250, "p95_lat": 401,
-                 "remaps": 0, "skip_pct": 0},
-                {"label": "FusionMOT", "unique_ids": 34,  "avg_track_len": 260.2,
-                 "frag": 241, "avg_gap": 2.6,  "avg_lat": 183, "p95_lat": 286,
-                 "remaps": 0, "skip_pct": 0},
+                {
+                    "label": "Baseline",
+                    "unique_ids": 69,
+                    "avg_track_len": 87.6,
+                    "frag": 213,
+                    "avg_gap": 5.4,
+                    "avg_lat": 172,
+                    "p95_lat": 216,
+                    "remaps": 0,
+                    "skip_pct": 0,
+                },
+                {
+                    "label": "BoT+OSNet",
+                    "unique_ids": 28,
+                    "avg_track_len": 215.9,
+                    "frag": 117,
+                    "avg_gap": 8.7,
+                    "avg_lat": 250,
+                    "p95_lat": 401,
+                    "remaps": 0,
+                    "skip_pct": 0,
+                },
+                {
+                    "label": "FusionMOT",
+                    "unique_ids": 34,
+                    "avg_track_len": 260.2,
+                    "frag": 241,
+                    "avg_gap": 2.6,
+                    "avg_lat": 183,
+                    "p95_lat": 286,
+                    "remaps": 0,
+                    "skip_pct": 0,
+                },
             ],
             "test_subway.mp4": [
-                {"label": "Baseline",  "unique_ids": 18,  "avg_track_len": 124.7,
-                 "frag": 39,  "avg_gap": 7.0,  "avg_lat": 186, "p95_lat": 215,
-                 "remaps": 0, "skip_pct": 0},
-                {"label": "BoT+OSNet", "unique_ids": 9,   "avg_track_len": 249.4,
-                 "frag": 31,  "avg_gap": 10.1, "avg_lat": 189, "p95_lat": 243,
-                 "remaps": 0, "skip_pct": 0},
-                {"label": "FusionMOT", "unique_ids": 15,  "avg_track_len": 209.5,
-                 "frag": 36,  "avg_gap": 12.9, "avg_lat": 141, "p95_lat": 195,
-                 "remaps": 0, "skip_pct": 0},
+                {
+                    "label": "Baseline",
+                    "unique_ids": 18,
+                    "avg_track_len": 124.7,
+                    "frag": 39,
+                    "avg_gap": 7.0,
+                    "avg_lat": 186,
+                    "p95_lat": 215,
+                    "remaps": 0,
+                    "skip_pct": 0,
+                },
+                {
+                    "label": "BoT+OSNet",
+                    "unique_ids": 9,
+                    "avg_track_len": 249.4,
+                    "frag": 31,
+                    "avg_gap": 10.1,
+                    "avg_lat": 189,
+                    "p95_lat": 243,
+                    "remaps": 0,
+                    "skip_pct": 0,
+                },
+                {
+                    "label": "FusionMOT",
+                    "unique_ids": 15,
+                    "avg_track_len": 209.5,
+                    "frag": 36,
+                    "avg_gap": 12.9,
+                    "avg_lat": 141,
+                    "p95_lat": 195,
+                    "remaps": 0,
+                    "skip_pct": 0,
+                },
             ],
         }
         results = list(CACHED.get(vname, []))
@@ -203,6 +269,7 @@ def main():
         pose_model = "yolo11n-pose.pt"
         try:
             import ultralytics  # noqa: F401
+
             print(f"\n--- D: FusionMOT + Pose skeleton (model={pose_model}) ---")
             t_d = FusionSegTracker(
                 model_path=pose_model,
@@ -213,9 +280,9 @@ def main():
                 img_size=640,
                 reid_config=ReIDConfig(backbone="osnet_x1_0", device=""),
                 mot_config=FusionMOTConfig(
-                    w_skeleton=0.06,      # soft cue, not hard gate
+                    w_skeleton=0.06,  # soft cue, not hard gate
                     use_hip_center=True,
-                    skeleton_gate=1.2,    # wider: allows view-angle variation
+                    skeleton_gate=1.2,  # wider: allows view-angle variation
                     kp_visibility_thresh=0.2,  # lower: catches small targets in high-res video
                 ),
             )

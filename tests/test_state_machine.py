@@ -11,7 +11,8 @@ from src.rws_tracking.types import TargetError, TrackState
 def cfg():
     pid = PIDConfig(kp=5.0, ki=0.3, kd=0.2)
     return GimbalControllerConfig(
-        yaw_pid=pid, pitch_pid=pid,
+        yaw_pid=pid,
+        pitch_pid=pid,
         lock_error_threshold_deg=1.0,
         lock_hold_time_s=0.5,
         lost_timeout_s=1.0,

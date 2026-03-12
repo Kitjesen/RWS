@@ -93,6 +93,7 @@ class TestListProfiles:
     def test_empty_profile_directory(self, tmp_path):
         """A real ProfileManager with an empty dir returns empty list."""
         from src.rws_tracking.config.profiles import ProfileManager
+
         pm = ProfileManager(tmp_path)
         app = _make_app({"profile_manager": pm})
         with app.test_client() as c:
@@ -107,6 +108,7 @@ class TestListProfiles:
         (tmp_path / "bravo.yaml").write_text("dummy: true")
 
         from src.rws_tracking.config.profiles import ProfileManager
+
         pm = ProfileManager(tmp_path)
         app = _make_app({"profile_manager": pm})
         with app.test_client() as c:
@@ -137,6 +139,7 @@ class TestSwitchProfile:
         with app.test_client() as c:
             # Mock load_profile so we don't need a fully valid YAML config
             import unittest.mock as mock
+
             with mock.patch.object(pm, "load_profile", return_value=None) as m:
                 resp = c.post("/api/config/profile/drill")
                 assert resp.status_code == 200
@@ -148,6 +151,7 @@ class TestSwitchProfile:
     def test_switch_to_missing_profile_returns_404(self, tmp_path):
         """Switching to a non-existent profile returns 404."""
         from src.rws_tracking.config.profiles import ProfileManager
+
         pm = ProfileManager(tmp_path)
         app = _make_app({"profile_manager": pm})
         with app.test_client() as c:

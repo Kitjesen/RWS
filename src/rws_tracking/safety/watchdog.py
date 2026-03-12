@@ -88,9 +88,7 @@ class OperatorWatchdog:
         if self._thread is not None and self._thread.is_alive():
             return
         self._running = True
-        self._thread = threading.Thread(
-            target=self._run, daemon=True, name="operator-watchdog"
-        )
+        self._thread = threading.Thread(target=self._run, daemon=True, name="operator-watchdog")
         self._thread.start()
         logger.info("watchdog: started (timeout=%.1fs)", self._timeout_s)
 
@@ -122,11 +120,15 @@ class OperatorWatchdog:
                 # Notify connected SSE subscribers of the operator timeout.
                 try:
                     from ..api.events import event_bus
-                    event_bus.emit("operator_timeout", {
-                        "elapsed_s": round(elapsed, 1),
-                        "timeout_s": self._timeout_s,
-                        "ts": round(time.time(), 3),
-                    })
+
+                    event_bus.emit(
+                        "operator_timeout",
+                        {
+                            "elapsed_s": round(elapsed, 1),
+                            "timeout_s": self._timeout_s,
+                            "ts": round(time.time(), 3),
+                        },
+                    )
                 except Exception:  # noqa: BLE001
                     pass
             time.sleep(self._check_interval_s)

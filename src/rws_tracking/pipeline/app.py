@@ -434,9 +434,7 @@ def build_pipeline_from_config(
     from ..telemetry.audit import AuditLogger
     from ..telemetry.video_ring_buffer import VideoRingBuffer
 
-    shooting_chain = ShootingChain(
-        cooldown_s=getattr(cfg, "fire_cooldown_s", 3.0)
-    )
+    shooting_chain = ShootingChain(cooldown_s=getattr(cfg, "fire_cooldown_s", 3.0))
 
     # ---- ROE profile manager ----
     # Initial profile comes from config.yaml safety.roe_profile (defaults to
@@ -454,9 +452,7 @@ def build_pipeline_from_config(
         if _two_man:
             shooting_chain.enable_two_man_rule(True)
             shooting_chain._arm_confirmation_timeout_s = float(_arm_timeout)
-    audit_logger = AuditLogger(
-        log_path=getattr(cfg, "audit_log_path", "logs/audit.jsonl")
-    )
+    audit_logger = AuditLogger(log_path=getattr(cfg, "audit_log_path", "logs/audit.jsonl"))
     health_monitor = HealthMonitor()
     lifecycle_manager = TargetLifecycleManager(
         confirm_age_frames=getattr(cfg, "lifecycle_confirm_frames", 3),

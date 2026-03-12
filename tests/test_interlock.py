@@ -13,13 +13,15 @@ from src.rws_tracking.safety.interlock import (
 
 @pytest.fixture
 def interlock():
-    return SafetyInterlock(SafetyInterlockConfig(
-        require_operator_auth=True,
-        min_lock_time_s=1.0,
-        min_engagement_range_m=5.0,
-        max_engagement_range_m=500.0,
-        heartbeat_timeout_s=100.0,
-    ))
+    return SafetyInterlock(
+        SafetyInterlockConfig(
+            require_operator_auth=True,
+            min_lock_time_s=1.0,
+            min_engagement_range_m=5.0,
+            max_engagement_range_m=500.0,
+            heartbeat_timeout_s=100.0,
+        )
+    )
 
 
 def _authorize_all(il):
@@ -70,10 +72,12 @@ class TestOperatorAuth:
 
 class TestHeartbeat:
     def test_timeout_blocks(self):
-        il = SafetyInterlock(SafetyInterlockConfig(
-            require_operator_auth=True,
-            heartbeat_timeout_s=0.001,
-        ))
+        il = SafetyInterlock(
+            SafetyInterlockConfig(
+                require_operator_auth=True,
+                heartbeat_timeout_s=0.001,
+            )
+        )
         il.set_operator_auth(True)
         il.update_system_status(True, True)
         il.update_target_status(True, 2.0, 50.0)

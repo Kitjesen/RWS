@@ -290,8 +290,7 @@ class VisionGimbalPipeline:
         # =====================================================================
         # Evict stale cache entries for tracks that disappeared this frame.
         live_ids = {t.track_id for t in tracks}
-        self._distance_cache = {k: v for k, v in self._distance_cache.items()
-                                if k in live_ids}
+        self._distance_cache = {k: v for k, v in self._distance_cache.items() if k in live_ids}
 
         # Filter out already-neutralized/archived targets before assessment.
         assessable_tracks = (
@@ -316,17 +315,19 @@ class VisionGimbalPipeline:
 
         # SSE: emit threat_detected for tracks newly entering the high-priority list.
         if _event_bus is not None:
-            current_high_ids = {ta.track_id for ta in threat_assessments
-                                if ta.threat_score >= 0.3}
+            current_high_ids = {ta.track_id for ta in threat_assessments if ta.threat_score >= 0.3}
             new_threat_ids = current_high_ids - self._last_threat_track_ids
             for ta in threat_assessments:
                 if ta.track_id in new_threat_ids:
-                    _event_bus.emit("threat_detected", {
-                        "track_id": ta.track_id,
-                        "threat_score": round(ta.threat_score, 4),
-                        "priority_rank": ta.priority_rank,
-                        "ts": round(timestamp, 3),
-                    })
+                    _event_bus.emit(
+                        "threat_detected",
+                        {
+                            "track_id": ta.track_id,
+                            "threat_score": round(ta.threat_score, 4),
+                            "priority_rank": ta.priority_rank,
+                            "ts": round(timestamp, 3),
+                        },
+                    )
             self._last_threat_track_ids = current_high_ids
 
         # =====================================================================
@@ -370,9 +371,7 @@ class VisionGimbalPipeline:
             laser_reading = self._rangefinder.measure(timestamp)
 
         if self._distance_fusion is not None and selected is not None:
-            distance_m = self._distance_fusion.fuse(
-                laser_reading, selected.bbox, timestamp
-            )
+            distance_m = self._distance_fusion.fuse(laser_reading, selected.bbox, timestamp)
             # Update cache so ThreatAssessor can use it next frame.
             if distance_m > 0:
                 self._distance_cache[selected.track_id] = distance_m
@@ -418,11 +417,7 @@ class VisionGimbalPipeline:
         # =====================================================================
         # 7b. IFF check (optional): block fire if selected target is friendly
         # =====================================================================
-        if (
-            self._iff_checker is not None
-            and safety_status is not None
-            and selected is not None
-        ):
+        if self._iff_checker is not None and safety_status is not None and selected is not None:
             iff_results = self._iff_checker.check(tracks)
             iff_result = iff_results.get(selected.track_id)
             if iff_result is not None and iff_result.is_friend:
@@ -442,12 +437,15 @@ class VisionGimbalPipeline:
         # SSE: emit safety_triggered on the first frame fire transitions to blocked.
         if _event_bus is not None and safety_status is not None:
             if not safety_status.fire_authorized and self._last_fire_authorized is not False:
-                _event_bus.emit("safety_triggered", {
-                    "reason": safety_status.blocked_reason or "interlock",
-                    "yaw_deg": round(feedback.yaw_deg, 2),
-                    "pitch_deg": round(feedback.pitch_deg, 2),
-                    "ts": round(timestamp, 3),
-                })
+                _event_bus.emit(
+                    "safety_triggered",
+                    {
+                        "reason": safety_status.blocked_reason or "interlock",
+                        "yaw_deg": round(feedback.yaw_deg, 2),
+                        "pitch_deg": round(feedback.pitch_deg, 2),
+                        "ts": round(timestamp, 3),
+                    },
+                )
             self._last_fire_authorized = safety_status.fire_authorized
 
         # =====================================================================
@@ -513,31 +511,33 @@ class VisionGimbalPipeline:
                         operator_id=self._shooting_chain.operator_id or "system",
                         chain_state=new_state,
                         target_id=selected.track_id if selected else None,
-                        threat_score=(threat_assessments[0].threat_score
-                                      if threat_assessments else 0.0),
+                        threat_score=(
+                            threat_assessments[0].threat_score if threat_assessments else 0.0
+                        ),
                         distance_m=distance_m,
                         fire_authorized=fire_auth,
-                        blocked_reason=(safety_status.blocked_reason
-                                        if safety_status and not fire_auth else ""),
+                        blocked_reason=(
+                            safety_status.blocked_reason if safety_status and not fire_auth else ""
+                        ),
                     )
                 # Push SSE event for real-time operator notification.
                 if _event_bus is not None:
-                    _event_bus.emit("fire_chain_state", {
-                        "state": new_state,
-                        "prev_state": self._last_chain_state,
-                        "target_id": selected.track_id if selected else None,
-                        "fire_authorized": fire_auth,
-                        "ts": round(timestamp, 3),
-                    })
+                    _event_bus.emit(
+                        "fire_chain_state",
+                        {
+                            "state": new_state,
+                            "prev_state": self._last_chain_state,
+                            "target_id": selected.track_id if selected else None,
+                            "fire_authorized": fire_auth,
+                            "ts": round(timestamp, 3),
+                        },
+                    )
                 self._last_chain_state = new_state
 
             # ROE gate: if the active profile has fire_enabled=False (e.g.
             # training mode), suppress the actual fire command even when the
             # shooting chain reports can_fire=True.
-            _roe_permits_fire = (
-                self._roe_manager is None
-                or self._roe_manager.is_fire_enabled()
-            )
+            _roe_permits_fire = self._roe_manager is None or self._roe_manager.is_fire_enabled()
             if not _roe_permits_fire and self._shooting_chain.can_fire:
                 logger.info(
                     "fire suppressed: ROE profile=%s (fire_enabled=False)",
@@ -558,41 +558,47 @@ class VisionGimbalPipeline:
                             operator_id=self._shooting_chain.operator_id or "system",
                             chain_state="fired",
                             target_id=selected.track_id if selected else None,
-                            threat_score=(threat_assessments[0].threat_score
-                                          if threat_assessments else 0.0),
+                            threat_score=(
+                                threat_assessments[0].threat_score if threat_assessments else 0.0
+                            ),
                             distance_m=distance_m,
                             fire_authorized=True,
                         )
                     # SSE: notify operator of fire execution.
                     if _event_bus is not None:
-                        _event_bus.emit("fire_executed", {
-                            "target_id": selected.track_id if selected else None,
-                            "threat_score": round(
-                                threat_assessments[0].threat_score
-                                if threat_assessments else 0.0, 4),
-                            "distance_m": round(distance_m, 1),
-                            "ts": round(timestamp, 3),
-                        })
-                    if (self._lifecycle_manager is not None
-                            and selected is not None):
-                        self._lifecycle_manager.mark_neutralized(
-                            selected.track_id, timestamp
-                        )
-                        if _event_bus is not None:
-                            _event_bus.emit("target_neutralized", {
-                                "track_id": selected.track_id,
+                        _event_bus.emit(
+                            "fire_executed",
+                            {
+                                "target_id": selected.track_id if selected else None,
                                 "threat_score": round(
                                     threat_assessments[0].threat_score
-                                    if threat_assessments else 0.0, 4),
+                                    if threat_assessments
+                                    else 0.0,
+                                    4,
+                                ),
+                                "distance_m": round(distance_m, 1),
                                 "ts": round(timestamp, 3),
-                            })
+                            },
+                        )
+                    if self._lifecycle_manager is not None and selected is not None:
+                        self._lifecycle_manager.mark_neutralized(selected.track_id, timestamp)
+                        if _event_bus is not None:
+                            _event_bus.emit(
+                                "target_neutralized",
+                                {
+                                    "track_id": selected.track_id,
+                                    "threat_score": round(
+                                        threat_assessments[0].threat_score
+                                        if threat_assessments
+                                        else 0.0,
+                                        4,
+                                    ),
+                                    "ts": round(timestamp, 3),
+                                },
+                            )
                     if self._video_ring_buffer is not None:
-                        track_id_for_clip = (
-                            selected.track_id if selected is not None else None
-                        )
-                        self._video_ring_buffer.save_clip(
-                            timestamp, "fire", track_id_for_clip
-                        )
+                        track_id_for_clip = selected.track_id if selected is not None else None
+                        self._video_ring_buffer.save_clip(timestamp, "fire", track_id_for_clip)
 
         # HealthMonitor: report pipeline heartbeat each frame.
         if self._health_monitor is not None:
@@ -608,11 +614,14 @@ class VisionGimbalPipeline:
                         )
                         prev = self._last_health_statuses.get(name, "ok")
                         if status_str in ("degraded", "failed") and status_str != prev:
-                            _event_bus.emit("health_degraded", {
-                                "subsystem": name,
-                                "status": status_str,
-                                "ts": round(timestamp, 3),
-                            })
+                            _event_bus.emit(
+                                "health_degraded",
+                                {
+                                    "subsystem": name,
+                                    "status": status_str,
+                                    "ts": round(timestamp, 3),
+                                },
+                            )
                         self._last_health_statuses[name] = status_str
                 except Exception:
                     pass
@@ -656,7 +665,9 @@ class VisionGimbalPipeline:
 
         fire_auth_for_pid = safety_status.fire_authorized if safety_status is not None else True
         command = self.controller.compute_command(
-            control_target, feedback, timestamp,
+            control_target,
+            feedback,
+            timestamp,
             body_state=body_state,
             fire_authorized=fire_auth_for_pid,
         )
@@ -685,8 +696,7 @@ class VisionGimbalPipeline:
             # Detect target switch: _last_target_id still holds the PREVIOUS
             # target ID at this point (updated later in section 11).
             target_switched = (
-                selected.track_id != self._last_target_id
-                and self._last_target_id is not None
+                selected.track_id != self._last_target_id and self._last_target_id is not None
             )
             if target_switched:
                 cam = self.controller._transform.camera
@@ -769,7 +779,9 @@ class VisionGimbalPipeline:
         # 10. 驱动执行
         # =====================================================================
         self.driver.set_yaw_pitch_rate(
-            command.yaw_rate_cmd_dps, command.pitch_rate_cmd_dps, timestamp,
+            command.yaw_rate_cmd_dps,
+            command.pitch_rate_cmd_dps,
+            timestamp,
         )
 
         # =====================================================================

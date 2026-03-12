@@ -289,9 +289,7 @@ class GimbalTrajectoryPlanner:
             self._phase = TrajectoryPhase.IDLE
             return True
 
-        self._yaw_seg = plan_trapezoid(
-            dy, self._cfg.max_rate_dps, self._cfg.max_acceleration_dps2
-        )
+        self._yaw_seg = plan_trapezoid(dy, self._cfg.max_rate_dps, self._cfg.max_acceleration_dps2)
         self._pitch_seg = plan_trapezoid(
             dp, self._cfg.max_rate_dps, self._cfg.max_acceleration_dps2
         )
@@ -303,13 +301,15 @@ class GimbalTrajectoryPlanner:
                 # 降低 yaw 轴速度以匹配时间
                 scaled_rate = abs(dy) / (t_max * 0.5)  # 近似
                 self._yaw_seg = plan_trapezoid(
-                    dy, min(scaled_rate, self._cfg.max_rate_dps),
+                    dy,
+                    min(scaled_rate, self._cfg.max_rate_dps),
                     self._cfg.max_acceleration_dps2,
                 )
             if self._pitch_seg.t_total < t_max and abs(dp) > 1e-4:
                 scaled_rate = abs(dp) / (t_max * 0.5)
                 self._pitch_seg = plan_trapezoid(
-                    dp, min(scaled_rate, self._cfg.max_rate_dps),
+                    dp,
+                    min(scaled_rate, self._cfg.max_rate_dps),
                     self._cfg.max_acceleration_dps2,
                 )
 
@@ -324,7 +324,9 @@ class GimbalTrajectoryPlanner:
 
         logger.info(
             "trajectory planned: Δyaw=%.1f° Δpitch=%.1f° t=%.3fs",
-            dy, dp, t_max,
+            dy,
+            dp,
+            t_max,
         )
         return True
 

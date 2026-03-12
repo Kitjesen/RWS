@@ -23,14 +23,16 @@ class MultiTargetSimulation:
         # Create multiple targets at different positions
         for i in range(num_targets):
             angle = i * (360 / num_targets)  # Spread around
-            self.targets.append({
-                'world_yaw': math.cos(math.radians(angle)) * 10.0,  # 10° radius
-                'world_pitch': math.sin(math.radians(angle)) * 5.0,  # 5° radius
-                'vel_yaw': 1.0 + i * 0.5,  # Different speeds
-                'vel_pitch': 0.5 + i * 0.3,
-                'class_id': 'person',
-                'confidence': 0.9 + i * 0.03,
-            })
+            self.targets.append(
+                {
+                    "world_yaw": math.cos(math.radians(angle)) * 10.0,  # 10° radius
+                    "world_pitch": math.sin(math.radians(angle)) * 5.0,  # 5° radius
+                    "vel_yaw": 1.0 + i * 0.5,  # Different speeds
+                    "vel_pitch": 0.5 + i * 0.3,
+                    "class_id": "person",
+                    "confidence": 0.9 + i * 0.03,
+                }
+            )
 
     def step(self, dt: float, gimbal_positions: list) -> list:
         """Update simulation and return detections.
@@ -51,46 +53,51 @@ class MultiTargetSimulation:
 
         for i, target in enumerate(self.targets):
             # Update world position
-            target['world_yaw'] += target['vel_yaw'] * dt
-            target['world_pitch'] += target['vel_pitch'] * dt
+            target["world_yaw"] += target["vel_yaw"] * dt
+            target["world_pitch"] += target["vel_pitch"] * dt
 
             # Limit range
-            target['world_yaw'] = max(-25, min(25, target['world_yaw']))
-            target['world_pitch'] = max(-15, min(15, target['world_pitch']))
+            target["world_yaw"] = max(-25, min(25, target["world_yaw"]))
+            target["world_pitch"] = max(-15, min(15, target["world_pitch"]))
 
             # Bounce at boundaries
-            if abs(target['world_yaw']) >= 24:
-                target['vel_yaw'] *= -1
-            if abs(target['world_pitch']) >= 14:
-                target['vel_pitch'] *= -1
+            if abs(target["world_yaw"]) >= 24:
+                target["vel_yaw"] *= -1
+            if abs(target["world_pitch"]) >= 14:
+                target["vel_pitch"] *= -1
 
             # Convert to pixel coordinates (assume gimbal at origin for simplicity)
             # In real multi-gimbal, each gimbal would see different pixel positions
-            pixel_x = self.cam.cx + math.tan(math.radians(target['world_yaw'])) * self.cam.fx
-            pixel_y = self.cam.cy - math.tan(math.radians(target['world_pitch'])) * self.cam.fy
+            pixel_x = self.cam.cx + math.tan(math.radians(target["world_yaw"])) * self.cam.fx
+            pixel_y = self.cam.cy - math.tan(math.radians(target["world_pitch"])) * self.cam.fy
 
             # Check if in frame
             if 0 <= pixel_x < self.cam.width and 0 <= pixel_y < self.cam.height:
                 bbox_w, bbox_h = 60 + i * 20, 90 + i * 30  # Different sizes
-                detections.append({
-                    "bbox": (pixel_x - bbox_w/2, pixel_y - bbox_h/2, bbox_w, bbox_h),
-                    "confidence": target['confidence'],
-                    "class_id": target['class_id'],
-                })
+                detections.append(
+                    {
+                        "bbox": (pixel_x - bbox_w / 2, pixel_y - bbox_h / 2, bbox_w, bbox_h),
+                        "confidence": target["confidence"],
+                        "class_id": target["class_id"],
+                    }
+                )
 
         return detections
 
 
 def main():
-    print("="*70)
+    print("=" * 70)
     print("Multi-Gimbal Coordinated Tracking Demo")
-    print("="*70)
+    print("=" * 70)
 
     # Camera model
     cam = CameraModel(
-        width=1280, height=720,
-        fx=970.0, fy=965.0,
-        cx=640.0, cy=360.0,
+        width=1280,
+        height=720,
+        fx=970.0,
+        fy=965.0,
+        cx=640.0,
+        cy=360.0,
     )
 
     # Create 3 gimbal units
@@ -102,14 +109,20 @@ def main():
 
         controller_cfg = GimbalControllerConfig(
             yaw_pid=PIDConfig(
-                kp=8.0, ki=0.3, kd=0.2,
-                integral_limit=20.0, output_limit=180.0,
+                kp=8.0,
+                ki=0.3,
+                kd=0.2,
+                integral_limit=20.0,
+                output_limit=180.0,
                 derivative_lpf_alpha=0.4,
                 feedforward_kv=0.5,
             ),
             pitch_pid=PIDConfig(
-                kp=8.0, ki=0.3, kd=0.2,
-                integral_limit=20.0, output_limit=180.0,
+                kp=8.0,
+                ki=0.3,
+                kd=0.2,
+                integral_limit=20.0,
+                output_limit=180.0,
                 derivative_lpf_alpha=0.4,
                 feedforward_kv=0.5,
             ),
@@ -158,15 +171,12 @@ def main():
     duration = 10.0
 
     print(f"{'Time':<6} {'Gimbal 0':<25} {'Gimbal 1':<25} {'Gimbal 2':<25}")
-    print("-"*85)
+    print("-" * 85)
 
     step_count = 0
     while ts < duration:
         # Get gimbal positions (for simulation)
-        gimbal_positions = [
-            (unit.driver._yaw, unit.driver._pitch)
-            for unit in gimbal_units
-        ]
+        gimbal_positions = [(unit.driver._yaw, unit.driver._pitch) for unit in gimbal_units]
 
         # Generate detections
         detections = sim.step(dt, gimbal_positions)
@@ -198,20 +208,20 @@ def main():
         step_count += 1
 
     # Final statistics
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Final Statistics")
-    print("="*70)
+    print("=" * 70)
 
     for unit in gimbal_units:
         metrics = unit.telemetry.snapshot_metrics()
         print(f"\nGimbal {unit.unit_id}:")
-        print(f"  Lock Rate:  {metrics['lock_rate']*100:6.2f}%")
+        print(f"  Lock Rate:  {metrics['lock_rate'] * 100:6.2f}%")
         print(f"  Avg Error:  {metrics['avg_abs_error_deg']:6.2f} deg")
         print(f"  Switches:   {metrics['switches_per_min']:6.2f} /min")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Multi-gimbal coordination successful!")
-    print("="*70)
+    print("=" * 70)
 
 
 if __name__ == "__main__":

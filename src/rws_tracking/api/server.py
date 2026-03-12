@@ -204,27 +204,29 @@ class TrackingAPI:
         if self.pipeline:
             feedback = self.pipeline.driver.get_feedback(time.monotonic())
             metrics = self.pipeline.telemetry.snapshot_metrics()
-            status.update({
-                # Decision state (SEARCH / TRACK / LOCK / LOST)
-                "state": self.pipeline._last_track_state,
-                # Gimbal position at root level (Flutter chart reads these)
-                "yaw_deg": feedback.yaw_deg,
-                "pitch_deg": feedback.pitch_deg,
-                # Per-frame tracking errors for the real-time error chart
-                "yaw_error_deg": self.pipeline._last_yaw_error_deg,
-                "pitch_error_deg": self.pipeline._last_pitch_error_deg,
-                # Rolling telemetry metrics
-                "lock_rate": metrics.get("lock_rate", 0.0),
-                "avg_abs_error_deg": metrics.get("avg_abs_error_deg", 0.0),
-                "switches_per_min": metrics.get("switches_per_min", 0.0),
-                # Full gimbal feedback also available nested
-                "gimbal": {
+            status.update(
+                {
+                    # Decision state (SEARCH / TRACK / LOCK / LOST)
+                    "state": self.pipeline._last_track_state,
+                    # Gimbal position at root level (Flutter chart reads these)
                     "yaw_deg": feedback.yaw_deg,
                     "pitch_deg": feedback.pitch_deg,
-                    "yaw_rate_dps": feedback.yaw_rate_dps,
-                    "pitch_rate_dps": feedback.pitch_rate_dps,
-                },
-            })
+                    # Per-frame tracking errors for the real-time error chart
+                    "yaw_error_deg": self.pipeline._last_yaw_error_deg,
+                    "pitch_error_deg": self.pipeline._last_pitch_error_deg,
+                    # Rolling telemetry metrics
+                    "lock_rate": metrics.get("lock_rate", 0.0),
+                    "avg_abs_error_deg": metrics.get("avg_abs_error_deg", 0.0),
+                    "switches_per_min": metrics.get("switches_per_min", 0.0),
+                    # Full gimbal feedback also available nested
+                    "gimbal": {
+                        "yaw_deg": feedback.yaw_deg,
+                        "pitch_deg": feedback.pitch_deg,
+                        "yaw_rate_dps": feedback.yaw_rate_dps,
+                        "pitch_rate_dps": feedback.pitch_rate_dps,
+                    },
+                }
+            )
 
         return status
 
@@ -260,9 +262,7 @@ class TrackingAPI:
             return {"success": False, "error": "Pipeline not initialized"}
 
         try:
-            self.pipeline.driver.set_yaw_pitch_rate(
-                yaw_rate_dps, pitch_rate_dps, time.monotonic()
-            )
+            self.pipeline.driver.set_yaw_pitch_rate(yaw_rate_dps, pitch_rate_dps, time.monotonic())
             return {
                 "success": True,
                 "command": {"yaw_rate_dps": yaw_rate_dps, "pitch_rate_dps": pitch_rate_dps},
@@ -322,7 +322,13 @@ class TrackingAPI:
                 sel = self.pipeline.selector
                 if hasattr(sel, "_cfg") and hasattr(sel._cfg, "weights"):
                     weights = sel._cfg.weights
-                    for key in ("confidence", "size", "center_proximity", "track_age", "class_weight"):
+                    for key in (
+                        "confidence",
+                        "size",
+                        "center_proximity",
+                        "track_age",
+                        "class_weight",
+                    ):
                         if key in sel_data:
                             setattr(weights, key, float(sel_data[key]))
                     applied.append("selector")
@@ -333,6 +339,7 @@ class TrackingAPI:
                 sm = self.pipeline._safety_manager
                 if sm is not None:
                     from ..types import SafetyZone
+
                     if zones_data.get("action") == "add" and "zone" in zones_data:
                         z = zones_data["zone"]
                         sm.add_no_fire_zone(SafetyZone(**z))
@@ -384,9 +391,9 @@ class TrackingAPI:
                 self.last_frame_time = ts
 
                 # Update tracking info for video stream
-                if hasattr(outputs, 'tracks'):
+                if hasattr(outputs, "tracks"):
                     self._last_tracks = outputs.tracks
-                elif hasattr(outputs, 'all_targets'):
+                elif hasattr(outputs, "all_targets"):
                     self._last_tracks = outputs.all_targets
 
                 if outputs.selected_target is not None:
@@ -420,6 +427,7 @@ class TrackingAPI:
                     # Record frame to clip if recording is active.
                     try:
                         from .video_record_routes import record_frame
+
                         record_frame(annotated)
                     except Exception:
                         pass
@@ -459,6 +467,7 @@ def _wire_pipeline_extensions(app: Flask, api: TrackingAPI) -> None:
     if "shooting_chain" in app.extensions and "operator_watchdog" not in app.extensions:
         try:
             from ..safety.watchdog import OperatorWatchdog
+
             watchdog = OperatorWatchdog(
                 app.extensions["shooting_chain"],
                 timeout_s=getattr(api, "_operator_timeout_s", 10.0),
@@ -472,6 +481,7 @@ def _wire_pipeline_extensions(app: Flask, api: TrackingAPI) -> None:
     if "safety_manager" in app.extensions:
         try:
             from .safety_routes import load_persisted_zones
+
             load_persisted_zones(app.extensions["safety_manager"])
         except Exception as exc:
             logger.warning("Could not load persisted NFZ zones: %s", exc)
@@ -489,18 +499,20 @@ def create_flask_app(api: TrackingAPI) -> Flask:
 
     # Paths that are always accessible without a token (monitoring/streaming).
     # These are read-only or infrastructure endpoints that must remain open.
-    _AUTH_EXEMPT_EXACT = frozenset([
-        "/api/health",
-        "/api/events",
-        "/metrics",
-        "/api/status",
-        "/api/selftest",
-        "/api/telemetry",
-        "/api/threats",
-    ])
+    _AUTH_EXEMPT_EXACT = frozenset(
+        [
+            "/api/health",
+            "/api/events",
+            "/metrics",
+            "/api/status",
+            "/api/selftest",
+            "/api/telemetry",
+            "/api/threats",
+        ]
+    )
     _AUTH_EXEMPT_PREFIXES = (
-        "/api/health/",   # sub-health routes
-        "/api/video/",    # MJPEG stream + snapshot
+        "/api/health/",  # sub-health routes
+        "/api/video/",  # MJPEG stream + snapshot
     )
 
     # Only apply auth to mutating (non-GET) requests or sensitive paths.
@@ -546,7 +558,7 @@ def create_flask_app(api: TrackingAPI) -> Flask:
 
             auth_header = request.headers.get("Authorization", "")
             if auth_header.startswith("Bearer "):
-                token = auth_header[len("Bearer "):]
+                token = auth_header[len("Bearer ") :]
                 if hmac.compare_digest(token, _api_key):
                     return None
 
@@ -611,10 +623,9 @@ def create_flask_app(api: TrackingAPI) -> Flask:
         """Set gimbal rate."""
         data = request.get_json()
         if not data or "yaw_rate_dps" not in data or "pitch_rate_dps" not in data:
-            return jsonify({
-                "success": False,
-                "error": "Missing yaw_rate_dps or pitch_rate_dps"
-            }), 400
+            return jsonify(
+                {"success": False, "error": "Missing yaw_rate_dps or pitch_rate_dps"}
+            ), 400
 
         result = api.set_gimbal_rate(data["yaw_rate_dps"], data["pitch_rate_dps"])
         return jsonify(result)
@@ -629,17 +640,28 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     def get_config():
         """Return the current effective configuration (PID, selector, etc.)."""
         from ..config.loader import load_config
+
         try:
             cfg = load_config(api.config_path)
             ctrl = cfg.controller
             if ctrl is None:
                 return jsonify({"error": "No controller config"}), 503
-            return jsonify({
-                "pid": {
-                    "yaw":   {"kp": ctrl.yaw_pid.kp,   "ki": ctrl.yaw_pid.ki,   "kd": ctrl.yaw_pid.kd},
-                    "pitch": {"kp": ctrl.pitch_pid.kp, "ki": ctrl.pitch_pid.ki, "kd": ctrl.pitch_pid.kd},
+            return jsonify(
+                {
+                    "pid": {
+                        "yaw": {
+                            "kp": ctrl.yaw_pid.kp,
+                            "ki": ctrl.yaw_pid.ki,
+                            "kd": ctrl.yaw_pid.kd,
+                        },
+                        "pitch": {
+                            "kp": ctrl.pitch_pid.kp,
+                            "ki": ctrl.pitch_pid.ki,
+                            "kd": ctrl.pitch_pid.kd,
+                        },
+                    }
                 }
-            })
+            )
         except Exception as exc:
             return jsonify({"error": str(exc)}), 503
 
@@ -703,15 +725,17 @@ def create_flask_app(api: TrackingAPI) -> Flask:
     def video_config():
         """Get current video stream configuration."""
         cfg = api._video_cfg
-        return jsonify({
-            "enabled": cfg.enabled,
-            "jpeg_quality": cfg.jpeg_quality,
-            "max_fps": cfg.max_fps,
-            "scale_factor": cfg.scale_factor,
-            "annotate_detections": cfg.annotate_detections,
-            "annotate_tracks": cfg.annotate_tracks,
-            "annotate_crosshair": cfg.annotate_crosshair,
-        })
+        return jsonify(
+            {
+                "enabled": cfg.enabled,
+                "jpeg_quality": cfg.jpeg_quality,
+                "max_fps": cfg.max_fps,
+                "scale_factor": cfg.scale_factor,
+                "annotate_detections": cfg.annotate_detections,
+                "annotate_tracks": cfg.annotate_tracks,
+                "annotate_crosshair": cfg.annotate_crosshair,
+            }
+        )
 
     @app.route("/api/threats", methods=["GET"])
     def get_threats():
@@ -730,9 +754,7 @@ def create_flask_app(api: TrackingAPI) -> Flask:
         """
         threats_out = []
         # Merge threat assessment with track info (class_id comes from Track)
-        track_class: dict[int, str] = {
-            t.track_id: t.class_id for t in api._last_tracks
-        }
+        track_class: dict[int, str] = {t.track_id: t.class_id for t in api._last_tracks}
         dist_cache: dict[int, float] = getattr(api, "_distance_cache", {})
         if not hasattr(api, "_distance_cache"):
             # Try to get from pipeline if available
@@ -740,21 +762,25 @@ def create_flask_app(api: TrackingAPI) -> Flask:
                 dist_cache = api.pipeline._distance_cache
 
         for ta in api._last_threat_assessments:
-            threats_out.append({
-                "track_id": ta.track_id,
-                "threat_score": round(ta.threat_score, 4),
-                "priority_rank": ta.priority_rank,
-                "distance_score": round(ta.distance_score, 4),
-                "velocity_score": round(ta.velocity_score, 4),
-                "class_score": round(ta.class_score, 4),
-                "heading_score": round(ta.heading_score, 4),
-                "class_id": track_class.get(ta.track_id, "unknown"),
-                "distance_m": round(dist_cache.get(ta.track_id, 0.0), 1),
-            })
-        return jsonify({
-            "threats": threats_out,
-            "pipeline_active": api.running and api.pipeline is not None,
-        })
+            threats_out.append(
+                {
+                    "track_id": ta.track_id,
+                    "threat_score": round(ta.threat_score, 4),
+                    "priority_rank": ta.priority_rank,
+                    "distance_score": round(ta.distance_score, 4),
+                    "velocity_score": round(ta.velocity_score, 4),
+                    "class_score": round(ta.class_score, 4),
+                    "heading_score": round(ta.heading_score, 4),
+                    "class_id": track_class.get(ta.track_id, "unknown"),
+                    "distance_m": round(dist_cache.get(ta.track_id, 0.0), 1),
+                }
+            )
+        return jsonify(
+            {
+                "threats": threats_out,
+                "pipeline_active": api.running and api.pipeline is not None,
+            }
+        )
 
     # Wire pipeline components into Flask extensions so Blueprint routes can access them.
     # (pipeline may be None at startup; _wire_pipeline_extensions is also called after
@@ -763,47 +789,58 @@ def create_flask_app(api: TrackingAPI) -> Flask:
 
     # Fire control routes
     from .fire_routes import fire_bp
+
     app.register_blueprint(fire_bp)
 
     from .health_routes import health_bp
+
     app.register_blueprint(health_bp)
 
     # Mission controller routes
     app.extensions["tracking_api"] = api
     from .mission_routes import mission_bp
+
     app.register_blueprint(mission_bp)
 
     # Prometheus metrics endpoint
     from .metrics_routes import metrics_bp
+
     app.register_blueprint(metrics_bp)
 
     # System self-test
     from .selftest_routes import selftest_bp
+
     app.register_blueprint(selftest_bp)
 
     # Real-time SSE event stream
     from .events import event_bus, events_bp
+
     app.register_blueprint(events_bp)
     event_bus.start()
 
     # Session replay / after-action review
     from .replay_routes import replay_bp
+
     app.register_blueprint(replay_bp)
 
     # No-fire zone CRUD
     from .safety_routes import safety_bp
+
     app.register_blueprint(safety_bp)
 
     # Multi-gimbal pipeline status (stub — pipeline not yet wired to HTTP)
     from .multi_routes import multi_bp
+
     app.register_blueprint(multi_bp)
 
     # Video clip recording
     from .video_record_routes import record_bp
+
     app.register_blueprint(record_bp)
 
     # Controller mode / MPC config switching
     from .controller_routes import controller_bp
+
     app.register_blueprint(controller_bp)
 
     # Config file watcher — hot-reload config.yaml into live PID/selector params.
@@ -832,10 +869,13 @@ def create_flask_app(api: TrackingAPI) -> Flask:
             }
             result = api.update_config(update_dict)
             try:
-                _eb.emit("config_reloaded", {
-                    "hot_applied": result.get("hot_applied", []),
-                    "message": result.get("message", ""),
-                })
+                _eb.emit(
+                    "config_reloaded",
+                    {
+                        "hot_applied": result.get("hot_applied", []),
+                        "message": result.get("message", ""),
+                    },
+                )
             except Exception:
                 pass
             logger.info("config_reload: %s", result.get("message", ""))

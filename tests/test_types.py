@@ -1,6 +1,5 @@
 """类型定义单元测试。"""
 
-
 from src.rws_tracking.types import (
     BallisticSolution,
     BodyState,

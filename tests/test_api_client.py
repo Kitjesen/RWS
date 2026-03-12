@@ -9,6 +9,7 @@ class TestTrackingClient:
     @pytest.fixture
     def client(self):
         from src.rws_tracking.api.client import TrackingClient
+
         c = TrackingClient("http://localhost:5000")
         return c
 
@@ -51,6 +52,7 @@ class TestTrackingClient:
     @patch("requests.get")
     def test_connection_error(self, mock_get, client):
         import requests
+
         mock_get.side_effect = requests.ConnectionError("refused")
         result = client.get_status()
         assert not result["success"]

@@ -7,25 +7,32 @@ from src.rws_tracking.hardware.driver import DriverLimits, SimulatedGimbalDriver
 
 @pytest.fixture
 def driver():
-    return SimulatedGimbalDriver(DriverLimits(
-        yaw_min_deg=-160, yaw_max_deg=160,
-        pitch_min_deg=-45, pitch_max_deg=75,
-        max_rate_dps=240, deadband_dps=0.2,
-        inertia_time_constant_s=0.05,
-        static_friction_dps=0.5,
-        coulomb_friction_dps=2.0,
-    ))
+    return SimulatedGimbalDriver(
+        DriverLimits(
+            yaw_min_deg=-160,
+            yaw_max_deg=160,
+            pitch_min_deg=-45,
+            pitch_max_deg=75,
+            max_rate_dps=240,
+            deadband_dps=0.2,
+            inertia_time_constant_s=0.05,
+            static_friction_dps=0.5,
+            coulomb_friction_dps=2.0,
+        )
+    )
 
 
 @pytest.fixture
 def ideal_driver():
     """No friction, no inertia."""
-    return SimulatedGimbalDriver(DriverLimits(
-        inertia_time_constant_s=0.0,
-        static_friction_dps=0.0,
-        coulomb_friction_dps=0.0,
-        deadband_dps=0.0,
-    ))
+    return SimulatedGimbalDriver(
+        DriverLimits(
+            inertia_time_constant_s=0.0,
+            static_friction_dps=0.0,
+            coulomb_friction_dps=0.0,
+            deadband_dps=0.0,
+        )
+    )
 
 
 class TestBasicOperation:
@@ -88,12 +95,14 @@ class TestDynamics:
         assert abs(fb.yaw_rate_dps) < 1.0
 
     def test_coulomb_friction_reduces_rate(self):
-        d = SimulatedGimbalDriver(DriverLimits(
-            inertia_time_constant_s=0.0,
-            static_friction_dps=0.0,
-            coulomb_friction_dps=5.0,
-            deadband_dps=0.0,
-        ))
+        d = SimulatedGimbalDriver(
+            DriverLimits(
+                inertia_time_constant_s=0.0,
+                static_friction_dps=0.0,
+                coulomb_friction_dps=5.0,
+                deadband_dps=0.0,
+            )
+        )
         d.set_yaw_pitch_rate(50.0, 0.0, 0.0)
         fb = d.get_feedback(0.1)
         # Coulomb friction should reduce the actual rate
@@ -103,6 +112,7 @@ class TestDynamics:
 class TestFromConfig:
     def test_from_config(self):
         from src.rws_tracking.config import DriverLimitsConfig
+
         cfg = DriverLimitsConfig()
         limits = DriverLimits.from_config(cfg)
         assert limits.yaw_min_deg == cfg.yaw_min_deg

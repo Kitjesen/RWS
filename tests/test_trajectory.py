@@ -68,12 +68,14 @@ class TestSampleTrapezoid:
 class TestGimbalTrajectoryPlanner:
     @pytest.fixture
     def planner(self):
-        return GimbalTrajectoryPlanner(TrajectoryConfig(
-            max_rate_dps=180.0,
-            max_acceleration_dps2=720.0,
-            settling_threshold_deg=0.5,
-            min_switch_interval_s=0.0,
-        ))
+        return GimbalTrajectoryPlanner(
+            TrajectoryConfig(
+                max_rate_dps=180.0,
+                max_acceleration_dps2=720.0,
+                settling_threshold_deg=0.5,
+                min_switch_interval_s=0.0,
+            )
+        )
 
     def test_initial_idle(self, planner):
         assert planner.phase == TrajectoryPhase.IDLE

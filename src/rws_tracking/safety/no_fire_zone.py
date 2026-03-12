@@ -55,8 +55,11 @@ class NoFireZoneManager:
         self._zones[zone.zone_id] = zone
         logger.info(
             "NFZ added: id=%s type=%s center=(%.1f, %.1f) r=%.1f°",
-            zone.zone_id, zone.zone_type,
-            zone.center_yaw_deg, zone.center_pitch_deg, zone.radius_deg,
+            zone.zone_id,
+            zone.zone_type,
+            zone.center_yaw_deg,
+            zone.center_pitch_deg,
+            zone.radius_deg,
         )
 
     def remove_zone(self, zone_id: str) -> bool:
@@ -103,8 +106,10 @@ class NoFireZoneManager:
 
         for zone in self._zones.values():
             angular_dist = self._angular_distance(
-                yaw_deg, pitch_deg,
-                zone.center_yaw_deg, zone.center_pitch_deg,
+                yaw_deg,
+                pitch_deg,
+                zone.center_yaw_deg,
+                zone.center_pitch_deg,
             )
             dist_to_boundary = angular_dist - zone.radius_deg
 
@@ -139,8 +144,10 @@ class NoFireZoneManager:
 
     @staticmethod
     def _angular_distance(
-        yaw1: float, pitch1: float,
-        yaw2: float, pitch2: float,
+        yaw1: float,
+        pitch1: float,
+        yaw2: float,
+        pitch2: float,
     ) -> float:
         """两个指向之间的角距 (°)。"""
         dy = yaw1 - yaw2

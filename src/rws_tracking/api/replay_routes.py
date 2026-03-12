@@ -146,12 +146,14 @@ def list_sessions():
             stat = entry.stat()
             events = _parse_session_file(entry)
             summary = _session_summary(events)
-            sessions.append({
-                "filename": entry.name,
-                "size_bytes": stat.st_size,
-                "modified_at": round(stat.st_mtime, 3),
-                **summary,
-            })
+            sessions.append(
+                {
+                    "filename": entry.name,
+                    "size_bytes": stat.st_size,
+                    "modified_at": round(stat.st_mtime, 3),
+                    **summary,
+                }
+            )
         except OSError:
             continue
 
@@ -212,7 +214,8 @@ def get_session_events(filename: str):
         limit = 5000
 
     filtered = [
-        e for e in events
+        e
+        for e in events
         if (not type_filter or e.get("event_type") in type_filter)
         and from_ts <= e.get("timestamp", 0.0) <= to_ts
     ]
@@ -221,12 +224,14 @@ def get_session_events(filename: str):
     filtered.sort(key=lambda e: e.get("timestamp", 0.0))
     filtered = filtered[:limit]
 
-    return jsonify({
-        "filename": filename,
-        "total_events": total,
-        "returned_events": len(filtered),
-        "events": filtered,
-    })
+    return jsonify(
+        {
+            "filename": filename,
+            "total_events": total,
+            "returned_events": len(filtered),
+            "events": filtered,
+        }
+    )
 
 
 @replay_bp.route("/sessions/<path:filename>/summary", methods=["GET"])

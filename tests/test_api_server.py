@@ -10,6 +10,7 @@ class TestTrackingAPI:
     @pytest.fixture
     def api(self):
         from src.rws_tracking.api.server import TrackingAPI
+
         api = TrackingAPI.__new__(TrackingAPI)
         api.config = MagicMock()
         api.pipeline = MagicMock()
@@ -46,7 +47,8 @@ class TestTrackingAPI:
     def test_update_config_pid(self, api):
         # Setup mock PID
         class _F:
-            def __init__(self, name): self.name = name
+            def __init__(self, name):
+                self.name = name
 
         mock_pid = MagicMock()
         mock_cfg = MagicMock()
@@ -62,9 +64,7 @@ class TestTrackingAPI:
         api.pipeline.controller._yaw_pid = mock_pid
         api.pipeline.controller._pitch_pid = mock_pid
 
-        result = api.update_config({
-            "pid": {"yaw": {"kp": 8.0}}
-        })
+        result = api.update_config({"pid": {"yaw": {"kp": 8.0}}})
         assert result["success"]
         assert "pid.yaw" in result.get("hot_applied", [])
 
@@ -96,17 +96,28 @@ class TestGetConfig:
         @app.route("/api/config", methods=["GET"])
         def get_config():
             from src.rws_tracking.config.loader import load_config
+
             try:
                 cfg = load_config(api.config_path)
                 ctrl = cfg.controller
                 if ctrl is None:
                     return jsonify({"error": "No controller config"}), 503
-                return jsonify({
-                    "pid": {
-                        "yaw":   {"kp": ctrl.yaw_pid.kp,   "ki": ctrl.yaw_pid.ki,   "kd": ctrl.yaw_pid.kd},
-                        "pitch": {"kp": ctrl.pitch_pid.kp, "ki": ctrl.pitch_pid.ki, "kd": ctrl.pitch_pid.kd},
+                return jsonify(
+                    {
+                        "pid": {
+                            "yaw": {
+                                "kp": ctrl.yaw_pid.kp,
+                                "ki": ctrl.yaw_pid.ki,
+                                "kd": ctrl.yaw_pid.kd,
+                            },
+                            "pitch": {
+                                "kp": ctrl.pitch_pid.kp,
+                                "ki": ctrl.pitch_pid.ki,
+                                "kd": ctrl.pitch_pid.kd,
+                            },
+                        }
                     }
-                })
+                )
             except Exception as exc:
                 return jsonify({"error": str(exc)}), 503
 
@@ -199,21 +210,25 @@ class TestThreatsEndpoint:
             track_class = {t.track_id: t.class_id for t in api._last_tracks}
             dist_cache = getattr(api, "_distance_cache", {})
             for ta in api._last_threat_assessments:
-                threats_out.append({
-                    "track_id": ta.track_id,
-                    "threat_score": round(ta.threat_score, 4),
-                    "priority_rank": ta.priority_rank,
-                    "distance_score": round(ta.distance_score, 4),
-                    "velocity_score": round(ta.velocity_score, 4),
-                    "class_score": round(ta.class_score, 4),
-                    "heading_score": round(ta.heading_score, 4),
-                    "class_id": track_class.get(ta.track_id, "unknown"),
-                    "distance_m": round(dist_cache.get(ta.track_id, 0.0), 1),
-                })
-            return jsonify({
-                "threats": threats_out,
-                "pipeline_active": api.running and api.pipeline is not None,
-            })
+                threats_out.append(
+                    {
+                        "track_id": ta.track_id,
+                        "threat_score": round(ta.threat_score, 4),
+                        "priority_rank": ta.priority_rank,
+                        "distance_score": round(ta.distance_score, 4),
+                        "velocity_score": round(ta.velocity_score, 4),
+                        "class_score": round(ta.class_score, 4),
+                        "heading_score": round(ta.heading_score, 4),
+                        "class_id": track_class.get(ta.track_id, "unknown"),
+                        "distance_m": round(dist_cache.get(ta.track_id, 0.0), 1),
+                    }
+                )
+            return jsonify(
+                {
+                    "threats": threats_out,
+                    "pipeline_active": api.running and api.pipeline is not None,
+                }
+            )
 
         return app.test_client()
 
@@ -271,6 +286,7 @@ class TestFlaskApp:
     @pytest.fixture
     def client(self):
         from src.rws_tracking.api.server import TrackingAPI
+
         api = TrackingAPI.__new__(TrackingAPI)
         api.config = MagicMock()
         api.pipeline = MagicMock()
@@ -286,21 +302,25 @@ class TestFlaskApp:
         api.last_frame_time = 0.0
 
         from flask import Flask
+
         app = Flask(__name__)
 
         @app.route("/api/status")
         def status():
             from flask import jsonify
+
             return jsonify(api.get_status())
 
         @app.route("/api/tracking/start", methods=["POST"])
         def start():
             from flask import jsonify
+
             return jsonify(api.start_tracking())
 
         @app.route("/api/tracking/stop", methods=["POST"])
         def stop():
             from flask import jsonify
+
             return jsonify(api.stop_tracking())
 
         app.config["TESTING"] = True

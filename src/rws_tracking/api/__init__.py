@@ -33,6 +33,7 @@ from .server import TrackingAPI, run_api_server
 try:
     from .grpc_client import TrackingGrpcClient
     from .grpc_server import serve as run_grpc_server
+
     _GRPC_AVAILABLE = True
 except ImportError:
     _GRPC_AVAILABLE = False

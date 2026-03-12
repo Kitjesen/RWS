@@ -7,9 +7,7 @@ from typing import Literal
 
 logger = logging.getLogger(__name__)
 
-SubsystemName = Literal[
-    "camera", "gimbal_driver", "imu", "rangefinder", "safety", "api"
-]
+SubsystemName = Literal["camera", "gimbal_driver", "imu", "rangefinder", "safety", "api"]
 
 
 @dataclass
@@ -63,37 +61,36 @@ class HealthMonitor:
     def __init__(self, timeouts: dict[str, float] | None = None):
         merged = {**self._DEFAULT_TIMEOUTS, **(timeouts or {})}
         self._subsystems: dict[str, SubsystemStatus] = {
-            name: SubsystemStatus(name=name, heartbeat_timeout_s=t)
-            for name, t in merged.items()
+            name: SubsystemStatus(name=name, heartbeat_timeout_s=t) for name, t in merged.items()
         }
 
     def heartbeat(
-        self, subsystem: str, timestamp: float | None = None,
+        self,
+        subsystem: str,
+        timestamp: float | None = None,
     ) -> None:
         """Record a successful heartbeat for a subsystem."""
         ts = timestamp if timestamp is not None else time.monotonic()
         if subsystem not in self._subsystems:
             self._subsystems[subsystem] = SubsystemStatus(
                 name=subsystem,
-                heartbeat_timeout_s=self._DEFAULT_TIMEOUTS.get(
-                    subsystem, 2.0
-                ),
+                heartbeat_timeout_s=self._DEFAULT_TIMEOUTS.get(subsystem, 2.0),
             )
         s = self._subsystems[subsystem]
         s.last_heartbeat_ts = ts
         s.error_message = ""
 
     def report_error(
-        self, subsystem: str, error: str,
+        self,
+        subsystem: str,
+        error: str,
         timestamp: float | None = None,
     ) -> None:
         """Report an error for a subsystem."""
         if subsystem not in self._subsystems:
             self._subsystems[subsystem] = SubsystemStatus(
                 name=subsystem,
-                heartbeat_timeout_s=self._DEFAULT_TIMEOUTS.get(
-                    subsystem, 2.0
-                ),
+                heartbeat_timeout_s=self._DEFAULT_TIMEOUTS.get(subsystem, 2.0),
             )
         s = self._subsystems[subsystem]
         s.error_message = error
@@ -106,21 +103,14 @@ class HealthMonitor:
             computed = s.compute_status()
             result[name] = {
                 "status": computed,
-                "last_heartbeat_age_s": (
-                    round(s.age_s, 2)
-                    if s.last_heartbeat_ts > 0
-                    else None
-                ),
+                "last_heartbeat_age_s": (round(s.age_s, 2) if s.last_heartbeat_ts > 0 else None),
                 "error": s.error_message or None,
             }
         return result
 
     def is_healthy(self) -> bool:
         """True if all subsystems are ok or unknown."""
-        return all(
-            s.compute_status() in ("ok", "unknown")
-            for s in self._subsystems.values()
-        )
+        return all(s.compute_status() in ("ok", "unknown") for s in self._subsystems.values())
 
     def get_failed(self) -> list[str]:
         """Return names of failed or degraded subsystems."""
@@ -132,9 +122,7 @@ class HealthMonitor:
 
     def overall_status(self) -> str:
         """Returns 'ok', 'degraded', or 'failed'."""
-        statuses = [
-            s.compute_status() for s in self._subsystems.values()
-        ]
+        statuses = [s.compute_status() for s in self._subsystems.values()]
         if "failed" in statuses:
             return "failed"
         if "degraded" in statuses:

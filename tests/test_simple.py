@@ -1,4 +1,5 @@
 """简单的命令行测试 - 无 GUI 窗口"""
+
 from src.rws_tracking.pipeline.app import run_demo
 
 
@@ -24,7 +25,7 @@ def main():
     print()
     print("测试完成！性能指标：")
     print()
-    print(f"  Lock Rate (锁定率):        {metrics['lock_rate']*100:6.2f}%")
+    print(f"  Lock Rate (锁定率):        {metrics['lock_rate'] * 100:6.2f}%")
     print(f"  Avg Error (平均误差):      {metrics['avg_abs_error_deg']:6.2f} deg")
     print(f"  Switches (目标切换频率):   {metrics['switches_per_min']:6.2f} /min")
     print()
@@ -35,9 +36,9 @@ def main():
     print()
 
     # 评估性能
-    if metrics['lock_rate'] > 0.5:
+    if metrics["lock_rate"] > 0.5:
         print("[优秀] 性能评估: 锁定率超过 50%")
-    elif metrics['lock_rate'] > 0.2:
+    elif metrics["lock_rate"] > 0.2:
         print("[良好] 性能评估: 锁定率在 20-50% 之间")
     else:
         print("[需改进] 性能评估: 锁定率低于 20%")
@@ -47,6 +48,7 @@ def main():
     print("=" * 60)
     print("测试完成！")
     print("=" * 60)
+
 
 if __name__ == "__main__":
     main()

@@ -19,17 +19,17 @@ def run_boxmot_test(video_path: Path, output_path: Path):
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  BoxMOT Video: {video_path.name}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Initialize YOLO
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     model = YOLO("yolo11n.pt")
 
     # Initialize BoxMOT with OSNet
     tracker = BoTSORT(
-        model_weights=Path('osnet_x0_25_msmt17.pt'),
+        model_weights=Path("osnet_x0_25_msmt17.pt"),
         device=device,
         fp16=False,
     )
@@ -53,7 +53,7 @@ def run_boxmot_test(video_path: Path, output_path: Path):
             colors[tid] = tuple(int(c) for c in rng.randint(80, 255, 3))
         return colors[tid]
 
-    allowed_classes = {0, 2, 5, 7} # person, car, bus, truck in COCO
+    allowed_classes = {0, 2, 5, 7}  # person, car, bus, truck in COCO
 
     while True:
         ret, frame = cap.read()
@@ -74,12 +74,14 @@ def run_boxmot_test(video_path: Path, output_path: Path):
 
             for i in range(len(boxes)):
                 if int(clss[i]) in allowed_classes and confs[i] > 0.35:
-                    dets.append([boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], confs[i], clss[i]])
+                    dets.append(
+                        [boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], confs[i], clss[i]]
+                    )
 
         dets = np.array(dets) if len(dets) > 0 else np.empty((0, 6))
 
         # 2. Track
-        tracks = tracker.update(dets, frame) # tracks is [x1, y1, x2, y2, id, conf, cls, ind]
+        tracks = tracker.update(dets, frame)  # tracks is [x1, y1, x2, y2, id, conf, cls, ind]
 
         t1 = time.monotonic()
         inference_times.append(t1 - t0)
@@ -103,14 +105,36 @@ def run_boxmot_test(video_path: Path, output_path: Path):
 
             cls_name = model.names.get(cls, str(cls))
             label = f"ID:{tid} {cls_name} {conf:.2f}"
-            cv2.putText(annotated, label, (int(x1) + 2, int(y1) - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            cv2.putText(
+                annotated,
+                label,
+                (int(x1) + 2, int(y1) - 4),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                color,
+                2,
+            )
 
         # HUD
         avg_ms = inference_times[-1] * 1000
-        cv2.putText(annotated, f"Frame {frame_idx}/{total_frames}  {avg_ms:.0f}ms  IDs:{len(total_ids)}",
-                     (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1)
-        cv2.putText(annotated, "BoxMOT + OSNet ReID", (10, 50),
-                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        cv2.putText(
+            annotated,
+            f"Frame {frame_idx}/{total_frames}  {avg_ms:.0f}ms  IDs:{len(total_ids)}",
+            (10, 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 0),
+            1,
+        )
+        cv2.putText(
+            annotated,
+            "BoxMOT + OSNet ReID",
+            (10, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (200, 200, 200),
+            1,
+        )
 
         writer.write(annotated)
         frame_idx += 1
@@ -118,7 +142,9 @@ def run_boxmot_test(video_path: Path, output_path: Path):
         if frame_idx % 50 == 0:
             elapsed = time.monotonic() - t_start
             fps_actual = frame_idx / max(elapsed, 0.001)
-            print(f"  [{frame_idx}/{total_frames}] {fps_actual:.1f} FPS, {len(total_ids)} unique IDs so far")
+            print(
+                f"  [{frame_idx}/{total_frames}] {fps_actual:.1f} FPS, {len(total_ids)} unique IDs so far"
+            )
 
     cap.release()
     writer.release()
@@ -140,7 +166,10 @@ def run_boxmot_test(video_path: Path, output_path: Path):
                 gaps.append(gap)
         if len(frames_list) > 10 or coverage > 50:
             gap_str = f"  gaps: {gaps}" if gaps else "  continuous"
-            print(f"  ID {tid:3d}: {len(frames_list):4d} frames, span={span}, coverage={coverage:.0f}%{gap_str}")
+            print(
+                f"  ID {tid:3d}: {len(frames_list):4d} frames, span={span}, coverage={coverage:.0f}%{gap_str}"
+            )
+
 
 if __name__ == "__main__":
     benchmark_dir = Path(__file__).parent
