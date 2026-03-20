@@ -6,10 +6,10 @@
 RWS/
 ├── README.md               # 项目主文档
 ├── CHANGELOG.md            # 变更日志
-├── CONTRIBUTING.md         # 贡献指南
-├── CODE_OF_CONDUCT.md      # 行为准则
-├── SECURITY.md             # 安全政策
-├── SUPPORT.md              # 支持渠道
+├── docs/CONTRIBUTING.md    # 贡献指南
+├── docs/CODE_OF_CONDUCT.md # 行为准则
+├── docs/SECURITY.md        # 安全政策
+├── docs/SUPPORT.md         # 支持渠道
 ├── config.yaml             # 系统配置
 ├── requirements.txt        # Python 依赖
 ├── pyproject.toml          # 项目元数据 + 工具配置

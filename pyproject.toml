@@ -46,6 +46,14 @@ addopts = [
     "--cov-report=html",
     "--cov-report=xml",
 ]
+norecursedirs = ["tests/tracking_benchmark"]
+filterwarnings = [
+    "ignore::DeprecationWarning:werkzeug",
+    "ignore::DeprecationWarning:flask",
+    "ignore::DeprecationWarning:google.protobuf",
+    "ignore::DeprecationWarning:ast",
+    "ignore::PendingDeprecationWarning",
+]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",

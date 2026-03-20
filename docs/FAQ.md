@@ -252,7 +252,7 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/RWS/src"
 
 ### How do I contribute?
 
-See [Contributing Guide](../CONTRIBUTING.md) for:
+See [Contributing Guide](CONTRIBUTING.md) for:
 - Code style guidelines
 - Testing requirements
 - Pull request process
@@ -332,7 +332,7 @@ telemetry:
 - **Documentation**: [docs/](../docs/)
 - **GitHub Issues**: [Report bugs](https://github.com/Kitjesen/RWS/issues)
 - **GitHub Discussions**: [Ask questions](https://github.com/Kitjesen/RWS/discussions)
-- **Support Guide**: [SUPPORT.md](../SUPPORT.md)
+- **Support Guide**: [SUPPORT.md](SUPPORT.md)
 
 ### How do I report a bug?
 
