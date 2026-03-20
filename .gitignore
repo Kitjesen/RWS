@@ -37,10 +37,14 @@ htmlcov/
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *~
 .DS_Store
+
+# Tool state
+.omc/
 
 # Logs
 *.log
