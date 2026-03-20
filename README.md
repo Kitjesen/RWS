@@ -128,7 +128,7 @@ python scripts/api/run_grpc_server.py
 RWS/
 ├── src/rws_tracking/           # 核心源代码
 │   ├── algebra/                # 坐标转换、卡尔曼滤波
-│   ├── perception/             # YOLO 检测、BoT-SORT 跟踪
+│   ├── perception/             # YOLO 检测、BoT-SORT 跟踪 (via qp-perception)
 │   ├── decision/               # 状态机、交战队列
 │   ├── control/                # PID 控制、弹道计算、提前角
 │   ├── hardware/               # 串口云台 (PELCO-D)、IMU、激光测距
@@ -152,6 +152,16 @@ RWS/
 ├── config.yaml                 # 配置文件
 └── requirements.txt            # 依赖
 ```
+
+### 感知模块
+
+感知层由独立的 [qp-perception](https://pypi.org/project/qp-perception/) 包提供，安装 RWS 时自动拉取：
+
+```bash
+pip install qp-perception
+```
+
+源码仓库：[github.com/Kitjesen/qp-perception](https://github.com/Kitjesen/qp-perception)
 
 ## 🔌 API 使用
 
