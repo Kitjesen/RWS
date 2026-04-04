@@ -21,6 +21,7 @@ from typing import Any
 
 import cv2
 import numpy as np
+import supervision as sv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -28,6 +29,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from rws_tracking.algebra.kalman2d import KalmanCAConfig  # noqa: E402
 from rws_tracking.perception.appearance_gallery import GalleryConfig  # noqa: E402
 from rws_tracking.perception.reid_extractor import ReIDConfig  # noqa: E402
+from rws_tracking.perception.supervision_adapter import tracks_to_sv_detections  # noqa: E402
 from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker  # noqa: E402
 
 
@@ -125,9 +127,15 @@ def run_single_test(
         writer = cv2.VideoWriter(str(output_path), fourcc, fps, (w, h))
 
     stats = BenchmarkStats(name=label)
-    colors: dict[int, tuple] = {}
     frame_idx = 0
     t_start = time.monotonic()
+    box_annotator = sv.BoxAnnotator(color_lookup=sv.ColorLookup.TRACK)
+    label_annotator = sv.LabelAnnotator(color_lookup=sv.ColorLookup.TRACK)
+    trace_annotator = sv.TraceAnnotator(
+        color_lookup=sv.ColorLookup.TRACK,
+        trace_length=30,
+        thickness=2,
+    )
 
     while True:
         ret, frame = cap.read()
@@ -140,6 +148,7 @@ def run_single_test(
         t1 = time.monotonic()
         stats.inference_times.append(t1 - t0)
 
+        detections = tracks_to_sv_detections(tracks)
         annotated = frame.copy()
         for track in tracks:
             tid = track.track_id
@@ -150,17 +159,14 @@ def run_single_test(
             stats.id_history[tid].append(frame_idx)
             stats.id_last_seen[tid] = frame_idx
 
-            b = track.bbox
-            x1, y1 = int(b.x), int(b.y)
-            x2, y2 = int(b.x + b.w), int(b.y + b.h)
-            color = get_color(tid, colors)
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-
-            lbl = f"ID:{tid}"
-            (tw, th_t), _ = cv2.getTextSize(lbl, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-            cv2.rectangle(annotated, (x1, y1 - th_t - 6), (x1 + tw + 4, y1), color, -1)
-            cv2.putText(
-                annotated, lbl, (x1 + 2, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1
+        if len(detections.xyxy) > 0:
+            labels = [f"ID:{int(tid)}" for tid in detections.tracker_id]
+            annotated = trace_annotator.annotate(scene=annotated, detections=detections)
+            annotated = box_annotator.annotate(scene=annotated, detections=detections)
+            annotated = label_annotator.annotate(
+                scene=annotated,
+                detections=detections,
+                labels=labels,
             )
 
         reid_info = ""
@@ -498,3 +504,4 @@ if __name__ == "__main__":
     stats_c.score = _composite_score(stats_c, baseline_unique_ids=len(stats_a.unique_ids))
 
     print_comparison(stats_a, stats_b, stats_c, baseline_unique_ids=len(stats_a.unique_ids))
+
