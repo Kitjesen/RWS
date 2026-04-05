@@ -98,6 +98,7 @@ class ZoneAnalytics:
         """Overlay all zone annotations onto *frame* and return it."""
         for (_, zone), annotator in zip(self._line_zones, self._line_annotators):
             frame = annotator.annotate(frame, line_counter=zone)
-        for (_, zone), annotator in zip(self._polygon_zones, self._polygon_annotators):
-            frame = annotator.annotate(frame, detections=detections)
+        for (name, zone), annotator in zip(self._polygon_zones, self._polygon_annotators):
+            label = f"{name}: {self.report.polygon_occupancy.get(name, 0)}"
+            frame = annotator.annotate(frame, label=label)
         return frame
