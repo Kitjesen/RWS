@@ -1,0 +1,47 @@
+# Benchmark zone definitions — externalized from scripts.
+# Coordinates are [x, y] in pixels, matched to each video's native resolution.
+# Add a new entry whose key matches the video file stem (without extension).
+
+scenes:
+
+  # test_people.mp4 — 1920×1080, people walking left/right
+  test_people:
+    line_zones:
+      - name: midline
+        start: [960, 180]
+        end:   [960, 900]
+    polygon_zones:
+      - name: center_region
+        polygon:
+          - [640,  180]
+          - [1280, 180]
+          - [1280, 900]
+          - [640,  900]
+
+  # test_market.mp4 — assumed 1280×720
+  test_market:
+    line_zones:
+      - name: checkout_line
+        start: [200, 360]
+        end:   [1080, 360]
+    polygon_zones:
+      - name: market_floor
+        polygon:
+          - [100, 100]
+          - [1180, 100]
+          - [1180, 620]
+          - [100, 620]
+
+  # test_subway.mp4 — assumed 1280×720
+  test_subway:
+    line_zones:
+      - name: platform_edge
+        start: [0,   500]
+        end:   [1280, 500]
+    polygon_zones:
+      - name: platform
+        polygon:
+          - [0,    380]
+          - [1280, 380]
+          - [1280, 720]
+          - [0,    720]

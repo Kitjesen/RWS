@@ -31,6 +31,7 @@ from rws_tracking.perception.appearance_gallery import GalleryConfig  # noqa: E4
 from rws_tracking.perception.reid_extractor import ReIDConfig  # noqa: E402
 from rws_tracking.perception.supervision_adapter import tracks_to_sv_detections  # noqa: E402
 from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker  # noqa: E402
+from zone_analytics import ZoneAnalytics  # noqa: E402
 
 
 @dataclass
@@ -47,6 +48,7 @@ class BenchmarkStats:
     fragmentation: int = 0
     avg_gap: float = 0.0
     score: float = 0.0
+    zone_counts: dict = field(default_factory=dict)
 
 
 def download_test_video(output_path: Path) -> bool:
@@ -102,6 +104,7 @@ def run_single_test(
     label: str,
     max_frames: int | None = None,
     write_video: bool = True,
+    zone_analytics: ZoneAnalytics | None = None,
 ) -> BenchmarkStats:
     video_info = sv.VideoInfo.from_video_path(str(video_path))
     fps = video_info.fps or 30.0
@@ -151,6 +154,10 @@ def run_single_test(
                     scene=annotated, detections=detections, labels=labels
                 )
 
+            if zone_analytics is not None:
+                zone_analytics.update(detections)
+                annotated = zone_analytics.annotate(annotated, detections)
+
             reid_info = ""
             if hasattr(tracker, "reid_stats"):
                 rs = tracker.reid_stats
@@ -189,6 +196,12 @@ def run_single_test(
 
     stats.wall_time = time.monotonic() - t_start
     stats.fragmentation, stats.avg_gap = _compute_fragmentation(stats.id_history)
+    if zone_analytics is not None:
+        stats.zone_counts = {
+            "line": zone_analytics.report.line_counts,
+            "polygon_occupancy": zone_analytics.report.polygon_occupancy,
+            "polygon_dwell": zone_analytics.report.polygon_dwell,
+        }
     return stats
 
 
@@ -238,6 +251,31 @@ def print_comparison(*all_stats: BenchmarkStats, baseline_unique_ids: int | None
     )
     row("Composite score", [f"{s.score:.4f}" for s in all_stats])
 
+    # Zone analytics section (only if at least one run has zone data)
+    all_zone_counts = [s.zone_counts for s in all_stats if s.zone_counts]
+    if all_zone_counts:
+        print()
+        print(f"  {'Zone Analytics':^{30 + (col_w + 1) * len(all_stats)}}")
+        print(f"  {'-' * 30}" + (" " + "-" * col_w) * len(all_stats))
+        ref = all_zone_counts[0]
+        for zone_name, counts in ref.get("line", {}).items():
+            row(
+                f"  {zone_name} IN",
+                [str(s.zone_counts.get("line", {}).get(zone_name, {}).get("in", "-"))
+                 for s in all_stats],
+            )
+            row(
+                f"  {zone_name} OUT",
+                [str(s.zone_counts.get("line", {}).get(zone_name, {}).get("out", "-"))
+                 for s in all_stats],
+            )
+        for zone_name in ref.get("polygon_dwell", {}):
+            row(
+                f"  {zone_name} dwell(frames)",
+                [str(s.zone_counts.get("polygon_dwell", {}).get(zone_name, "-"))
+                 for s in all_stats],
+            )
+
     baseline_ids = baseline_unique_ids or (len(all_stats[0].unique_ids) if all_stats else 1)
     print()
     for s in all_stats[1:]:
@@ -257,6 +295,9 @@ if __name__ == "__main__":
 
     if not download_test_video(video_path):
         sys.exit(1)
+
+    _zones_yaml = benchmark_dir / "zones.yaml"
+    _video_stem = video_path.stem
 
     common_kwargs = {
         "model_path": "yolo11n-seg.pt",
@@ -434,6 +475,7 @@ if __name__ == "__main__":
         label="A:Baseline",
         max_frames=None,
         write_video=True,
+        zone_analytics=ZoneAnalytics.from_yaml(_zones_yaml, _video_stem),
     )
     stats_a.score = _composite_score(stats_a, baseline_unique_ids=len(stats_a.unique_ids))
     del tracker_a
@@ -458,6 +500,7 @@ if __name__ == "__main__":
         label=f"B:{best_name}",
         max_frames=None,
         write_video=True,
+        zone_analytics=ZoneAnalytics.from_yaml(_zones_yaml, _video_stem),
     )
     stats_b.score = _composite_score(stats_b, baseline_unique_ids=len(stats_a.unique_ids))
     del tracker_b
@@ -482,6 +525,7 @@ if __name__ == "__main__":
         label="C:ReID+CMC",
         max_frames=None,
         write_video=True,
+        zone_analytics=ZoneAnalytics.from_yaml(_zones_yaml, _video_stem),
     )
     stats_c.score = _composite_score(stats_c, baseline_unique_ids=len(stats_a.unique_ids))
 
