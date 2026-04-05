@@ -68,13 +68,6 @@ def download_test_video(output_path: Path) -> bool:
     return False
 
 
-def get_color(tid: int, palette: dict[int, tuple]) -> tuple:
-    if tid not in palette:
-        rng = np.random.RandomState(tid * 7 + 13)
-        palette[tid] = tuple(int(c) for c in rng.randint(80, 255, 3))
-    return palette[tid]
-
-
 def _compute_fragmentation(id_history: dict[int, list[int]]) -> tuple[int, float]:
     """Return (total_breaks, avg_gap_of_breaks)."""
     gaps: list[int] = []
@@ -110,25 +103,13 @@ def run_single_test(
     max_frames: int | None = None,
     write_video: bool = True,
 ) -> BenchmarkStats:
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        return BenchmarkStats(name=label)
+    video_info = sv.VideoInfo.from_video_path(str(video_path))
+    fps = video_info.fps or 30.0
+    print(
+        f"\n  [{label}] {video_info.width}x{video_info.height}"
+        f" @ {fps:.0f}FPS  ({video_info.total_frames} frames)"
+    )
 
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    print(f"\n  [{label}] {w}x{h} @ {fps:.0f}FPS  ({total_frames} frames)")
-
-    writer = None
-    if write_video and output_path is not None:
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(str(output_path), fourcc, fps, (w, h))
-
-    stats = BenchmarkStats(name=label)
-    frame_idx = 0
-    t_start = time.monotonic()
     box_annotator = sv.BoxAnnotator(color_lookup=sv.ColorLookup.TRACK)
     label_annotator = sv.LabelAnnotator(color_lookup=sv.ColorLookup.TRACK)
     trace_annotator = sv.TraceAnnotator(
@@ -136,75 +117,76 @@ def run_single_test(
         trace_length=30,
         thickness=2,
     )
+    fps_monitor = sv.FPSMonitor()
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+    stats = BenchmarkStats(name=label)
+    t_start = time.monotonic()
 
-        ts = frame_idx / fps
-        t0 = time.monotonic()
-        tracks = tracker.detect_and_track(frame, ts)
-        t1 = time.monotonic()
-        stats.inference_times.append(t1 - t0)
+    def _run(sink: sv.VideoSink | None) -> None:
+        fps_monitor.reset()
+        frames = sv.get_video_frames_generator(str(video_path), end=max_frames)
+        for frame_idx, frame in enumerate(frames):
+            ts = frame_idx / fps
+            t0 = time.monotonic()
+            tracks = tracker.detect_and_track(frame, ts)
+            stats.inference_times.append(time.monotonic() - t0)
+            fps_monitor.tick()
 
-        detections = tracks_to_sv_detections(tracks)
-        annotated = frame.copy()
-        for track in tracks:
-            tid = track.track_id
-            stats.unique_ids.add(tid)
-            if tid not in stats.id_history:
-                stats.id_history[tid] = []
-                stats.id_first_seen[tid] = frame_idx
-            stats.id_history[tid].append(frame_idx)
-            stats.id_last_seen[tid] = frame_idx
+            detections = tracks_to_sv_detections(tracks)
+            for track in tracks:
+                tid = track.track_id
+                stats.unique_ids.add(tid)
+                if tid not in stats.id_history:
+                    stats.id_history[tid] = []
+                    stats.id_first_seen[tid] = frame_idx
+                stats.id_history[tid].append(frame_idx)
+                stats.id_last_seen[tid] = frame_idx
 
-        if len(detections.xyxy) > 0:
-            labels = [f"ID:{int(tid)}" for tid in detections.tracker_id]
-            annotated = trace_annotator.annotate(scene=annotated, detections=detections)
-            annotated = box_annotator.annotate(scene=annotated, detections=detections)
-            annotated = label_annotator.annotate(
-                scene=annotated,
-                detections=detections,
-                labels=labels,
+            annotated = frame.copy()
+            if len(detections.xyxy) > 0:
+                labels = [f"ID:{int(tid)}" for tid in detections.tracker_id]
+                annotated = trace_annotator.annotate(scene=annotated, detections=detections)
+                annotated = box_annotator.annotate(scene=annotated, detections=detections)
+                annotated = label_annotator.annotate(
+                    scene=annotated, detections=detections, labels=labels
+                )
+
+            reid_info = ""
+            if hasattr(tracker, "reid_stats"):
+                rs = tracker.reid_stats
+                if rs["enabled"]:
+                    skip_pct = (rs["skips"] / max(rs["extractions"] + rs["skips"], 1)) * 100
+                    reid_info = f"  ReID remaps={rs['remaps']} skip={skip_pct:.0f}%"
+                    stats.reid_recoveries = rs["remaps"]
+
+            cv2.putText(
+                annotated,
+                f"[{label}] F{frame_idx}  {stats.inference_times[-1]*1000:.0f}ms"
+                f"  IDs:{len(stats.unique_ids)}{reid_info}",
+                (10, 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (0, 255, 0),
+                1,
             )
 
-        reid_info = ""
-        if hasattr(tracker, "reid_stats"):
-            rs = tracker.reid_stats
-            if rs["enabled"]:
-                skip_pct = (rs["skips"] / max(rs["extractions"] + rs["skips"], 1)) * 100
-                reid_info = f"  ReID remaps={rs['remaps']} skip={skip_pct:.0f}%"
-                stats.reid_recoveries = rs["remaps"]
+            if sink is not None:
+                sink.write_frame(annotated)
 
-        avg_ms = stats.inference_times[-1] * 1000
-        cv2.putText(
-            annotated,
-            f"[{label}] F{frame_idx}  {avg_ms:.0f}ms  IDs:{len(stats.unique_ids)}{reid_info}",
-            (10, 25),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (0, 255, 0),
-            1,
-        )
+            if frame_idx > 0 and frame_idx % 100 == 0:
+                print(
+                    f"    [{frame_idx}/{video_info.total_frames}]"
+                    f" {fps_monitor.fps:.1f} FPS, {len(stats.unique_ids)} IDs"
+                )
 
-        if writer is not None:
-            writer.write(annotated)
-        frame_idx += 1
-        if max_frames is not None and frame_idx >= max_frames:
-            break
+            stats.total_frames = frame_idx + 1
 
-        if frame_idx % 100 == 0:
-            elapsed = time.monotonic() - t_start
-            fps_actual = frame_idx / max(elapsed, 0.001)
-            print(
-                f"    [{frame_idx}/{total_frames}] {fps_actual:.1f} FPS, {len(stats.unique_ids)} IDs"
-            )
+    if write_video and output_path is not None:
+        with sv.VideoSink(str(output_path), video_info=video_info) as sink:
+            _run(sink)
+    else:
+        _run(None)
 
-    cap.release()
-    if writer is not None:
-        writer.release()
-    stats.total_frames = frame_idx
     stats.wall_time = time.monotonic() - t_start
     stats.fragmentation, stats.avg_gap = _compute_fragmentation(stats.id_history)
     return stats
