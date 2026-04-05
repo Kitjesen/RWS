@@ -23,7 +23,9 @@ import cv2
 import numpy as np
 import supervision as sv
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+BENCHMARK_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BENCHMARK_DIR.parent.parent.parent
+sys.path.insert(0, str(BENCHMARK_DIR))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from rws_tracking.algebra.kalman2d import KalmanCAConfig  # noqa: E402
