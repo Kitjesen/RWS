@@ -38,6 +38,16 @@ PRESETS: dict[str, BenchmarkPreset] = {
         minimum_matching_threshold=0.8,
         minimum_consecutive_frames=1,
     ),
+    'balanced': BenchmarkPreset(
+        model_path='yolo11m.pt',
+        imgsz=1280,
+        confidence=0.25,
+        classes=[0],
+        track_activation_threshold=0.25,
+        lost_track_buffer=30,
+        minimum_matching_threshold=0.8,
+        minimum_consecutive_frames=1,
+    ),
     'crowd': BenchmarkPreset(
         model_path='yolo11s.pt',
         imgsz=1280,
@@ -428,8 +438,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--preset',
         choices=sorted(PRESETS.keys()),
-        default='crowd',
-        help='Benchmark preset. crowd favors recall and stability for dense people scenes.',
+        default='balanced',
+        help='Benchmark preset. balanced is recommended for people tracking; crowd is more aggressive on recall and may increase ID churn.',
     )
     parser.add_argument(
         '--model',
