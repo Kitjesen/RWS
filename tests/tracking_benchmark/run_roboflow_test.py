@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -11,11 +12,86 @@ import numpy as np
 import supervision as sv
 from ultralytics import YOLO
 
-PERSON_CLASSES = [0, 2, 3, 5]
 PROGRESS_INTERVAL = 50
 
 
-def _build_tracker(tracker_kind: str, fps: float):
+@dataclass(frozen=True)
+class BenchmarkPreset:
+    model_path: str
+    imgsz: int
+    confidence: float
+    classes: list[int]
+    track_activation_threshold: float
+    lost_track_buffer: int
+    minimum_matching_threshold: float
+    minimum_consecutive_frames: int = 1
+
+
+PRESETS: dict[str, BenchmarkPreset] = {
+    'fast': BenchmarkPreset(
+        model_path='yolo11n.pt',
+        imgsz=640,
+        confidence=0.25,
+        classes=[0],
+        track_activation_threshold=0.25,
+        lost_track_buffer=30,
+        minimum_matching_threshold=0.8,
+        minimum_consecutive_frames=1,
+    ),
+    'crowd': BenchmarkPreset(
+        model_path='yolo11s.pt',
+        imgsz=1280,
+        confidence=0.15,
+        classes=[0],
+        track_activation_threshold=0.15,
+        lost_track_buffer=60,
+        minimum_matching_threshold=0.7,
+        minimum_consecutive_frames=1,
+    ),
+}
+
+
+def _parse_class_ids(value: str) -> list[int]:
+    parts = [part.strip() for part in value.split(',') if part.strip()]
+    if not parts:
+        raise argparse.ArgumentTypeError('Expected at least one class id.')
+    try:
+        return [int(part) for part in parts]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f'Invalid class id list: {value}') from exc
+
+
+def _resolve_preset(args: argparse.Namespace) -> BenchmarkPreset:
+    base = PRESETS[args.preset]
+    return BenchmarkPreset(
+        model_path=args.model or base.model_path,
+        imgsz=args.imgsz if args.imgsz is not None else base.imgsz,
+        confidence=args.conf if args.conf is not None else base.confidence,
+        classes=args.class_ids if args.class_ids is not None else base.classes,
+        track_activation_threshold=(
+            args.track_activation_threshold
+            if args.track_activation_threshold is not None
+            else base.track_activation_threshold
+        ),
+        lost_track_buffer=(
+            args.lost_track_buffer
+            if args.lost_track_buffer is not None
+            else base.lost_track_buffer
+        ),
+        minimum_matching_threshold=(
+            args.minimum_matching_threshold
+            if args.minimum_matching_threshold is not None
+            else base.minimum_matching_threshold
+        ),
+        minimum_consecutive_frames=(
+            args.minimum_consecutive_frames
+            if args.minimum_consecutive_frames is not None
+            else base.minimum_consecutive_frames
+        ),
+    )
+
+
+def _build_tracker(tracker_kind: str, fps: float, preset: BenchmarkPreset):
     if tracker_kind == 'deepsort':
         try:
             from trackers import DeepSORT
@@ -27,7 +103,16 @@ def _build_tracker(tracker_kind: str, fps: float):
         return DeepSORT(), 'Roboflow DeepSORT (ReID)'
     if tracker_kind == 'bytetrack':
         frame_rate = max(int(round(fps)), 1)
-        return sv.ByteTrack(frame_rate=frame_rate), 'Supervision ByteTrack'
+        return (
+            sv.ByteTrack(
+                track_activation_threshold=preset.track_activation_threshold,
+                lost_track_buffer=preset.lost_track_buffer,
+                minimum_matching_threshold=preset.minimum_matching_threshold,
+                minimum_consecutive_frames=preset.minimum_consecutive_frames,
+                frame_rate=frame_rate,
+            ),
+            'Supervision ByteTrack',
+        )
     raise ValueError(f'Unsupported tracker: {tracker_kind}')
 
 
@@ -39,8 +124,14 @@ def _default_output_path(benchmark_dir: Path, tracker_kind: str) -> Path:
     return benchmark_dir / filename_map[tracker_kind]
 
 
-def _run_detector(model: YOLO, frame: np.ndarray) -> sv.Detections:
-    results = model(frame, verbose=False, classes=PERSON_CLASSES)
+def _run_detector(model: YOLO, frame: np.ndarray, preset: BenchmarkPreset) -> sv.Detections:
+    results = model(
+        frame,
+        verbose=False,
+        classes=preset.classes,
+        conf=preset.confidence,
+        imgsz=preset.imgsz,
+    )
     return sv.Detections.from_ultralytics(results[0])
 
 
@@ -125,6 +216,7 @@ def _run_warmup(
     model: YOLO,
     tracker_kind: str,
     tracker,
+    preset: BenchmarkPreset,
 ) -> int:
     if warmup_frames <= 0:
         return 0
@@ -135,7 +227,7 @@ def _run_warmup(
         ret, frame = cap.read()
         if not ret:
             break
-        detections = _run_detector(model, frame)
+        detections = _run_detector(model, frame, preset)
         _track_detections(tracker_kind, tracker, detections, frame)
         warmed += 1
     return warmed
@@ -145,6 +237,8 @@ def run_trackers_benchmark(
     video_path: Path,
     output_path: Path,
     tracker_kind: str,
+    preset: BenchmarkPreset,
+    preset_name: str,
     max_frames: int | None = None,
     warmup_frames: int = 5,
     no_render: bool = False,
@@ -153,9 +247,19 @@ def run_trackers_benchmark(
     print(f"\n{'=' * 60}")
     print(f'  Supervision Tracker Benchmark: {tracker_kind}')
     print(f'  Video: {video_path.name}')
+    print(f'  Preset: {preset_name}')
+    print(f'  Model: {preset.model_path}  imgsz={preset.imgsz}  conf={preset.confidence:.2f}  classes={preset.classes}')
+    if tracker_kind == 'bytetrack':
+        print(
+            '  ByteTrack: '
+            f'act={preset.track_activation_threshold:.2f} '
+            f'lost={preset.lost_track_buffer} '
+            f'match={preset.minimum_matching_threshold:.2f} '
+            f'min_cons={preset.minimum_consecutive_frames}'
+        )
     print(f"{'=' * 60}\n")
 
-    model = YOLO('yolo11n.pt')
+    model = YOLO(preset.model_path)
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -176,8 +280,8 @@ def run_trackers_benchmark(
         cap.release()
         raise RuntimeError('No frames left to benchmark after warmup. Reduce --warmup-frames or increase --max-frames.')
 
-    tracker, tracker_label = _build_tracker(tracker_kind, fps)
-    warmup_done = _run_warmup(cap, warmup_target, model, tracker_kind, tracker)
+    tracker, tracker_label = _build_tracker(tracker_kind, fps, preset)
+    warmup_done = _run_warmup(cap, warmup_target, model, tracker_kind, tracker, preset)
     writer = _prepare_writer(output_path, fps, width, height, enabled=not no_save)
 
     box_annotator = sv.BoxAnnotator(color_lookup=sv.ColorLookup.TRACK)
@@ -204,7 +308,7 @@ def run_trackers_benchmark(
         t_frame_start = time.perf_counter()
 
         t0 = time.perf_counter()
-        detections = _run_detector(model, frame)
+        detections = _run_detector(model, frame, preset)
         t1 = time.perf_counter()
         tracked_detections = _track_detections(tracker_kind, tracker, detections, frame)
         t2 = time.perf_counter()
@@ -300,6 +404,7 @@ def run_trackers_benchmark(
 
     return {
         'tracker': tracker_kind,
+        'preset': preset_name,
         'warmup_frames': warmup_done,
         'frames': frame_idx,
         'avg_fps': avg_fps,
@@ -319,6 +424,60 @@ def _parse_args() -> argparse.Namespace:
         choices=['deepsort', 'bytetrack', 'all'],
         default='all',
         help='Tracker lane to run. Default runs both lanes.',
+    )
+    parser.add_argument(
+        '--preset',
+        choices=sorted(PRESETS.keys()),
+        default='crowd',
+        help='Benchmark preset. crowd favors recall and stability for dense people scenes.',
+    )
+    parser.add_argument(
+        '--model',
+        type=str,
+        default=None,
+        help='Override model path, for example yolo11n.pt or yolo11m.pt.',
+    )
+    parser.add_argument(
+        '--imgsz',
+        type=int,
+        default=None,
+        help='Override detector image size.',
+    )
+    parser.add_argument(
+        '--conf',
+        type=float,
+        default=None,
+        help='Override detector confidence threshold.',
+    )
+    parser.add_argument(
+        '--class-ids',
+        type=_parse_class_ids,
+        default=None,
+        help='Comma-separated class ids. Default preset uses person-only (0).',
+    )
+    parser.add_argument(
+        '--track-activation-threshold',
+        type=float,
+        default=None,
+        help='Override ByteTrack activation threshold.',
+    )
+    parser.add_argument(
+        '--lost-track-buffer',
+        type=int,
+        default=None,
+        help='Override ByteTrack lost track buffer.',
+    )
+    parser.add_argument(
+        '--minimum-matching-threshold',
+        type=float,
+        default=None,
+        help='Override ByteTrack matching threshold.',
+    )
+    parser.add_argument(
+        '--minimum-consecutive-frames',
+        type=int,
+        default=None,
+        help='Override ByteTrack minimum consecutive frames.',
     )
     parser.add_argument(
         '--video',
@@ -347,7 +506,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--no-render',
         action='store_true',
-        help='Skip drawing boxes and labels to isolate detector/tracker performance.',
+        help='Skip drawing boxes and labels to isolate detector and tracker performance.',
     )
     parser.add_argument(
         '--no-save',
@@ -361,6 +520,7 @@ if __name__ == '__main__':
     args = _parse_args()
     benchmark_dir = Path(__file__).parent
     video_path = args.video or (benchmark_dir / 'test_people.mp4')
+    preset = _resolve_preset(args)
 
     tracker_kinds = ['deepsort', 'bytetrack'] if args.tracker == 'all' else [args.tracker]
     if len(tracker_kinds) > 1 and args.output is not None:
@@ -375,6 +535,8 @@ if __name__ == '__main__':
                     video_path=video_path,
                     output_path=output_path,
                     tracker_kind=tracker_kind,
+                    preset=preset,
+                    preset_name=args.preset,
                     max_frames=args.max_frames,
                     warmup_frames=args.warmup_frames,
                     no_render=args.no_render,
@@ -393,7 +555,7 @@ if __name__ == '__main__':
         print(f"{'=' * 60}")
         for summary in summaries:
             print(
-                f"  {summary['tracker']:<10} FPS={summary['avg_fps']:.1f}  "
+                f"  {summary['tracker']:<10} preset={summary['preset']:<5} FPS={summary['avg_fps']:.1f}  "
                 f"Det={summary['avg_detector_ms']:.1f}ms  "
                 f"Trk={summary['avg_tracker_ms']:.1f}ms  "
                 f"Rnd={summary['avg_render_ms']:.1f}ms  "
