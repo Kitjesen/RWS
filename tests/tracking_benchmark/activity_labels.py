@@ -22,6 +22,7 @@ _HAND_UP_MARGIN = 0.04
 _CROUCH_SEGMENT_RATIO = 0.16
 _WALK_SPEED_RATIO = 0.35
 _MOVE_SPEED_RATIO = 0.12
+_DEFAULT_TRACE_JUMP_FACTOR = 1.35
 
 
 @dataclass(frozen=True)
@@ -37,14 +38,16 @@ class RenderTrack:
     action_label: str
     ghost: bool = False
     misses: int = 0
+    age_frames: int = 1
 
 
 @dataclass
 class _TrackState:
     smoothed_box: np.ndarray
     action_history: deque[str] = field(default_factory=lambda: deque(maxlen=6))
-    stable_action: str = 'standing'
+    stable_action: str = 'stand'
     last_seen_frame: int = 0
+    age_frames: int = 1
 
 
 def track_box_to_xyxy(track: Any) -> np.ndarray:
@@ -124,6 +127,25 @@ def _midpoint(
     if not _valid_keypoint(keypoints, idx_b, visibility_thresh):
         return None
     return (keypoints[idx_a, :2] + keypoints[idx_b, :2]) * 0.5
+
+
+def trace_center_from_box(box_xyxy: np.ndarray) -> tuple[int, int]:
+    x1, y1, x2, y2 = np.asarray(box_xyxy, dtype=np.float64).round().astype(int)
+    return ((x1 + x2) // 2, (y1 + y2) // 2)
+
+
+def should_reset_trace(
+    previous_center: tuple[int, int],
+    new_center: tuple[int, int],
+    box_xyxy: np.ndarray,
+    jump_factor: float = _DEFAULT_TRACE_JUMP_FACTOR,
+) -> bool:
+    box = np.asarray(box_xyxy, dtype=np.float64)
+    width = max(float(box[2] - box[0]), 1.0)
+    height = max(float(box[3] - box[1]), 1.0)
+    max_jump = max(width, height) * max(float(jump_factor), 0.5)
+    distance = float(np.hypot(new_center[0] - previous_center[0], new_center[1] - previous_center[1]))
+    return distance > max_jump
 
 
 def infer_action_label(
@@ -215,6 +237,7 @@ class ActivityOverlayTracker:
                 )
                 state.last_seen_frame = frame_index
 
+            state.age_frames = int(max(getattr(track, 'age_frames', 1), 1))
             raw_action = infer_action_label(
                 track,
                 pose_matches.get(track_id),
@@ -229,6 +252,7 @@ class ActivityOverlayTracker:
                     action_label=state.stable_action,
                     ghost=False,
                     misses=int(getattr(track, 'misses', 0)),
+                    age_frames=state.age_frames,
                 )
             )
 
@@ -245,6 +269,7 @@ class ActivityOverlayTracker:
                         action_label=state.stable_action,
                         ghost=True,
                         misses=missed,
+                        age_frames=state.age_frames,
                     )
                 )
             else:

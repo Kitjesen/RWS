@@ -14,7 +14,14 @@ PROJECT_ROOT = BENCHMARK_DIR.parent.parent.parent
 sys.path.insert(0, str(BENCHMARK_DIR))
 sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
-from activity_labels import ActivityOverlayTracker, PoseObservation, RenderTrack, match_pose_observations  # noqa: E402
+from activity_labels import (  # noqa: E402
+    ActivityOverlayTracker,
+    PoseObservation,
+    RenderTrack,
+    match_pose_observations,
+    should_reset_trace,
+    trace_center_from_box,
+)
 from rws_tracking.perception.fusion_mot import FusionMOTConfig  # noqa: E402
 from rws_tracking.perception.fusion_seg_tracker import FusionSegTracker  # noqa: E402
 from rws_tracking.perception.reid_extractor import ReIDConfig  # noqa: E402
@@ -34,7 +41,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--hold-frames', type=int, default=4)
     parser.add_argument('--bbox-alpha', type=float, default=0.65)
     parser.add_argument('--pose-iou-threshold', type=float, default=0.2)
-    parser.add_argument('--trace-length', type=int, default=20)
+    parser.add_argument('--trace-length', type=int, default=12)
+    parser.add_argument('--min-trace-age', type=int, default=6)
+    parser.add_argument('--trace-jump-factor', type=float, default=1.35)
     parser.add_argument('--device', type=str, default='')
     parser.add_argument('--max-frames', type=int, default=None)
     return parser.parse_args()
@@ -82,14 +91,44 @@ def _draw_label(frame, text: str, x: int, y: int, color: tuple[int, int, int]) -
     cv2.putText(frame, text, (x + 4, y - 4), font, scale, (15, 15, 15), thickness, cv2.LINE_AA)
 
 
+def _update_trace_history(
+    item: RenderTrack,
+    trace_history: dict[int, deque[tuple[int, int]]],
+    trace_length: int,
+    min_trace_age: int,
+    trace_jump_factor: float,
+) -> deque[tuple[int, int]]:
+    history = trace_history.setdefault(item.track_id, deque(maxlen=trace_length))
+    if item.ghost:
+        return history
+
+    center = trace_center_from_box(item.bbox_xyxy)
+    if item.age_frames < min_trace_age or item.misses > 0:
+        history.clear()
+        history.append(center)
+        return history
+
+    if history and should_reset_trace(history[-1], center, item.bbox_xyxy, jump_factor=trace_jump_factor):
+        history.clear()
+
+    history.append(center)
+    return history
+
+
 def _annotate_frame(
     frame,
     render_items: list[RenderTrack],
     trace_history: dict[int, deque[tuple[int, int]]],
     trace_length: int,
+    min_trace_age: int,
+    trace_jump_factor: float,
     headline: str,
 ):
     annotated = frame.copy()
+    visible_ids = {item.track_id for item in render_items}
+    for stale_track_id in list(trace_history):
+        if stale_track_id not in visible_ids:
+            del trace_history[stale_track_id]
 
     for item in render_items:
         x1, y1, x2, y2 = item.bbox_xyxy.round().astype(int)
@@ -101,12 +140,16 @@ def _annotate_frame(
         thickness = 1 if item.ghost else 2
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness, cv2.LINE_AA)
 
-        center = ((x1 + x2) // 2, (y1 + y2) // 2)
-        history = trace_history.setdefault(item.track_id, deque(maxlen=trace_length))
-        if not item.ghost:
-            history.append(center)
-        if len(history) >= 2:
-            for start, end in zip(history, list(history)[1:]):
+        history = _update_trace_history(
+            item,
+            trace_history,
+            trace_length=trace_length,
+            min_trace_age=min_trace_age,
+            trace_jump_factor=trace_jump_factor,
+        )
+        if not item.ghost and item.age_frames >= min_trace_age and item.misses == 0 and len(history) >= 2:
+            points = list(history)
+            for start, end in zip(points, points[1:]):
                 cv2.line(annotated, start, end, color, 2, cv2.LINE_AA)
 
         label = f'ID:{item.track_id} {item.action_label}'
@@ -204,6 +247,8 @@ def main() -> int:
             render_items,
             trace_history,
             trace_length=args.trace_length,
+            min_trace_age=args.min_trace_age,
+            trace_jump_factor=args.trace_jump_factor,
             headline=headline,
         )
         writer.write(annotated)

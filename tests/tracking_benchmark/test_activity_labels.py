@@ -4,11 +4,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 BENCHMARK_DIR = Path(__file__).resolve().parent
 if str(BENCHMARK_DIR) not in sys.path:
     sys.path.insert(0, str(BENCHMARK_DIR))
 
-from activity_labels import ActivityOverlayTracker, infer_action_label  # noqa: E402
+from activity_labels import ActivityOverlayTracker, infer_action_label, should_reset_trace  # noqa: E402
 
 
 @dataclass
@@ -25,6 +27,7 @@ class FakeTrack:
     bbox: FakeBoundingBox
     velocity_px_per_s: tuple[float, float] = (0.0, 0.0)
     misses: int = 0
+    age_frames: int = 1
 
 
 def _empty_pose() -> list[list[float]]:
@@ -64,3 +67,20 @@ def test_activity_overlay_tracker_holds_recent_track_briefly():
     assert len(second) == 1
     assert second[0].ghost is True
     assert second[0].track_id == 3
+
+
+def test_activity_overlay_tracker_keeps_track_age():
+    overlay = ActivityOverlayTracker(hold_frames=2, bbox_alpha=1.0)
+    track = FakeTrack(track_id=4, bbox=FakeBoundingBox(x=0.0, y=0.0, w=50.0, h=110.0), age_frames=7)
+
+    items = overlay.update([track], {4: None}, frame_index=0)
+
+    assert len(items) == 1
+    assert items[0].age_frames == 7
+
+
+def test_should_reset_trace_on_large_jump_only():
+    box = np.array([10.0, 20.0, 50.0, 120.0], dtype=np.float64)
+
+    assert should_reset_trace((30, 70), (190, 70), box, jump_factor=1.2) is True
+    assert should_reset_trace((30, 70), (55, 78), box, jump_factor=1.2) is False
