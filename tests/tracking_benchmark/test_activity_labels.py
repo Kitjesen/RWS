@@ -69,14 +69,15 @@ def test_activity_overlay_tracker_holds_recent_track_briefly():
     assert second[0].track_id == 3
 
 
-def test_activity_overlay_tracker_keeps_track_age():
+def test_activity_overlay_tracker_increments_internal_age():
     overlay = ActivityOverlayTracker(hold_frames=2, bbox_alpha=1.0)
-    track = FakeTrack(track_id=4, bbox=FakeBoundingBox(x=0.0, y=0.0, w=50.0, h=110.0), age_frames=7)
+    track = FakeTrack(track_id=4, bbox=FakeBoundingBox(x=0.0, y=0.0, w=50.0, h=110.0), age_frames=1)
 
-    items = overlay.update([track], {4: None}, frame_index=0)
+    first = overlay.update([track], {4: None}, frame_index=0)
+    second = overlay.update([track], {4: None}, frame_index=1)
 
-    assert len(items) == 1
-    assert items[0].age_frames == 7
+    assert first[0].age_frames == 1
+    assert second[0].age_frames == 2
 
 
 def test_should_reset_trace_on_large_jump_only():

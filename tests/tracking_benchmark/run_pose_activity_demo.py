@@ -9,6 +9,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import supervision as sv
+from ultralytics import YOLO
 
 BENCHMARK_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BENCHMARK_DIR.parent.parent.parent
@@ -24,18 +25,24 @@ from activity_labels import (  # noqa: E402
     should_reset_trace,
 )
 from rws_tracking.perception.fusion_mot import FusionMOTConfig  # noqa: E402
+from rws_tracking.perception.appearance_gallery import GalleryConfig  # noqa: E402
 from rws_tracking.perception.fusion_seg_tracker import FusionSegTracker  # noqa: E402
 from rws_tracking.perception.reid_extractor import ReIDConfig  # noqa: E402
+from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--video', type=Path, default=BENCHMARK_DIR / 'test_people.mp4')
     parser.add_argument('--output', type=Path, default=BENCHMARK_DIR / 'output_pose_activity_demo.mp4')
-    parser.add_argument('--model', type=str, default='yolo11s-pose.pt')
+    parser.add_argument('--tracking-backend', choices=('seg', 'fusion'), default='seg')
+    parser.add_argument('--tracking-model', type=str, default='yolo11m-seg.pt')
+    parser.add_argument('--pose-model', type=str, default='yolo11s-pose.pt')
     parser.add_argument('--imgsz', type=int, default=1280)
-    parser.add_argument('--confidence-high', type=float, default=0.25)
-    parser.add_argument('--confidence-low', type=float, default=0.12)
+    parser.add_argument('--tracking-confidence', type=float, default=0.25)
+    parser.add_argument('--tracking-low-confidence', type=float, default=0.12)
+    parser.add_argument('--tracking-max-detections', type=int, default=96)
+    parser.add_argument('--pose-confidence', type=float, default=0.18)
     parser.add_argument('--w-skeleton', type=float, default=0.06)
     parser.add_argument('--skeleton-gate', type=float, default=1.2)
     parser.add_argument('--kp-visibility-thresh', type=float, default=0.2)
@@ -234,6 +241,62 @@ def _annotate_frame(
     return annotated
 
 
+def _build_tracker(args: argparse.Namespace):
+    if args.tracking_backend == 'fusion':
+        return FusionSegTracker(
+            model_path=args.pose_model,
+            confidence_threshold=args.tracking_confidence,
+            low_confidence_threshold=args.tracking_low_confidence,
+            class_whitelist=['person'],
+            device=args.device,
+            img_size=args.imgsz,
+            reid_config=ReIDConfig(device=args.device),
+            mot_config=FusionMOTConfig(
+                high_conf=args.tracking_confidence,
+                low_conf=args.tracking_low_confidence,
+                w_skeleton=args.w_skeleton,
+                use_hip_center=True,
+                skeleton_gate=args.skeleton_gate,
+                kp_visibility_thresh=args.kp_visibility_thresh,
+                max_lost_frames=60,
+                max_lost_seconds=8.0,
+                confirm_frames=2,
+            ),
+        )
+    return YoloSegTracker(
+        model_path=args.tracking_model,
+        confidence_threshold=args.tracking_confidence,
+        nms_iou_threshold=0.45,
+        tracker='botsort.yaml',
+        class_whitelist=['person'],
+        device=args.device,
+        img_size=args.imgsz,
+        max_detections=args.tracking_max_detections,
+        enable_reid=True,
+        reid_config=ReIDConfig(device=args.device),
+        gallery_config=GalleryConfig(
+            ema_alpha=0.85,
+            max_lost_age=5.0,
+            min_track_age_frames=3,
+            match_threshold=0.30,
+            match_threshold_relaxed=0.24,
+            cascade_recent_s=1.5,
+            second_best_margin=0.03,
+            spatial_gate_px=380.0,
+            spatial_gate_grow_rate=180.0,
+            appearance_weight=0.55,
+            motion_weight=0.30,
+            iou_weight=0.15,
+            min_fused_score=0.30,
+            da_alpha_fixed=0.95,
+            da_confidence_sigma=0.40,
+            aw_epsilon=0.5,
+            aw_base_weight=0.55,
+            ocm_window=5,
+        ),
+    )
+
+
 def main() -> int:
     args = _parse_args()
     video_path = args.video
@@ -254,26 +317,8 @@ def main() -> int:
     if not writer.isOpened():
         raise SystemExit(f'Cannot open writer for {output_path}')
 
-    tracker = FusionSegTracker(
-        model_path=args.model,
-        confidence_threshold=args.confidence_high,
-        low_confidence_threshold=args.confidence_low,
-        class_whitelist=['person'],
-        device=args.device,
-        img_size=args.imgsz,
-        reid_config=ReIDConfig(device=args.device),
-        mot_config=FusionMOTConfig(
-            high_conf=args.confidence_high,
-            low_conf=args.confidence_low,
-            w_skeleton=args.w_skeleton,
-            use_hip_center=True,
-            skeleton_gate=args.skeleton_gate,
-            kp_visibility_thresh=args.kp_visibility_thresh,
-            max_lost_frames=60,
-            max_lost_seconds=8.0,
-            confirm_frames=2,
-        ),
-    )
+    tracker = _build_tracker(args)
+    pose_model = YOLO(args.pose_model)
     overlay = ActivityOverlayTracker(
         hold_frames=args.hold_frames,
         bbox_alpha=args.bbox_alpha,
@@ -292,9 +337,18 @@ def main() -> int:
         timestamp = frame_idx / fps
         t0 = time.perf_counter()
         tracks = tracker.detect_and_track(frame, timestamp)
+        pose_results = pose_model(
+            source=frame,
+            conf=args.pose_confidence,
+            iou=0.45,
+            imgsz=args.imgsz,
+            device=args.device or None,
+            classes=[0],
+            verbose=False,
+        )
         pose_matches = match_pose_observations(
             tracks,
-            _extract_pose_observations(tracker.last_raw_results),
+            _extract_pose_observations(pose_results),
             iou_threshold=args.pose_iou_threshold,
         )
         render_items = overlay.update(tracks, pose_matches, frame_idx)
@@ -303,11 +357,10 @@ def main() -> int:
 
         total_tracks_seen.update(item.track_id for item in render_items if not item.ghost)
         headline = (
-            f'FusionPose  F{frame_idx}  {dt * 1000:.0f}ms  '
+            f'{args.tracking_backend.upper()}+Pose  F{frame_idx}  {dt * 1000:.0f}ms  '
             f'visible:{sum(1 for item in render_items if not item.ghost)}  '
             f'ghost:{sum(1 for item in render_items if item.ghost)}  '
             f'ids:{len(total_tracks_seen)}  '
-            f'ghosts:{"on" if args.show_ghosts else "off"}  '
             f'pred:{"on" if args.show_predicted else "off"}  '
             f'traces:{"on" if args.show_traces else "off"}'
         )
@@ -337,9 +390,7 @@ def main() -> int:
                 f'[{frame_idx + 1}/{video_info.total_frames}] '
                 f'{fps_actual:.1f} FPS  visible={sum(1 for item in render_items if not item.ghost)} '
                 f'ghost={sum(1 for item in render_items if item.ghost)} ids={len(total_tracks_seen)} '
-                f'ghosts={"on" if args.show_ghosts else "off"} '
-                f'pred={"on" if args.show_predicted else "off"} '
-                f'traces={"on" if args.show_traces else "off"}'
+                f'backend={args.tracking_backend}'
             )
 
     writer.release()
@@ -348,14 +399,13 @@ def main() -> int:
     avg_fps = len(inference_times) / max(elapsed, 1e-3)
 
     print('\n' + '=' * 60)
-    print('  FUSION POSE ACTIVITY DEMO')
+    print('  POSE ACTIVITY DEMO')
     print('=' * 60)
     print(f'  Video           : {video_path.name}')
     print(f'  Output          : {output_path}')
-    print(f'  Model           : {args.model}')
-    print(f'  Ghosts          : {"on" if args.show_ghosts else "off"}')
-    print(f'  Predicted       : {"on" if args.show_predicted else "off"}')
-    print(f'  Traces          : {"on" if args.show_traces else "off"}')
+    print(f'  Backend         : {args.tracking_backend}')
+    print(f'  Tracking model  : {args.tracking_model}')
+    print(f'  Pose model      : {args.pose_model}')
     print(f'  Frames          : {len(inference_times)}')
     print(f'  Average FPS     : {avg_fps:.1f}')
     print(f'  Avg frame time  : {avg_ms:.1f}ms')

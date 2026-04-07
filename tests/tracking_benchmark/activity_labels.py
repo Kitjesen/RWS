@@ -236,6 +236,7 @@ class ActivityOverlayTracker:
                     smoothed_box=current_box.copy(),
                     action_history=deque(maxlen=self._action_history),
                     last_seen_frame=frame_index,
+                    age_frames=max(int(getattr(track, 'age_frames', 1) or 1), 1),
                 )
                 self._states[track_id] = state
             else:
@@ -243,8 +244,9 @@ class ActivityOverlayTracker:
                     self._bbox_alpha * current_box + (1.0 - self._bbox_alpha) * state.smoothed_box
                 )
                 state.last_seen_frame = frame_index
+                reported_age = int(getattr(track, 'age_frames', 0) or 0)
+                state.age_frames = max(reported_age, state.age_frames + 1)
 
-            state.age_frames = int(max(getattr(track, 'age_frames', 1), 1))
             raw_action = infer_action_label(
                 track,
                 pose_matches.get(track_id),
