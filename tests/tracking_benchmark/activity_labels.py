@@ -17,9 +17,10 @@ _KP_KNEE_R = 14
 _KP_ANKLE_L = 15
 _KP_ANKLE_R = 16
 
-_LYING_ASPECT_RATIO = 1.2
+_LYING_ASPECT_RATIO = 1.75
 _HAND_UP_MARGIN = 0.04
-_CROUCH_SEGMENT_RATIO = 0.16
+_CROUCH_SEGMENT_RATIO = 0.12
+_CROUCH_TORSO_RATIO = 0.18
 _WALK_SPEED_RATIO = 0.35
 _MOVE_SPEED_RATIO = 0.12
 _DEFAULT_TRACE_JUMP_FACTOR = 1.35
@@ -44,7 +45,7 @@ class RenderTrack:
 @dataclass
 class _TrackState:
     smoothed_box: np.ndarray
-    action_history: deque[str] = field(default_factory=lambda: deque(maxlen=6))
+    action_history: deque[str] = field(default_factory=lambda: deque(maxlen=8))
     stable_action: str = 'stand'
     last_seen_frame: int = 0
     age_frames: int = 1
@@ -158,8 +159,10 @@ def infer_action_label(
     bbox = track.bbox
     bbox_h = max(float(bbox.h), 1.0)
     bbox_w = max(float(bbox.w), 1.0)
+    vx, vy = getattr(track, 'velocity_px_per_s', (0.0, 0.0))
+    speed_ratio = float(np.hypot(vx, vy)) / bbox_h
 
-    if bbox_w > bbox_h * _LYING_ASPECT_RATIO:
+    if bbox_w > bbox_h * _LYING_ASPECT_RATIO and speed_ratio < _MOVE_SPEED_RATIO:
         return 'lying'
 
     if keypoints is not None:
@@ -178,17 +181,21 @@ def infer_action_label(
         if left_hand_up or right_hand_up:
             return 'hand-up'
 
+        shoulder_mid = _midpoint(keypoints, _KP_SHOULDER_L, _KP_SHOULDER_R, visibility_thresh)
         hip_mid = _midpoint(keypoints, _KP_HIP_L, _KP_HIP_R, visibility_thresh)
         knee_mid = _midpoint(keypoints, _KP_KNEE_L, _KP_KNEE_R, visibility_thresh)
         ankle_mid = _midpoint(keypoints, _KP_ANKLE_L, _KP_ANKLE_R, visibility_thresh)
-        if hip_mid is not None and knee_mid is not None and ankle_mid is not None:
+        if shoulder_mid is not None and hip_mid is not None and knee_mid is not None and ankle_mid is not None:
+            torso_ratio = max(0.0, float(hip_mid[1] - shoulder_mid[1])) / bbox_h
             upper_leg_ratio = max(0.0, float(knee_mid[1] - hip_mid[1])) / bbox_h
             lower_leg_ratio = max(0.0, float(ankle_mid[1] - knee_mid[1])) / bbox_h
-            if upper_leg_ratio < _CROUCH_SEGMENT_RATIO or lower_leg_ratio < _CROUCH_SEGMENT_RATIO:
+            if (
+                torso_ratio < _CROUCH_TORSO_RATIO
+                and upper_leg_ratio < _CROUCH_SEGMENT_RATIO
+                and lower_leg_ratio < _CROUCH_SEGMENT_RATIO
+            ):
                 return 'crouch'
 
-    vx, vy = getattr(track, 'velocity_px_per_s', (0.0, 0.0))
-    speed_ratio = float(np.hypot(vx, vy)) / bbox_h
     if speed_ratio >= _WALK_SPEED_RATIO:
         return 'walk'
     if speed_ratio >= _MOVE_SPEED_RATIO:
@@ -201,7 +208,7 @@ class ActivityOverlayTracker:
         self,
         hold_frames: int = 4,
         bbox_alpha: float = 0.65,
-        action_history: int = 6,
+        action_history: int = 8,
         visibility_thresh: float = 0.2,
     ) -> None:
         self._hold_frames = max(int(hold_frames), 0)

@@ -84,3 +84,22 @@ def test_should_reset_trace_on_large_jump_only():
 
     assert should_reset_trace((30, 70), (190, 70), box, jump_factor=1.2) is True
     assert should_reset_trace((30, 70), (55, 78), box, jump_factor=1.2) is False
+
+
+def test_infer_action_label_avoids_false_lying_for_normal_box():
+    track = FakeTrack(track_id=5, bbox=FakeBoundingBox(x=0.0, y=0.0, w=90.0, h=100.0))
+
+    assert infer_action_label(track, None) == 'stand'
+
+
+def test_infer_action_label_requires_full_pose_for_crouch():
+    pose = _empty_pose()
+    pose[11] = [40.0, 75.0, 0.9]
+    pose[12] = [60.0, 75.0, 0.9]
+    pose[13] = [42.0, 82.0, 0.9]
+    pose[14] = [58.0, 82.0, 0.9]
+    pose[15] = [44.0, 88.0, 0.9]
+    pose[16] = [56.0, 88.0, 0.9]
+    track = FakeTrack(track_id=6, bbox=FakeBoundingBox(x=20.0, y=20.0, w=60.0, h=120.0))
+
+    assert infer_action_label(track, pose) == 'stand'

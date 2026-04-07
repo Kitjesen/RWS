@@ -40,6 +40,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--skeleton-gate', type=float, default=1.2)
     parser.add_argument('--kp-visibility-thresh', type=float, default=0.2)
     parser.add_argument('--hold-frames', type=int, default=4)
+    parser.add_argument('--show-ghosts', action='store_true')
     parser.add_argument('--bbox-alpha', type=float, default=0.65)
     parser.add_argument('--pose-iou-threshold', type=float, default=0.2)
     parser.add_argument('--show-traces', action='store_true')
@@ -156,6 +157,7 @@ def _annotate_frame(
     trace_history: dict[int, deque[tuple[int, int]]],
     trace_boxes: dict[int, np.ndarray],
     trace_frames: dict[int, int],
+    show_ghosts: bool,
     show_traces: bool,
     trace_length: int,
     min_trace_age: int,
@@ -164,13 +166,14 @@ def _annotate_frame(
     headline: str,
 ):
     annotated = frame.copy()
-    visible_ids = {item.track_id for item in render_items}
+    displayed_items = [item for item in render_items if show_ghosts or not item.ghost]
+    visible_ids = {item.track_id for item in displayed_items}
     for stale_track_id in list(trace_history):
         if stale_track_id not in visible_ids:
             _clear_trace_state(stale_track_id, trace_history, trace_boxes, trace_frames)
             trace_history.pop(stale_track_id, None)
 
-    for item in render_items:
+    for item in displayed_items:
         x1, y1, x2, y2 = item.bbox_xyxy.round().astype(int)
         x1 = max(0, x1)
         y1 = max(0, y1)
@@ -290,6 +293,7 @@ def main() -> int:
             f'visible:{sum(1 for item in render_items if not item.ghost)}  '
             f'ghost:{sum(1 for item in render_items if item.ghost)}  '
             f'ids:{len(total_tracks_seen)}  '
+            f'ghosts:{"on" if args.show_ghosts else "off"}  '
             f'traces:{"on" if args.show_traces else "off"}'
         )
         annotated = _annotate_frame(
@@ -299,6 +303,7 @@ def main() -> int:
             trace_history,
             trace_boxes,
             trace_frames,
+            show_ghosts=args.show_ghosts,
             show_traces=args.show_traces,
             trace_length=args.trace_length,
             min_trace_age=args.min_trace_age,
@@ -315,6 +320,7 @@ def main() -> int:
                 f'[{frame_idx + 1}/{video_info.total_frames}] '
                 f'{fps_actual:.1f} FPS  visible={sum(1 for item in render_items if not item.ghost)} '
                 f'ghost={sum(1 for item in render_items if item.ghost)} ids={len(total_tracks_seen)} '
+                f'ghosts={"on" if args.show_ghosts else "off"} '
                 f'traces={"on" if args.show_traces else "off"}'
             )
 
@@ -329,6 +335,7 @@ def main() -> int:
     print(f'  Video           : {video_path.name}')
     print(f'  Output          : {output_path}')
     print(f'  Model           : {args.model}')
+    print(f'  Ghosts          : {"on" if args.show_ghosts else "off"}')
     print(f'  Traces          : {"on" if args.show_traces else "off"}')
     print(f'  Frames          : {len(inference_times)}')
     print(f'  Average FPS     : {avg_fps:.1f}')
