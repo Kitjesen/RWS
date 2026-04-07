@@ -7,6 +7,7 @@ from collections import deque
 from pathlib import Path
 
 import cv2
+import numpy as np
 import supervision as sv
 
 BENCHMARK_DIR = Path(__file__).resolve().parent
@@ -18,9 +19,9 @@ from activity_labels import (  # noqa: E402
     ActivityOverlayTracker,
     PoseObservation,
     RenderTrack,
+    box_iou,
     match_pose_observations,
     should_reset_trace,
-    trace_center_from_box,
 )
 from rws_tracking.perception.fusion_mot import FusionMOTConfig  # noqa: E402
 from rws_tracking.perception.fusion_seg_tracker import FusionSegTracker  # noqa: E402
@@ -41,9 +42,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--hold-frames', type=int, default=4)
     parser.add_argument('--bbox-alpha', type=float, default=0.65)
     parser.add_argument('--pose-iou-threshold', type=float, default=0.2)
-    parser.add_argument('--trace-length', type=int, default=12)
-    parser.add_argument('--min-trace-age', type=int, default=6)
-    parser.add_argument('--trace-jump-factor', type=float, default=1.35)
+    parser.add_argument('--show-traces', action='store_true')
+    parser.add_argument('--trace-length', type=int, default=8)
+    parser.add_argument('--min-trace-age', type=int, default=8)
+    parser.add_argument('--trace-jump-factor', type=float, default=1.0)
+    parser.add_argument('--min-trace-iou', type=float, default=0.3)
     parser.add_argument('--device', type=str, default='')
     parser.add_argument('--max-frames', type=int, default=None)
     return parser.parse_args()
@@ -91,44 +94,81 @@ def _draw_label(frame, text: str, x: int, y: int, color: tuple[int, int, int]) -
     cv2.putText(frame, text, (x + 4, y - 4), font, scale, (15, 15, 15), thickness, cv2.LINE_AA)
 
 
+def _trace_anchor_from_box(box_xyxy: np.ndarray) -> tuple[int, int]:
+    x1, _, x2, y2 = np.asarray(box_xyxy, dtype=np.float64).round().astype(int)
+    return ((x1 + x2) // 2, y2)
+
+
+def _clear_trace_state(
+    track_id: int,
+    trace_history: dict[int, deque[tuple[int, int]]],
+    trace_boxes: dict[int, np.ndarray],
+    trace_frames: dict[int, int],
+) -> None:
+    history = trace_history.get(track_id)
+    if history is not None:
+        history.clear()
+    trace_boxes.pop(track_id, None)
+    trace_frames.pop(track_id, None)
+
+
 def _update_trace_history(
     item: RenderTrack,
+    frame_index: int,
     trace_history: dict[int, deque[tuple[int, int]]],
+    trace_boxes: dict[int, np.ndarray],
+    trace_frames: dict[int, int],
     trace_length: int,
     min_trace_age: int,
     trace_jump_factor: float,
-) -> deque[tuple[int, int]]:
+    min_trace_iou: float,
+) -> deque[tuple[int, int]] | None:
     history = trace_history.setdefault(item.track_id, deque(maxlen=trace_length))
-    if item.ghost:
+    current_box = np.asarray(item.bbox_xyxy, dtype=np.float64)
+
+    if item.ghost or item.age_frames < min_trace_age or item.misses > 0:
+        _clear_trace_state(item.track_id, trace_history, trace_boxes, trace_frames)
+        history = trace_history.setdefault(item.track_id, deque(maxlen=trace_length))
         return history
 
-    center = trace_center_from_box(item.bbox_xyxy)
-    if item.age_frames < min_trace_age or item.misses > 0:
-        history.clear()
-        history.append(center)
-        return history
+    anchor = _trace_anchor_from_box(current_box)
+    previous_box = trace_boxes.get(item.track_id)
+    previous_frame = trace_frames.get(item.track_id)
+    if previous_box is not None:
+        had_gap = previous_frame is not None and (frame_index - previous_frame) > 1
+        low_iou = box_iou(previous_box, current_box) < min_trace_iou
+        anchor_x = int(round((previous_box[0] + previous_box[2]) * 0.5))
+        anchor_y = int(round(previous_box[3]))
+        jumped = should_reset_trace((anchor_x, anchor_y), anchor, current_box, jump_factor=trace_jump_factor)
+        if had_gap or low_iou or jumped:
+            history.clear()
 
-    if history and should_reset_trace(history[-1], center, item.bbox_xyxy, jump_factor=trace_jump_factor):
-        history.clear()
-
-    history.append(center)
+    history.append(anchor)
+    trace_boxes[item.track_id] = current_box.copy()
+    trace_frames[item.track_id] = frame_index
     return history
 
 
 def _annotate_frame(
     frame,
+    frame_index: int,
     render_items: list[RenderTrack],
     trace_history: dict[int, deque[tuple[int, int]]],
+    trace_boxes: dict[int, np.ndarray],
+    trace_frames: dict[int, int],
+    show_traces: bool,
     trace_length: int,
     min_trace_age: int,
     trace_jump_factor: float,
+    min_trace_iou: float,
     headline: str,
 ):
     annotated = frame.copy()
     visible_ids = {item.track_id for item in render_items}
     for stale_track_id in list(trace_history):
         if stale_track_id not in visible_ids:
-            del trace_history[stale_track_id]
+            _clear_trace_state(stale_track_id, trace_history, trace_boxes, trace_frames)
+            trace_history.pop(stale_track_id, None)
 
     for item in render_items:
         x1, y1, x2, y2 = item.bbox_xyxy.round().astype(int)
@@ -140,17 +180,24 @@ def _annotate_frame(
         thickness = 1 if item.ghost else 2
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, thickness, cv2.LINE_AA)
 
-        history = _update_trace_history(
-            item,
-            trace_history,
-            trace_length=trace_length,
-            min_trace_age=min_trace_age,
-            trace_jump_factor=trace_jump_factor,
-        )
-        if not item.ghost and item.age_frames >= min_trace_age and item.misses == 0 and len(history) >= 2:
-            points = list(history)
-            for start, end in zip(points, points[1:]):
-                cv2.line(annotated, start, end, color, 2, cv2.LINE_AA)
+        if show_traces:
+            history = _update_trace_history(
+                item,
+                frame_index,
+                trace_history,
+                trace_boxes,
+                trace_frames,
+                trace_length=trace_length,
+                min_trace_age=min_trace_age,
+                trace_jump_factor=trace_jump_factor,
+                min_trace_iou=min_trace_iou,
+            )
+            if history is not None and len(history) >= 2:
+                points = list(history)
+                for start, end in zip(points, points[1:]):
+                    cv2.line(annotated, start, end, color, 2, cv2.LINE_AA)
+        else:
+            _clear_trace_state(item.track_id, trace_history, trace_boxes, trace_frames)
 
         label = f'ID:{item.track_id} {item.action_label}'
         if item.ghost:
@@ -217,6 +264,8 @@ def main() -> int:
     )
 
     trace_history: dict[int, deque[tuple[int, int]]] = {}
+    trace_boxes: dict[int, np.ndarray] = {}
+    trace_frames: dict[int, int] = {}
     inference_times: list[float] = []
     total_tracks_seen: set[int] = set()
     t_start = time.perf_counter()
@@ -240,15 +289,21 @@ def main() -> int:
             f'FusionPose  F{frame_idx}  {dt * 1000:.0f}ms  '
             f'visible:{sum(1 for item in render_items if not item.ghost)}  '
             f'ghost:{sum(1 for item in render_items if item.ghost)}  '
-            f'ids:{len(total_tracks_seen)}'
+            f'ids:{len(total_tracks_seen)}  '
+            f'traces:{"on" if args.show_traces else "off"}'
         )
         annotated = _annotate_frame(
             frame,
+            frame_idx,
             render_items,
             trace_history,
+            trace_boxes,
+            trace_frames,
+            show_traces=args.show_traces,
             trace_length=args.trace_length,
             min_trace_age=args.min_trace_age,
             trace_jump_factor=args.trace_jump_factor,
+            min_trace_iou=args.min_trace_iou,
             headline=headline,
         )
         writer.write(annotated)
@@ -259,7 +314,8 @@ def main() -> int:
             print(
                 f'[{frame_idx + 1}/{video_info.total_frames}] '
                 f'{fps_actual:.1f} FPS  visible={sum(1 for item in render_items if not item.ghost)} '
-                f'ghost={sum(1 for item in render_items if item.ghost)} ids={len(total_tracks_seen)}'
+                f'ghost={sum(1 for item in render_items if item.ghost)} ids={len(total_tracks_seen)} '
+                f'traces={"on" if args.show_traces else "off"}'
             )
 
     writer.release()
@@ -273,6 +329,7 @@ def main() -> int:
     print(f'  Video           : {video_path.name}')
     print(f'  Output          : {output_path}')
     print(f'  Model           : {args.model}')
+    print(f'  Traces          : {"on" if args.show_traces else "off"}')
     print(f'  Frames          : {len(inference_times)}')
     print(f'  Average FPS     : {avg_fps:.1f}')
     print(f'  Avg frame time  : {avg_ms:.1f}ms')
