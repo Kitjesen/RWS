@@ -25,6 +25,7 @@ from activity_labels import (  # noqa: E402
     match_pose_observations,
     should_reset_trace,
 )
+from benchmark_metrics import TrackMetricsSummary, summarize_tracking_run  # noqa: E402
 from qp_perception.types import BoundingBox, Track  # noqa: E402
 from rws_tracking.perception.fusion_mot import FusionMOTConfig  # noqa: E402
 from rws_tracking.perception.appearance_gallery import GalleryConfig  # noqa: E402
@@ -58,6 +59,17 @@ TRACKING_PRESETS: dict[str, TrackingPreset] = {
         max_detections=128,
     ),
 }
+
+
+@dataclass(frozen=True)
+class ActivityDemoResult:
+    video_path: Path
+    output_path: Path
+    tracking_backend: str
+    tracking_preset: str
+    tracking_model: str
+    pose_model: str
+    metrics: TrackMetricsSummary
 
 
 class RTDetrByteTrackTracker:
@@ -328,6 +340,26 @@ def _update_trace_history(
     return history
 
 
+def _select_display_items(
+    render_items: list[RenderTrack],
+    show_ghosts: bool,
+    show_predicted: bool,
+    min_display_age: int,
+) -> list[RenderTrack]:
+    displayed_items: list[RenderTrack] = []
+    for item in render_items:
+        if item.ghost:
+            if show_ghosts:
+                displayed_items.append(item)
+            continue
+        if item.age_frames < min_display_age:
+            continue
+        if not show_predicted and item.misses > 0:
+            continue
+        displayed_items.append(item)
+    return displayed_items
+
+
 def _annotate_frame(
     frame,
     frame_index: int,
@@ -346,17 +378,12 @@ def _annotate_frame(
     headline: str,
 ):
     annotated = frame.copy()
-    displayed_items: list[RenderTrack] = []
-    for item in render_items:
-        if item.ghost:
-            if show_ghosts:
-                displayed_items.append(item)
-            continue
-        if item.age_frames < min_display_age:
-            continue
-        if not show_predicted and item.misses > 0:
-            continue
-        displayed_items.append(item)
+    displayed_items = _select_display_items(
+        render_items,
+        show_ghosts=show_ghosts,
+        show_predicted=show_predicted,
+        min_display_age=min_display_age,
+    )
     visible_ids = {item.track_id for item in displayed_items}
     for stale_track_id in list(trace_history):
         if stale_track_id not in visible_ids:
@@ -487,8 +514,7 @@ def _tracking_model_name(args: argparse.Namespace) -> str:
     return args.tracking_model
 
 
-def main() -> int:
-    args = _parse_args()
+def run_activity_demo(args: argparse.Namespace) -> ActivityDemoResult:
     _apply_tracking_preset(args)
     video_path = args.video
     output_path = args.output
@@ -521,87 +547,127 @@ def main() -> int:
     trace_frames: dict[int, int] = {}
     inference_times: list[float] = []
     total_tracks_seen: set[int] = set()
+    frame_track_counts: list[int] = []
+    id_history: dict[int, list[int]] = {}
     t_start = time.perf_counter()
 
-    frames = sv.get_video_frames_generator(str(video_path), end=args.max_frames)
-    for frame_idx, frame in enumerate(frames):
-        timestamp = frame_idx / fps
-        t0 = time.perf_counter()
-        tracks = tracker.detect_and_track(frame, timestamp)
-        pose_results = pose_model(
-            source=frame,
-            conf=args.pose_confidence,
-            iou=0.45,
-            imgsz=args.imgsz,
-            device=args.device or None,
-            classes=[0],
-            verbose=False,
-        )
-        pose_matches = match_pose_observations(
-            tracks,
-            _extract_pose_observations(pose_results),
-            iou_threshold=args.pose_iou_threshold,
-        )
-        render_items = overlay.update(tracks, pose_matches, frame_idx)
-        dt = time.perf_counter() - t0
-        inference_times.append(dt)
-
-        total_tracks_seen.update(item.track_id for item in render_items if not item.ghost)
-        headline = (
-            f'{args.tracking_backend.upper()}+Pose  F{frame_idx}  {dt * 1000:.0f}ms  '
-            f'visible:{sum(1 for item in render_items if not item.ghost)}  '
-            f'ghost:{sum(1 for item in render_items if item.ghost)}  '
-            f'ids:{len(total_tracks_seen)}  '
-            f'pred:{"on" if args.show_predicted else "off"}  '
-            f'traces:{"on" if args.show_traces else "off"}'
-        )
-        annotated = _annotate_frame(
-            frame,
-            frame_idx,
-            render_items,
-            trace_history,
-            trace_boxes,
-            trace_frames,
-            show_ghosts=args.show_ghosts,
-            show_predicted=args.show_predicted,
-            min_display_age=args.min_display_age,
-            show_traces=args.show_traces,
-            trace_length=args.trace_length,
-            min_trace_age=args.min_trace_age,
-            trace_jump_factor=args.trace_jump_factor,
-            min_trace_iou=args.min_trace_iou,
-            headline=headline,
-        )
-        writer.write(annotated)
-
-        if frame_idx > 0 and frame_idx % 50 == 0:
-            elapsed = time.perf_counter() - t_start
-            fps_actual = (frame_idx + 1) / max(elapsed, 1e-3)
-            print(
-                f'[{frame_idx + 1}/{video_info.total_frames}] '
-                f'{fps_actual:.1f} FPS  visible={sum(1 for item in render_items if not item.ghost)} '
-                f'ghost={sum(1 for item in render_items if item.ghost)} ids={len(total_tracks_seen)} '
-                f'backend={args.tracking_backend}'
+    try:
+        frames = sv.get_video_frames_generator(str(video_path), end=args.max_frames)
+        for frame_idx, frame in enumerate(frames):
+            timestamp = frame_idx / fps
+            t0 = time.perf_counter()
+            tracks = tracker.detect_and_track(frame, timestamp)
+            pose_results = pose_model(
+                source=frame,
+                conf=args.pose_confidence,
+                iou=0.45,
+                imgsz=args.imgsz,
+                device=args.device or None,
+                classes=[0],
+                verbose=False,
             )
+            pose_matches = match_pose_observations(
+                tracks,
+                _extract_pose_observations(pose_results),
+                iou_threshold=args.pose_iou_threshold,
+            )
+            render_items = overlay.update(tracks, pose_matches, frame_idx)
+            dt = time.perf_counter() - t0
+            inference_times.append(dt)
 
-    writer.release()
+            displayed_items = _select_display_items(
+                render_items,
+                show_ghosts=args.show_ghosts,
+                show_predicted=args.show_predicted,
+                min_display_age=args.min_display_age,
+            )
+            visible_items = [item for item in displayed_items if not item.ghost]
+            frame_track_counts.append(len(visible_items))
+            for item in visible_items:
+                total_tracks_seen.add(item.track_id)
+                id_history.setdefault(item.track_id, []).append(frame_idx)
+
+            headline = (
+                f'{args.tracking_backend.upper()}+Pose  F{frame_idx}  {dt * 1000:.0f}ms  '
+                f'visible:{len(visible_items)}  '
+                f'ghost:{sum(1 for item in displayed_items if item.ghost)}  '
+                f'ids:{len(total_tracks_seen)}  '
+                f'pred:{"on" if args.show_predicted else "off"}  '
+                f'traces:{"on" if args.show_traces else "off"}'
+            )
+            annotated = _annotate_frame(
+                frame,
+                frame_idx,
+                render_items,
+                trace_history,
+                trace_boxes,
+                trace_frames,
+                show_ghosts=args.show_ghosts,
+                show_predicted=args.show_predicted,
+                min_display_age=args.min_display_age,
+                show_traces=args.show_traces,
+                trace_length=args.trace_length,
+                min_trace_age=args.min_trace_age,
+                trace_jump_factor=args.trace_jump_factor,
+                min_trace_iou=args.min_trace_iou,
+                headline=headline,
+            )
+            writer.write(annotated)
+
+            if frame_idx > 0 and frame_idx % 50 == 0:
+                elapsed = time.perf_counter() - t_start
+                fps_actual = (frame_idx + 1) / max(elapsed, 1e-3)
+                print(
+                    f'[{frame_idx + 1}/{video_info.total_frames}] '
+                    f'{fps_actual:.1f} FPS  visible={len(visible_items)} '
+                    f'ghost={sum(1 for item in displayed_items if item.ghost)} ids={len(total_tracks_seen)} '
+                    f'backend={args.tracking_backend} preset={args.tracking_preset}'
+                )
+    finally:
+        writer.release()
+
     elapsed = time.perf_counter() - t_start
-    avg_ms = (sum(inference_times) / len(inference_times) * 1000.0) if inference_times else 0.0
-    avg_fps = len(inference_times) / max(elapsed, 1e-3)
+    metrics = summarize_tracking_run(
+        name=args.tracking_preset,
+        total_frames=len(inference_times),
+        frame_track_counts=frame_track_counts,
+        inference_times=inference_times,
+        id_history=id_history,
+        wall_time_s=elapsed,
+    )
 
     print('\n' + '=' * 60)
     print('  POSE ACTIVITY DEMO')
     print('=' * 60)
-    print(f'  Video           : {video_path.name}')
-    print(f'  Output          : {output_path}')
-    print(f'  Backend         : {args.tracking_backend}')
-    print(f'  Tracking preset : {args.tracking_preset}')
-    print(f'  Tracking model  : {_tracking_model_name(args)}')
-    print(f'  Pose model      : {args.pose_model}')
-    print(f'  Frames          : {len(inference_times)}')
-    print(f'  Average FPS     : {avg_fps:.1f}')
-    print(f'  Avg frame time  : {avg_ms:.1f}ms')
-    print(f'  Unique IDs seen : {len(total_tracks_seen)}')
+    print(f'  Video              : {video_path.name}')
+    print(f'  Output             : {output_path}')
+    print(f'  Backend            : {args.tracking_backend}')
+    print(f'  Tracking preset    : {args.tracking_preset}')
+    print(f'  Tracking model     : {_tracking_model_name(args)}')
+    print(f'  Pose model         : {args.pose_model}')
+    print(f'  Frames             : {metrics.total_frames}')
+    print(f'  Average FPS        : {metrics.average_fps:.2f}')
+    print(f'  Avg people / frame : {metrics.average_people_per_frame:.2f}')
+    print(f'  Unique IDs         : {metrics.unique_ids}')
+    print(f'  Short-track ratio  : {metrics.short_track_ratio * 100:.1f}%')
+    print(f'  Fragmentation      : {metrics.fragmentation_breaks}')
+    print(f'  Avg frame latency  : {metrics.average_frame_latency_ms:.1f}ms')
+    print(f'  P95 frame latency  : {metrics.p95_frame_latency_ms:.1f}ms')
+
+    return ActivityDemoResult(
+        video_path=video_path,
+        output_path=output_path,
+        tracking_backend=args.tracking_backend,
+        tracking_preset=args.tracking_preset,
+        tracking_model=_tracking_model_name(args),
+        pose_model=args.pose_model,
+        metrics=metrics,
+    )
+
+
+def main() -> int:
+    args = _parse_args()
+    run_activity_demo(args)
     return 0
 
 

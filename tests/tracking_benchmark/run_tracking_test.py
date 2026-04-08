@@ -28,6 +28,15 @@ PROJECT_ROOT = BENCHMARK_DIR.parent.parent.parent
 sys.path.insert(0, str(BENCHMARK_DIR))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
+from benchmark_metrics import (  # noqa: E402
+    average_people_per_frame,
+    average_track_length,
+    count_long_tracks,
+    count_short_tracks,
+    compute_fragmentation,
+    p95_frame_latency_ms,
+    short_track_ratio,
+)
 from rws_tracking.algebra.kalman2d import KalmanCAConfig  # noqa: E402
 from rws_tracking.perception.appearance_gallery import GalleryConfig  # noqa: E402
 from rws_tracking.perception.reid_extractor import ReIDConfig  # noqa: E402
@@ -43,6 +52,7 @@ class BenchmarkStats:
     wall_time: float = 0.0
     inference_times: list[float] = field(default_factory=list)
     unique_ids: set[int] = field(default_factory=set)
+    frame_track_counts: list[int] = field(default_factory=list)
     id_history: dict[int, list[int]] = field(default_factory=dict)
     id_first_seen: dict[int, int] = field(default_factory=dict)
     id_last_seen: dict[int, int] = field(default_factory=dict)
@@ -74,17 +84,7 @@ def download_test_video(output_path: Path) -> bool:
 
 def _compute_fragmentation(id_history: dict[int, list[int]]) -> tuple[int, float]:
     """Return (total_breaks, avg_gap_of_breaks)."""
-    gaps: list[int] = []
-    for frames in id_history.values():
-        if len(frames) < 2:
-            continue
-        for i in range(1, len(frames)):
-            g = frames[i] - frames[i - 1]
-            if g > 1:
-                gaps.append(g)
-    if not gaps:
-        return 0, 0.0
-    return len(gaps), float(np.mean(gaps))
+    return compute_fragmentation(id_history)
 
 
 def _composite_score(s: BenchmarkStats, baseline_unique_ids: int) -> float:
@@ -138,6 +138,7 @@ def run_single_test(
             fps_monitor.tick()
 
             detections = tracks_to_sv_detections(tracks)
+            stats.frame_track_counts.append(len(tracks))
             for track in tracks:
                 tid = track.track_id
                 stats.unique_ids.add(tid)
@@ -212,16 +213,22 @@ def print_comparison(*all_stats: BenchmarkStats, baseline_unique_ids: int | None
         return np.mean(s.inference_times) * 1000 if s.inference_times else 0
 
     def p95_ms(s: BenchmarkStats) -> float:
-        return np.percentile(s.inference_times, 95) * 1000 if s.inference_times else 0
+        return p95_frame_latency_ms(s.inference_times)
 
     def count_long(s: BenchmarkStats) -> int:
-        return sum(1 for f in s.id_history.values() if len(f) >= 30)
+        return count_long_tracks(s.id_history)
 
     def count_short(s: BenchmarkStats) -> int:
-        return sum(1 for f in s.id_history.values() if len(f) <= 10)
+        return count_short_tracks(s.id_history)
 
     def avg_len(s: BenchmarkStats) -> float:
-        return np.mean([len(f) for f in s.id_history.values()]) if s.id_history else 0
+        return average_track_length(s.id_history)
+
+    def avg_people(s: BenchmarkStats) -> float:
+        return average_people_per_frame(s.frame_track_counts)
+
+    def short_ratio(s: BenchmarkStats) -> float:
+        return short_track_ratio(s.id_history)
 
     col_w = 18
     header_names = [s.name for s in all_stats]
@@ -241,7 +248,9 @@ def print_comparison(*all_stats: BenchmarkStats, baseline_unique_ids: int | None
     row("Wall time (s)", [f"{s.wall_time:.1f}" for s in all_stats])
     row("Avg inference (ms)", [f"{avg_ms(s):.1f}" for s in all_stats])
     row("P95 inference (ms)", [f"{p95_ms(s):.1f}" for s in all_stats])
+    row("Avg people / frame", [f"{avg_people(s):.2f}" for s in all_stats])
     row("Unique IDs (LOWER=BETTER)", [str(len(s.unique_ids)) for s in all_stats])
+    row("Short-track ratio", [f"{short_ratio(s) * 100:.1f}%" for s in all_stats])
     row("Long tracks (>30f)", [str(count_long(s)) for s in all_stats])
     row("Short tracks (<10f)", [str(count_short(s)) for s in all_stats])
     row("Avg track length", [f"{avg_len(s):.1f}" for s in all_stats])
