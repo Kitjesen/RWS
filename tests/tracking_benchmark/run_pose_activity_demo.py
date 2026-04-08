@@ -9,7 +9,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import supervision as sv
-from ultralytics import YOLO
+from ultralytics import RTDETR, YOLO
 
 BENCHMARK_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BENCHMARK_DIR.parent.parent.parent
@@ -24,6 +24,7 @@ from activity_labels import (  # noqa: E402
     match_pose_observations,
     should_reset_trace,
 )
+from qp_perception.types import BoundingBox, Track  # noqa: E402
 from rws_tracking.perception.fusion_mot import FusionMOTConfig  # noqa: E402
 from rws_tracking.perception.appearance_gallery import GalleryConfig  # noqa: E402
 from rws_tracking.perception.fusion_seg_tracker import FusionSegTracker  # noqa: E402
@@ -31,18 +32,140 @@ from rws_tracking.perception.reid_extractor import ReIDConfig  # noqa: E402
 from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker  # noqa: E402
 
 
+class RTDetrByteTrackTracker:
+    """Experimental RT-DETR detector with Supervision ByteTrack association."""
+
+    def __init__(
+        self,
+        model_path: str,
+        confidence_threshold: float,
+        img_size: int,
+        device: str,
+        max_detections: int | None,
+        frame_rate: float,
+        track_activation_threshold: float,
+        lost_track_buffer: int,
+        minimum_matching_threshold: float,
+        minimum_consecutive_frames: int,
+    ) -> None:
+        self._model = RTDETR(model_path)
+        self._conf = confidence_threshold
+        self._img_size = img_size
+        self._device = device
+        self._max_detections = None if max_detections is None else max(int(max_detections), 1)
+        self._tracker = sv.ByteTrack(
+            track_activation_threshold=track_activation_threshold,
+            lost_track_buffer=lost_track_buffer,
+            minimum_matching_threshold=minimum_matching_threshold,
+            minimum_consecutive_frames=minimum_consecutive_frames,
+            frame_rate=max(int(round(frame_rate)), 1),
+        )
+        self._first_seen_ts: dict[int, float] = {}
+        self._last_seen_ts: dict[int, float] = {}
+        self._age_frames: dict[int, int] = {}
+        self._prev_center: dict[int, tuple[float, float]] = {}
+        self._prev_timestamp: dict[int, float] = {}
+
+    def detect_and_track(self, frame: np.ndarray, timestamp: float) -> list[Track]:
+        if not isinstance(frame, np.ndarray):
+            return []
+
+        predict_kwargs = {
+            'source': frame,
+            'conf': self._conf,
+            'imgsz': self._img_size,
+            'device': self._device or None,
+            'classes': [0],
+            'verbose': False,
+        }
+        if self._max_detections is not None:
+            predict_kwargs['max_det'] = self._max_detections
+
+        results = self._model(**predict_kwargs)
+        detections = sv.Detections.from_ultralytics(results[0])
+        tracked = self._tracker.update_with_detections(detections)
+
+        if len(tracked.xyxy) == 0 or tracked.tracker_id is None:
+            return []
+
+        tracker_ids = np.asarray(tracked.tracker_id, dtype=np.int64)
+        confidences = (
+            np.asarray(tracked.confidence, dtype=np.float64)
+            if tracked.confidence is not None
+            else np.ones(len(tracked.xyxy), dtype=np.float64)
+        )
+
+        live_ids: set[int] = set()
+        tracks: list[Track] = []
+        for idx, xyxy in enumerate(np.asarray(tracked.xyxy, dtype=np.float64)):
+            x1, y1, x2, y2 = xyxy.tolist()
+            w = max(float(x2 - x1), 0.0)
+            h = max(float(y2 - y1), 0.0)
+            if w <= 0.0 or h <= 0.0:
+                continue
+
+            tid = int(tracker_ids[idx])
+            live_ids.add(tid)
+            bbox = BoundingBox(x=float(x1), y=float(y1), w=w, h=h)
+            center = bbox.center
+            prev_center = self._prev_center.get(tid)
+            prev_timestamp = self._prev_timestamp.get(tid)
+            if prev_center is None or prev_timestamp is None or timestamp <= prev_timestamp:
+                velocity = (0.0, 0.0)
+            else:
+                dt = max(timestamp - prev_timestamp, 1e-3)
+                velocity = (
+                    float((center[0] - prev_center[0]) / dt),
+                    float((center[1] - prev_center[1]) / dt),
+                )
+
+            self._prev_center[tid] = center
+            self._prev_timestamp[tid] = timestamp
+            self._first_seen_ts.setdefault(tid, timestamp)
+            self._last_seen_ts[tid] = timestamp
+            self._age_frames[tid] = self._age_frames.get(tid, 0) + 1
+
+            tracks.append(
+                Track(
+                    track_id=tid,
+                    bbox=bbox,
+                    confidence=float(confidences[idx]),
+                    class_id='person',
+                    first_seen_ts=self._first_seen_ts[tid],
+                    last_seen_ts=timestamp,
+                    age_frames=self._age_frames[tid],
+                    misses=0,
+                    velocity_px_per_s=velocity,
+                    acceleration_px_per_s2=(0.0, 0.0),
+                    mask_center=None,
+                )
+            )
+
+        for stale_id in list(self._prev_center):
+            if stale_id not in live_ids:
+                self._prev_center.pop(stale_id, None)
+                self._prev_timestamp.pop(stale_id, None)
+
+        return tracks
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--video', type=Path, default=BENCHMARK_DIR / 'test_people.mp4')
     parser.add_argument('--output', type=Path, default=BENCHMARK_DIR / 'output_pose_activity_demo.mp4')
-    parser.add_argument('--tracking-backend', choices=('seg', 'fusion'), default='seg')
+    parser.add_argument('--tracking-backend', choices=('seg', 'fusion', 'rtdetr'), default='seg')
     parser.add_argument('--tracking-model', type=str, default='yolo11m-seg.pt')
+    parser.add_argument('--rtdetr-model', type=str, default='rtdetr-l.pt')
     parser.add_argument('--pose-model', type=str, default='yolo11s-pose.pt')
     parser.add_argument('--imgsz', type=int, default=1280)
     parser.add_argument('--tracking-confidence', type=float, default=0.25)
     parser.add_argument('--tracking-low-confidence', type=float, default=0.12)
     parser.add_argument('--tracking-max-detections', type=int, default=96)
     parser.add_argument('--pose-confidence', type=float, default=0.18)
+    parser.add_argument('--rtdetr-track-activation', type=float, default=0.20)
+    parser.add_argument('--rtdetr-lost-track-buffer', type=int, default=45)
+    parser.add_argument('--rtdetr-match-threshold', type=float, default=0.75)
+    parser.add_argument('--rtdetr-min-consecutive-frames', type=int, default=1)
     parser.add_argument('--w-skeleton', type=float, default=0.06)
     parser.add_argument('--skeleton-gate', type=float, default=1.2)
     parser.add_argument('--kp-visibility-thresh', type=float, default=0.2)
@@ -241,7 +364,7 @@ def _annotate_frame(
     return annotated
 
 
-def _build_tracker(args: argparse.Namespace):
+def _build_tracker(args: argparse.Namespace, fps: float):
     if args.tracking_backend == 'fusion':
         return FusionSegTracker(
             model_path=args.pose_model,
@@ -262,6 +385,19 @@ def _build_tracker(args: argparse.Namespace):
                 max_lost_seconds=8.0,
                 confirm_frames=2,
             ),
+        )
+    if args.tracking_backend == 'rtdetr':
+        return RTDetrByteTrackTracker(
+            model_path=args.rtdetr_model,
+            confidence_threshold=args.tracking_confidence,
+            img_size=args.imgsz,
+            device=args.device,
+            max_detections=args.tracking_max_detections,
+            frame_rate=fps,
+            track_activation_threshold=args.rtdetr_track_activation,
+            lost_track_buffer=args.rtdetr_lost_track_buffer,
+            minimum_matching_threshold=args.rtdetr_match_threshold,
+            minimum_consecutive_frames=args.rtdetr_min_consecutive_frames,
         )
     return YoloSegTracker(
         model_path=args.tracking_model,
@@ -297,6 +433,14 @@ def _build_tracker(args: argparse.Namespace):
     )
 
 
+def _tracking_model_name(args: argparse.Namespace) -> str:
+    if args.tracking_backend == 'fusion':
+        return args.pose_model
+    if args.tracking_backend == 'rtdetr':
+        return args.rtdetr_model
+    return args.tracking_model
+
+
 def main() -> int:
     args = _parse_args()
     video_path = args.video
@@ -317,7 +461,7 @@ def main() -> int:
     if not writer.isOpened():
         raise SystemExit(f'Cannot open writer for {output_path}')
 
-    tracker = _build_tracker(args)
+    tracker = _build_tracker(args, fps)
     pose_model = YOLO(args.pose_model)
     overlay = ActivityOverlayTracker(
         hold_frames=args.hold_frames,
@@ -404,7 +548,7 @@ def main() -> int:
     print(f'  Video           : {video_path.name}')
     print(f'  Output          : {output_path}')
     print(f'  Backend         : {args.tracking_backend}')
-    print(f'  Tracking model  : {args.tracking_model}')
+    print(f'  Tracking model  : {_tracking_model_name(args)}')
     print(f'  Pose model      : {args.pose_model}')
     print(f'  Frames          : {len(inference_times)}')
     print(f'  Average FPS     : {avg_fps:.1f}')
