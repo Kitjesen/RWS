@@ -4,6 +4,7 @@ import argparse
 import sys
 import time
 from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -30,6 +31,33 @@ from rws_tracking.perception.appearance_gallery import GalleryConfig  # noqa: E4
 from rws_tracking.perception.fusion_seg_tracker import FusionSegTracker  # noqa: E402
 from rws_tracking.perception.reid_extractor import ReIDConfig  # noqa: E402
 from rws_tracking.perception.yolo_seg_tracker import YoloSegTracker  # noqa: E402
+
+
+@dataclass(frozen=True)
+class TrackingPreset:
+    model_path: str
+    imgsz: int
+    confidence: float
+    low_confidence: float
+    max_detections: int
+
+
+TRACKING_PRESETS: dict[str, TrackingPreset] = {
+    'balanced': TrackingPreset(
+        model_path='yolo11m-seg.pt',
+        imgsz=1280,
+        confidence=0.25,
+        low_confidence=0.12,
+        max_detections=96,
+    ),
+    'crowd-recall': TrackingPreset(
+        model_path='yolo11m-seg.pt',
+        imgsz=1536,
+        confidence=0.18,
+        low_confidence=0.10,
+        max_detections=128,
+    ),
+}
 
 
 class RTDetrByteTrackTracker:
@@ -154,13 +182,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--video', type=Path, default=BENCHMARK_DIR / 'test_people.mp4')
     parser.add_argument('--output', type=Path, default=BENCHMARK_DIR / 'output_pose_activity_demo.mp4')
     parser.add_argument('--tracking-backend', choices=('seg', 'fusion', 'rtdetr'), default='seg')
-    parser.add_argument('--tracking-model', type=str, default='yolo11m-seg.pt')
+    parser.add_argument('--tracking-preset', choices=tuple(TRACKING_PRESETS), default='balanced')
+    parser.add_argument('--tracking-model', type=str, default=None)
     parser.add_argument('--rtdetr-model', type=str, default='rtdetr-l.pt')
     parser.add_argument('--pose-model', type=str, default='yolo11s-pose.pt')
-    parser.add_argument('--imgsz', type=int, default=1280)
-    parser.add_argument('--tracking-confidence', type=float, default=0.25)
-    parser.add_argument('--tracking-low-confidence', type=float, default=0.12)
-    parser.add_argument('--tracking-max-detections', type=int, default=96)
+    parser.add_argument('--imgsz', type=int, default=None)
+    parser.add_argument('--tracking-confidence', type=float, default=None)
+    parser.add_argument('--tracking-low-confidence', type=float, default=None)
+    parser.add_argument('--tracking-max-detections', type=int, default=None)
     parser.add_argument('--pose-confidence', type=float, default=0.18)
     parser.add_argument('--rtdetr-track-activation', type=float, default=0.20)
     parser.add_argument('--rtdetr-lost-track-buffer', type=int, default=45)
@@ -183,6 +212,23 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--device', type=str, default='')
     parser.add_argument('--max-frames', type=int, default=None)
     return parser.parse_args()
+
+
+def _set_arg_default(args: argparse.Namespace, field_name: str, value) -> None:
+    if getattr(args, field_name) is None:
+        setattr(args, field_name, value)
+
+
+def _apply_tracking_preset(args: argparse.Namespace) -> None:
+    preset = TRACKING_PRESETS[args.tracking_preset]
+    if args.tracking_backend == 'seg':
+        _set_arg_default(args, 'tracking_model', preset.model_path)
+    else:
+        _set_arg_default(args, 'tracking_model', TRACKING_PRESETS['balanced'].model_path)
+    _set_arg_default(args, 'imgsz', preset.imgsz)
+    _set_arg_default(args, 'tracking_confidence', preset.confidence)
+    _set_arg_default(args, 'tracking_low_confidence', preset.low_confidence)
+    _set_arg_default(args, 'tracking_max_detections', preset.max_detections)
 
 
 def _extract_pose_observations(raw_results: list | None) -> list[PoseObservation]:
@@ -443,6 +489,7 @@ def _tracking_model_name(args: argparse.Namespace) -> str:
 
 def main() -> int:
     args = _parse_args()
+    _apply_tracking_preset(args)
     video_path = args.video
     output_path = args.output
 
@@ -548,6 +595,7 @@ def main() -> int:
     print(f'  Video           : {video_path.name}')
     print(f'  Output          : {output_path}')
     print(f'  Backend         : {args.tracking_backend}')
+    print(f'  Tracking preset : {args.tracking_preset}')
     print(f'  Tracking model  : {_tracking_model_name(args)}')
     print(f'  Pose model      : {args.pose_model}')
     print(f'  Frames          : {len(inference_times)}')
