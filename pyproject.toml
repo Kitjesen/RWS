@@ -23,8 +23,8 @@ dev = [
     "pytest-xdist>=3.3.0",
     "pytest-benchmark>=4.0.0",
     "supervision>=0.27.0,<0.28.0",
-    "ruff>=0.1.0",
-    "mypy>=1.5.0",
+    "ruff>=0.15.10",
+    "mypy>=1.19.1",
     "types-PyYAML",
 ]
 
