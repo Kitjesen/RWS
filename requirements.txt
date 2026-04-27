@@ -37,7 +37,7 @@ types-PyYAML            # Type stubs for PyYAML
 # API Server (for remote control)
 flask>=2.3.0            # REST API server
 flask-cors>=4.0.0       # CORS support for API
-requests>=2.31.0        # HTTP client for API
+requests>=2.32.5        # HTTP client for API
 grpcio>=1.60.0          # gRPC framework
 grpcio-tools>=1.60.0    # gRPC protobuf compiler
 protobuf>=4.25.0        # Protocol buffers
