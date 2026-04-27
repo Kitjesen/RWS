@@ -35,12 +35,12 @@ types-PyYAML            # Type stubs for PyYAML
 # ----------------------------------------------------------------------------
 
 # API Server (for remote control)
-flask>=2.3.0            # REST API server
-flask-cors>=4.0.0       # CORS support for API
+flask>=3.1.3            # REST API server
+flask-cors>=6.0.2       # CORS support for API
 requests>=2.32.5        # HTTP client for API
-grpcio>=1.60.0          # gRPC framework
-grpcio-tools>=1.60.0    # gRPC protobuf compiler
-protobuf>=4.25.0        # Protocol buffers
+grpcio>=1.80.0          # gRPC framework
+grpcio-tools>=1.80.0    # gRPC protobuf compiler
+protobuf>=6.33.6        # Protocol buffers
 
 # SIL Simulation
 # mujoco>=3.0.0         # Physics simulation for closed-loop testing
