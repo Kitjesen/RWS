@@ -23,7 +23,7 @@ pytest>=7.4.0           # Test framework
 pytest-cov>=4.1.0       # Coverage reporting
 pytest-xdist>=3.3.0     # Parallel test execution
 pytest-benchmark>=4.0.0 # Performance benchmarking
-supervision>=0.27.0,<0.28.0  # Benchmark visualization, tracking zones, analytics
+supervision>=0.27.0,<0.30.0  # Benchmark visualization, tracking zones, analytics
 
 # Code Quality
 ruff>=0.1.0             # Fast linter and formatter

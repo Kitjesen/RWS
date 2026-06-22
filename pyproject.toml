@@ -22,7 +22,7 @@ dev = [
     "pytest-cov>=4.1.0",
     "pytest-xdist>=3.3.0",
     "pytest-benchmark>=4.0.0",
-    "supervision>=0.27.0,<0.28.0",
+    "supervision>=0.27.0,<0.30.0",
     "ruff>=0.1.0",
     "mypy>=1.5.0",
     "types-PyYAML",
